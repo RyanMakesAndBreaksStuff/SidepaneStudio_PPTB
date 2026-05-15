@@ -89,8 +89,8 @@ export class PptbContextAdapter implements IXrmContext {
 
   async webApiGet<T = unknown>(odataPath: string): Promise<T> {
     const cleanPath = odataPath.replace(/^\/api\/data\/v\d+\.\d+\//, '');
-    const result = await (window as any).dataverseAPI.queryData(cleanPath) as { value: T };
-    return result.value;
+    const result = await (window as any).dataverseAPI.queryData(cleanPath) as { value: unknown };
+    return result.value as T;
   }
 
   async dataverseExecute<T = unknown>(request: DataverseExecuteRequest): Promise<T> {
