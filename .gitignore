@@ -1,5 +1,14 @@
 ﻿################################################################################
 # This .gitignore file was automatically created by Microsoft(R) Visual Studio.
 ################################################################################
-
+/node_modules
 /.vs
+/coverage/node_modules
+/.claude
+/art assets
+/dist
+/docs
+/data
+
+
+/package-lock.json
