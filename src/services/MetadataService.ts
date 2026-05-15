@@ -56,7 +56,7 @@ export class MetadataService {
         const writePriv = (entity.Privileges ?? []).find(
           (p: any) => typeof p.Name === 'string' && p.Name.toLowerCase().startsWith('prvwrite')
         );
-        if (!writePriv) continue;
+        if (!writePriv?.PrivilegeId) continue;
         if (!userPrivilegeIds.has(normalizeGuid(writePriv.PrivilegeId))) continue;
 
         tables.push({

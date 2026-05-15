@@ -169,4 +169,18 @@ describe('MetadataService', () => {
       'secondary'
     );
   });
+
+  it('skips entity privilege with missing PrivilegeId — does not throw', async () => {
+    const entityWithBadPriv = {
+      ...ENTITY_ACCOUNT,
+      Privileges: [{ Name: 'prvWriteaccount' }], // no PrivilegeId
+    };
+    const xrm = makeXrm('user-123', [entityWithBadPriv], [PRIV_WRITE_ACCOUNT]);
+    const svc = new MetadataService(xrm);
+    const result = await svc.listAccessibleTables();
+    expect(result.status).toBe('ok');
+    if (result.status === 'ok') {
+      expect(result.tables).toHaveLength(0);
+    }
+  });
 });
