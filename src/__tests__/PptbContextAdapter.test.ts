@@ -184,4 +184,20 @@ describe('PptbContextAdapter', () => {
     await adapter.getAllEntitiesMetadata(['LogicalName'], 'secondary');
     expect(api.getAllEntitiesMetadata).toHaveBeenCalledWith(['LogicalName'], 'secondary');
   });
+
+  it('dataverseExecute throws immediately when operationName is missing', async () => {
+    vi.stubGlobal('dataverseAPI', makeMockDataverseAPI());
+    const adapter = new PptbContextAdapter();
+    await expect(
+      adapter.dataverseExecute({ operationName: '', operationType: 'function' })
+    ).rejects.toThrow('operationName');
+  });
+
+  it('dataverseExecute throws immediately when operationType is missing', async () => {
+    vi.stubGlobal('dataverseAPI', makeMockDataverseAPI());
+    const adapter = new PptbContextAdapter();
+    await expect(
+      adapter.dataverseExecute({ operationName: 'WhoAmI', operationType: '' as any })
+    ).rejects.toThrow('operationType');
+  });
 });

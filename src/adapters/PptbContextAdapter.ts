@@ -94,6 +94,8 @@ export class PptbContextAdapter implements IXrmContext {
   }
 
   async dataverseExecute<T = unknown>(request: DataverseExecuteRequest, connectionTarget?: 'primary' | 'secondary'): Promise<T> {
+    if (!request.operationName) throw new Error('dataverseExecute: operationName is required');
+    if (!request.operationType) throw new Error('dataverseExecute: operationType is required');
     const payload: DataverseAPI.ExecuteRequest = {
       operationName: request.operationName,
       operationType: request.operationType,
