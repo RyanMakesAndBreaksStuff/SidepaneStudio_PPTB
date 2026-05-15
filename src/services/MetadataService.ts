@@ -22,37 +22,35 @@ export class MetadataService {
   private _cache = new Map<string, CacheEntry>();
 
   constructor(
-    private readonly xrm: Pick<IXrmContext, 'getCurrentUserId'>
+    private readonly xrm: Pick<IXrmContext, 'getCurrentUserId' | 'dataverseExecute' | 'getAllEntitiesMetadata'>
   ) {}
 
   async listAccessibleTables(): Promise<AccessibleTablesResult> {
     try {
       const userId = await this.xrm.getCurrentUserId();
-      const cacheKey = userId;
-      const cached = this._cache.get(cacheKey);
+      const cached = this._cache.get(userId);
       if (cached && Date.now() < cached.expiresAt) {
         return { status: 'ok', tables: cached.tables };
       }
 
-      const api = (window as any).dataverseAPI;
-
-      const [entityMeta, privResult] = await Promise.all([
-        api.getAllEntitiesMetadata([
+      const [entities, privResult] = await Promise.all([
+        this.xrm.getAllEntitiesMetadata([
           'LogicalName', 'DisplayName', 'ObjectTypeCode',
           'IsIntersect', 'IsPrivate', 'Privileges',
-        ]) as Promise<any[]>,
-        api.execute({
-          RequestName: 'RetrieveUserPrivileges',
-          Parameters: [{ Key: 'UserId', Value: userId }],
-        }) as Promise<{ Privileges: Array<{ PrivilegeId: string; Depth: number }> }>,
+        ]),
+        this.xrm.dataverseExecute<{ Privileges: Array<{ PrivilegeId: string; Depth: number }> }>({
+          operationName: 'RetrieveUserPrivileges',
+          operationType: 'function',
+          parameters: { UserId: userId },
+        }),
       ]);
 
       const userPrivilegeIds = new Set(
-        (privResult.Privileges ?? []).map((p: any) => normalizeGuid(p.PrivilegeId))
+        (privResult.Privileges ?? []).map((p) => normalizeGuid(p.PrivilegeId))
       );
 
       const tables: TableInfo[] = [];
-      for (const entity of entityMeta) {
+      for (const entity of entities) {
         if (entity.IsIntersect || entity.IsPrivate) continue;
 
         const writePriv = (entity.Privileges ?? []).find(
@@ -70,7 +68,7 @@ export class MetadataService {
       }
 
       tables.sort((a, b) => a.displayName.localeCompare(b.displayName));
-      this._cache.set(cacheKey, { tables, expiresAt: Date.now() + CACHE_TTL_MS });
+      this._cache.set(userId, { tables, expiresAt: Date.now() + CACHE_TTL_MS });
       return { status: 'ok', tables };
     } catch (err) {
       const reason = err instanceof Error ? err.message : 'Unknown error loading table list.';

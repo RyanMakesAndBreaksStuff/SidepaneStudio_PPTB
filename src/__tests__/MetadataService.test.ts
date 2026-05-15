@@ -2,16 +2,17 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { MetadataService } from '../services/MetadataService';
 import type { IXrmContext } from '../adapters/PptbContextAdapter';
 
-function makeXrm(userId = 'user-123'): Pick<IXrmContext, 'getCurrentUserId'> {
+type MetaXrm = Pick<IXrmContext, 'getCurrentUserId' | 'dataverseExecute' | 'getAllEntitiesMetadata'>;
+
+function makeXrm(
+  userId = 'user-123',
+  entities: object[] = [],
+  privileges: object[] = []
+): MetaXrm {
   return {
     getCurrentUserId: vi.fn().mockResolvedValue(userId),
-  };
-}
-
-function makeDataverseAPI(entities: object[] = [], privileges: object[] = []) {
-  return {
     getAllEntitiesMetadata: vi.fn().mockResolvedValue(entities),
-    execute: vi.fn().mockResolvedValue({ Privileges: privileges }),
+    dataverseExecute: vi.fn().mockResolvedValue({ Privileges: privileges }),
   };
 }
 
@@ -32,8 +33,8 @@ describe('MetadataService', () => {
   });
 
   it('returns accessible tables when user has write privilege', async () => {
-    vi.stubGlobal('dataverseAPI', makeDataverseAPI([ENTITY_ACCOUNT], [PRIV_WRITE_ACCOUNT]));
-    const svc = new MetadataService(makeXrm());
+    const xrm = makeXrm('user-123', [ENTITY_ACCOUNT], [PRIV_WRITE_ACCOUNT]);
+    const svc = new MetadataService(xrm);
     const result = await svc.listAccessibleTables();
     expect(result.status).toBe('ok');
     if (result.status === 'ok') {
@@ -43,9 +44,30 @@ describe('MetadataService', () => {
     }
   });
 
+  it('passes correct PPTB execute format for RetrieveUserPrivileges', async () => {
+    const xrm = makeXrm('user-abc', [ENTITY_ACCOUNT], [PRIV_WRITE_ACCOUNT]);
+    const svc = new MetadataService(xrm);
+    await svc.listAccessibleTables();
+    expect(xrm.dataverseExecute).toHaveBeenCalledWith({
+      operationName: 'RetrieveUserPrivileges',
+      operationType: 'function',
+      parameters: { UserId: 'user-abc' },
+    });
+  });
+
+  it('passes correct property list to getAllEntitiesMetadata', async () => {
+    const xrm = makeXrm('user-123', [], []);
+    const svc = new MetadataService(xrm);
+    await svc.listAccessibleTables();
+    expect(xrm.getAllEntitiesMetadata).toHaveBeenCalledWith([
+      'LogicalName', 'DisplayName', 'ObjectTypeCode',
+      'IsIntersect', 'IsPrivate', 'Privileges',
+    ]);
+  });
+
   it('excludes entities without matching write privilege', async () => {
-    vi.stubGlobal('dataverseAPI', makeDataverseAPI([ENTITY_ACCOUNT], [])); // no privileges
-    const svc = new MetadataService(makeXrm());
+    const xrm = makeXrm('user-123', [ENTITY_ACCOUNT], []);
+    const svc = new MetadataService(xrm);
     const result = await svc.listAccessibleTables();
     expect(result.status).toBe('ok');
     if (result.status === 'ok') {
@@ -53,42 +75,84 @@ describe('MetadataService', () => {
     }
   });
 
-  it('caches result — second call skips dataverseAPI', async () => {
-    const api = makeDataverseAPI([ENTITY_ACCOUNT], [PRIV_WRITE_ACCOUNT]);
-    vi.stubGlobal('dataverseAPI', api);
-    const svc = new MetadataService(makeXrm());
+  it('excludes intersect entities', async () => {
+    const intersect = { ...ENTITY_ACCOUNT, IsIntersect: true };
+    const xrm = makeXrm('user-123', [intersect], [PRIV_WRITE_ACCOUNT]);
+    const svc = new MetadataService(xrm);
+    const result = await svc.listAccessibleTables();
+    expect(result.status).toBe('ok');
+    if (result.status === 'ok') {
+      expect(result.tables).toHaveLength(0);
+    }
+  });
+
+  it('excludes private entities', async () => {
+    const priv = { ...ENTITY_ACCOUNT, IsPrivate: true };
+    const xrm = makeXrm('user-123', [priv], [PRIV_WRITE_ACCOUNT]);
+    const svc = new MetadataService(xrm);
+    const result = await svc.listAccessibleTables();
+    expect(result.status).toBe('ok');
+    if (result.status === 'ok') {
+      expect(result.tables).toHaveLength(0);
+    }
+  });
+
+  it('caches result — second call skips getAllEntitiesMetadata and dataverseExecute', async () => {
+    const xrm = makeXrm('user-123', [ENTITY_ACCOUNT], [PRIV_WRITE_ACCOUNT]);
+    const svc = new MetadataService(xrm);
     await svc.listAccessibleTables();
     await svc.listAccessibleTables();
-    expect(api.getAllEntitiesMetadata).toHaveBeenCalledTimes(1);
+    expect(xrm.getAllEntitiesMetadata).toHaveBeenCalledTimes(1);
+    expect(xrm.dataverseExecute).toHaveBeenCalledTimes(1);
   });
 
   it('invalidate clears cache — next call re-fetches', async () => {
-    const api = makeDataverseAPI([ENTITY_ACCOUNT], [PRIV_WRITE_ACCOUNT]);
-    vi.stubGlobal('dataverseAPI', api);
-    const svc = new MetadataService(makeXrm());
+    const xrm = makeXrm('user-123', [ENTITY_ACCOUNT], [PRIV_WRITE_ACCOUNT]);
+    const svc = new MetadataService(xrm);
     await svc.listAccessibleTables();
     svc.invalidate();
     await svc.listAccessibleTables();
-    expect(api.getAllEntitiesMetadata).toHaveBeenCalledTimes(2);
+    expect(xrm.getAllEntitiesMetadata).toHaveBeenCalledTimes(2);
   });
 
-  it('returns error status when dataverseAPI throws', async () => {
-    vi.stubGlobal('dataverseAPI', {
-      getAllEntitiesMetadata: vi.fn().mockRejectedValue(new Error('Network error')),
-      execute: vi.fn(),
-    });
-    const svc = new MetadataService(makeXrm());
+  it('returns error status when dataverseExecute throws', async () => {
+    const xrm = makeXrm();
+    (xrm.dataverseExecute as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('Network error'));
+    const svc = new MetadataService(xrm);
     const result = await svc.listAccessibleTables();
     expect(result.status).toBe('error');
+    if (result.status === 'error') {
+      expect(result.reason).toBe('Network error');
+    }
   });
 
-  it('cache key includes userId — different users get fresh fetch', async () => {
-    const api = makeDataverseAPI([ENTITY_ACCOUNT], [PRIV_WRITE_ACCOUNT]);
-    vi.stubGlobal('dataverseAPI', api);
-    const svc1 = new MetadataService(makeXrm('user-A'));
-    const svc2 = new MetadataService(makeXrm('user-B'));
+  it('returns error status when getAllEntitiesMetadata throws', async () => {
+    const xrm = makeXrm();
+    (xrm.getAllEntitiesMetadata as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('Metadata error'));
+    const svc = new MetadataService(xrm);
+    const result = await svc.listAccessibleTables();
+    expect(result.status).toBe('error');
+    if (result.status === 'error') {
+      expect(result.reason).toBe('Metadata error');
+    }
+  });
+
+  it('cache key is per userId — different users get independent fetches', async () => {
+    const xrm1 = makeXrm('user-A', [ENTITY_ACCOUNT], [PRIV_WRITE_ACCOUNT]);
+    const xrm2 = makeXrm('user-B', [ENTITY_ACCOUNT], [PRIV_WRITE_ACCOUNT]);
+    const svc1 = new MetadataService(xrm1);
+    const svc2 = new MetadataService(xrm2);
     await svc1.listAccessibleTables();
     await svc2.listAccessibleTables();
-    expect(api.getAllEntitiesMetadata).toHaveBeenCalledTimes(2);
+    expect(xrm1.getAllEntitiesMetadata).toHaveBeenCalledTimes(1);
+    expect(xrm2.getAllEntitiesMetadata).toHaveBeenCalledTimes(1);
+  });
+
+  it('no global window.dataverseAPI stub needed — uses injected xrm', async () => {
+    expect((window as any).dataverseAPI).toBeUndefined();
+    const xrm = makeXrm('user-123', [ENTITY_ACCOUNT], [PRIV_WRITE_ACCOUNT]);
+    const svc = new MetadataService(xrm);
+    const result = await svc.listAccessibleTables();
+    expect(result.status).toBe('ok');
   });
 });
