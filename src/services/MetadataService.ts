@@ -25,7 +25,7 @@ export class MetadataService {
     private readonly xrm: Pick<IXrmContext, 'getCurrentUserId' | 'dataverseExecute' | 'getAllEntitiesMetadata'>
   ) {}
 
-  async listAccessibleTables(): Promise<AccessibleTablesResult> {
+  async listAccessibleTables(connectionTarget?: 'primary' | 'secondary'): Promise<AccessibleTablesResult> {
     try {
       const userId = await this.xrm.getCurrentUserId();
       const cached = this._cache.get(userId);
@@ -37,12 +37,12 @@ export class MetadataService {
         this.xrm.getAllEntitiesMetadata([
           'LogicalName', 'DisplayName', 'ObjectTypeCode',
           'IsIntersect', 'IsPrivate', 'Privileges',
-        ]),
+        ], connectionTarget),
         this.xrm.dataverseExecute<{ Privileges: Array<{ PrivilegeId: string; Depth: number }> }>({
           operationName: 'RetrieveUserPrivileges',
           operationType: 'function',
           parameters: { UserId: userId },
-        }),
+        }, connectionTarget),
       ]);
 
       const userPrivilegeIds = new Set(

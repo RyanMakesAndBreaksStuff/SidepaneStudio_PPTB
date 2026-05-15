@@ -30,7 +30,7 @@ describe('PptbContextAdapter', () => {
     expect(api.execute).toHaveBeenCalledWith({
       operationName: 'WhoAmI',
       operationType: 'function',
-    });
+    }, undefined);
   });
 
   it('getCurrentUserId caches WhoAmI — only one execute call', async () => {
@@ -75,7 +75,7 @@ describe('PptbContextAdapter', () => {
       operationName: 'RetrieveUserPrivileges',
       operationType: 'function',
       parameters: { UserId: 'user-123' },
-    });
+    }, undefined);
   });
 
   it('dataverseExecute omits optional fields when not provided', async () => {
@@ -87,7 +87,7 @@ describe('PptbContextAdapter', () => {
     expect(api.execute).toHaveBeenCalledWith({
       operationName: 'WhoAmI',
       operationType: 'function',
-    });
+    }, undefined);
   });
 
   it('getAllEntitiesMetadata unwraps value array', async () => {
@@ -97,7 +97,7 @@ describe('PptbContextAdapter', () => {
     const adapter = new PptbContextAdapter();
     const result = await adapter.getAllEntitiesMetadata(['LogicalName']);
     expect(result).toEqual([{ LogicalName: 'account' }]);
-    expect(api.getAllEntitiesMetadata).toHaveBeenCalledWith(['LogicalName']);
+    expect(api.getAllEntitiesMetadata).toHaveBeenCalledWith(['LogicalName'], undefined);
   });
 
   it('getAllEntitiesMetadata returns empty array when value is empty', async () => {
@@ -151,7 +151,7 @@ describe('PptbContextAdapter', () => {
     vi.stubGlobal('dataverseAPI', api);
     const adapter = new PptbContextAdapter();
     const result = await adapter.webApiGet('/api/data/v9.2/accounts?$select=name');
-    expect(api.queryData).toHaveBeenCalledWith('accounts?$select=name');
+    expect(api.queryData).toHaveBeenCalledWith('accounts?$select=name', undefined);
     expect(result).toEqual([{ name: 'Acme' }]);
   });
 
@@ -161,6 +161,27 @@ describe('PptbContextAdapter', () => {
     vi.stubGlobal('dataverseAPI', api);
     const adapter = new PptbContextAdapter();
     await adapter.webApiGet('contacts?$select=fullname');
-    expect(api.queryData).toHaveBeenCalledWith('contacts?$select=fullname');
+    expect(api.queryData).toHaveBeenCalledWith('contacts?$select=fullname', undefined);
+  });
+
+  it('dataverseExecute forwards connectionTarget to window.dataverseAPI.execute', async () => {
+    const api = makeMockDataverseAPI();
+    api.execute.mockResolvedValue({ UserId: 'u' });
+    vi.stubGlobal('dataverseAPI', api);
+    const adapter = new PptbContextAdapter();
+    await adapter.dataverseExecute({ operationName: 'WhoAmI', operationType: 'function' }, 'secondary');
+    expect(api.execute).toHaveBeenCalledWith(
+      { operationName: 'WhoAmI', operationType: 'function' },
+      'secondary'
+    );
+  });
+
+  it('getAllEntitiesMetadata forwards connectionTarget', async () => {
+    const api = makeMockDataverseAPI();
+    api.getAllEntitiesMetadata.mockResolvedValue({ value: [] });
+    vi.stubGlobal('dataverseAPI', api);
+    const adapter = new PptbContextAdapter();
+    await adapter.getAllEntitiesMetadata(['LogicalName'], 'secondary');
+    expect(api.getAllEntitiesMetadata).toHaveBeenCalledWith(['LogicalName'], 'secondary');
   });
 });

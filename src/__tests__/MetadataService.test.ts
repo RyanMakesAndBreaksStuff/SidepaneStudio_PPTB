@@ -52,7 +52,7 @@ describe('MetadataService', () => {
       operationName: 'RetrieveUserPrivileges',
       operationType: 'function',
       parameters: { UserId: 'user-abc' },
-    });
+    }, undefined);
   });
 
   it('passes correct property list to getAllEntitiesMetadata', async () => {
@@ -62,7 +62,7 @@ describe('MetadataService', () => {
     expect(xrm.getAllEntitiesMetadata).toHaveBeenCalledWith([
       'LogicalName', 'DisplayName', 'ObjectTypeCode',
       'IsIntersect', 'IsPrivate', 'Privileges',
-    ]);
+    ], undefined);
   });
 
   it('excludes entities without matching write privilege', async () => {
@@ -154,5 +154,19 @@ describe('MetadataService', () => {
     const svc = new MetadataService(xrm);
     const result = await svc.listAccessibleTables();
     expect(result.status).toBe('ok');
+  });
+
+  it('listAccessibleTables forwards connectionTarget to xrm calls', async () => {
+    const xrm = makeXrm('user-123', [ENTITY_ACCOUNT], [PRIV_WRITE_ACCOUNT]);
+    const svc = new MetadataService(xrm);
+    await svc.listAccessibleTables('secondary');
+    expect(xrm.getAllEntitiesMetadata).toHaveBeenCalledWith(
+      ['LogicalName', 'DisplayName', 'ObjectTypeCode', 'IsIntersect', 'IsPrivate', 'Privileges'],
+      'secondary'
+    );
+    expect(xrm.dataverseExecute).toHaveBeenCalledWith(
+      expect.objectContaining({ operationName: 'RetrieveUserPrivileges' }),
+      'secondary'
+    );
   });
 });

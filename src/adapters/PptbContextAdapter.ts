@@ -38,9 +38,9 @@ export interface IXrmContext {
   readEnvVar(name: string): Promise<string | null>;
   getCurrentAppId(): string | null;
   getCurrentUserId(): Promise<string>;
-  webApiGet<T = unknown>(path: string): Promise<T>;
-  dataverseExecute<T = unknown>(request: DataverseExecuteRequest): Promise<T>;
-  getAllEntitiesMetadata(properties: string[]): Promise<any[]>;
+  webApiGet<T = unknown>(path: string, connectionTarget?: 'primary' | 'secondary'): Promise<T>;
+  dataverseExecute<T = unknown>(request: DataverseExecuteRequest, connectionTarget?: 'primary' | 'secondary'): Promise<T>;
+  getAllEntitiesMetadata(properties: string[], connectionTarget?: 'primary' | 'secondary'): Promise<any[]>;
 }
 
 export class PptbContextAdapter implements IXrmContext {
@@ -87,13 +87,13 @@ export class PptbContextAdapter implements IXrmContext {
     this._whoAmIPromise = null;
   }
 
-  async webApiGet<T = unknown>(odataPath: string): Promise<T> {
+  async webApiGet<T = unknown>(odataPath: string, connectionTarget?: 'primary' | 'secondary'): Promise<T> {
     const cleanPath = odataPath.replace(/^\/api\/data\/v\d+\.\d+\//, '');
-    const result = await window.dataverseAPI.queryData(cleanPath);
+    const result = await window.dataverseAPI.queryData(cleanPath, connectionTarget);
     return result.value as unknown as T;
   }
 
-  async dataverseExecute<T = unknown>(request: DataverseExecuteRequest): Promise<T> {
+  async dataverseExecute<T = unknown>(request: DataverseExecuteRequest, connectionTarget?: 'primary' | 'secondary'): Promise<T> {
     const payload: DataverseAPI.ExecuteRequest = {
       operationName: request.operationName,
       operationType: request.operationType,
@@ -101,11 +101,11 @@ export class PptbContextAdapter implements IXrmContext {
     if (request.entityName !== undefined) payload.entityName = request.entityName;
     if (request.entityId !== undefined) payload.entityId = request.entityId;
     if (request.parameters !== undefined) payload.parameters = request.parameters;
-    return window.dataverseAPI.execute(payload) as Promise<T>;
+    return window.dataverseAPI.execute(payload, connectionTarget) as Promise<T>;
   }
 
-  async getAllEntitiesMetadata(properties: string[]): Promise<any[]> {
-    const result = await window.dataverseAPI.getAllEntitiesMetadata(properties);
+  async getAllEntitiesMetadata(properties: string[], connectionTarget?: 'primary' | 'secondary'): Promise<any[]> {
+    const result = await window.dataverseAPI.getAllEntitiesMetadata(properties, connectionTarget);
     return result.value;
   }
 }
