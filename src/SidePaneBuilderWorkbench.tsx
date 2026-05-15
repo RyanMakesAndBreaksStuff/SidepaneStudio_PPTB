@@ -25,7 +25,7 @@ export function SidePaneBuilderWorkbench(): React.ReactElement {
 
   // Verify active connection before allowing API calls
   useEffect(() => {
-    const toolbox = (window as any).toolboxAPI;
+    const toolbox = window.toolboxAPI;
     if (!toolbox) {
       setConnectionState({ status: 'error', message: 'toolboxAPI unavailable — open inside PPTB.' });
       return;
@@ -43,7 +43,7 @@ export function SidePaneBuilderWorkbench(): React.ReactElement {
 
   // Subscribe to connection lifecycle events — invalidate caches on change
   useEffect(() => {
-    const toolbox = (window as any).toolboxAPI;
+    const toolbox = window.toolboxAPI;
     if (!toolbox) return;
 
     const handler = (event: string) => {
@@ -58,8 +58,8 @@ export function SidePaneBuilderWorkbench(): React.ReactElement {
       }
     };
 
-    const unsub = toolbox.events.on(handler);
-    return () => { unsub?.(); };
+    toolbox.events.on(handler);
+    return () => { toolbox.events.off(handler); };
   }, []);
 
   // Responsive layout via ResizeObserver
@@ -73,7 +73,7 @@ export function SidePaneBuilderWorkbench(): React.ReactElement {
 
   // Restore last config from PPTB settings on mount
   useEffect(() => {
-    const toolbox = (window as any).toolboxAPI;
+    const toolbox = window.toolboxAPI;
     if (!toolbox) return;
     toolbox.settings.get('lastConfig').then((raw: string | null) => {
       if (!raw) return;
@@ -87,7 +87,7 @@ export function SidePaneBuilderWorkbench(): React.ReactElement {
 
   // Persist config to PPTB settings, debounced 500ms
   useEffect(() => {
-    const toolbox = (window as any).toolboxAPI;
+    const toolbox = window.toolboxAPI;
     if (!toolbox) return;
     const id = setTimeout(() => {
       toolbox.settings.set('lastConfig', JSON.stringify(config));
@@ -104,7 +104,7 @@ export function SidePaneBuilderWorkbench(): React.ReactElement {
 
   const handleReset = useCallback(() => {
     setConfig(DEFAULT_CONFIG);
-    const toolbox = (window as any).toolboxAPI;
+    const toolbox = window.toolboxAPI;
     toolbox?.settings?.set('lastConfig', null);
   }, []);
 

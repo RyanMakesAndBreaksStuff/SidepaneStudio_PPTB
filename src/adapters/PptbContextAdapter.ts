@@ -89,23 +89,23 @@ export class PptbContextAdapter implements IXrmContext {
 
   async webApiGet<T = unknown>(odataPath: string): Promise<T> {
     const cleanPath = odataPath.replace(/^\/api\/data\/v\d+\.\d+\//, '');
-    const result = await (window as any).dataverseAPI.queryData(cleanPath) as { value: unknown };
-    return result.value as T;
+    const result = await window.dataverseAPI.queryData(cleanPath);
+    return result.value as unknown as T;
   }
 
   async dataverseExecute<T = unknown>(request: DataverseExecuteRequest): Promise<T> {
-    const payload: Record<string, unknown> = {
+    const payload: DataverseAPI.ExecuteRequest = {
       operationName: request.operationName,
       operationType: request.operationType,
     };
     if (request.entityName !== undefined) payload.entityName = request.entityName;
     if (request.entityId !== undefined) payload.entityId = request.entityId;
     if (request.parameters !== undefined) payload.parameters = request.parameters;
-    return (window as any).dataverseAPI.execute(payload) as Promise<T>;
+    return window.dataverseAPI.execute(payload) as Promise<T>;
   }
 
   async getAllEntitiesMetadata(properties: string[]): Promise<any[]> {
-    const result = await (window as any).dataverseAPI.getAllEntitiesMetadata(properties) as { value: any[] };
+    const result = await window.dataverseAPI.getAllEntitiesMetadata(properties);
     return result.value;
   }
 }
