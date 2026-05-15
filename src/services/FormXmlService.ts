@@ -64,7 +64,7 @@ function firstLabel(el: Element | null): string {
 export class FormXmlService {
   async getFormsForEntity(entityLogicalName: string): Promise<FormMeta[]> {
     try {
-      const result = await (window as any).dataverseAPI.queryData(
+      const result = await window.dataverseAPI.queryData(
         `systemforms?$filter=objecttypecode eq '${entityLogicalName}' and type eq 2` +
           `&$select=name,formid&$orderby=name asc`
       );
@@ -76,10 +76,10 @@ export class FormXmlService {
 
   async getFormModel(formId: string): Promise<FormModel | null> {
     try {
-      const result = await (window as any).dataverseAPI.queryData(
+      const result = await window.dataverseAPI.queryData(
         `systemforms(${formId})?$select=formxml`
-      );
-      return this._parseFormXml(result.formxml ?? '');
+      ) as unknown as Record<string, unknown>;
+      return this._parseFormXml((result.formxml as string) ?? '');
     } catch {
       return null;
     }

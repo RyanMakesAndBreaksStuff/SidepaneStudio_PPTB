@@ -4,7 +4,7 @@ import { ThemeProvider } from './contexts/ThemeContext';
 import { SidePaneBuilderWorkbench } from './SidePaneBuilderWorkbench';
 
 function ConnectionGuard(): React.ReactElement {
-  const hasDataverseAPI = typeof (window as any).dataverseAPI !== 'undefined';
+  const hasDataverseAPI = typeof window.dataverseAPI !== 'undefined';
   if (!hasDataverseAPI) {
     return (
       <div style={{

@@ -15,8 +15,7 @@ export function CommandBar({ onReset }: CommandBarProps): React.ReactElement {
 
   const handleReset = () => {
     onReset();
-    const toolbox = (window as any).toolboxAPI;
-    toolbox?.utils?.showNotification({ type: 'success', message: 'Configuration reset.' });
+    window.toolboxAPI?.utils?.showNotification({ title: 'Configuration reset', body: '', type: 'success' });
   };
 
   return (

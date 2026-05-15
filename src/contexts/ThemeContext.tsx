@@ -12,10 +12,9 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [isDark, setIsDarkState] = useState<boolean>(true); // dark default until host responds
 
   useEffect(() => {
-    const toolbox = (window as any).toolboxAPI;
-    if (!toolbox?.utils?.getCurrentTheme) return;
-    const hostTheme: 'light' | 'dark' = toolbox.utils.getCurrentTheme();
-    setIsDarkState(hostTheme === 'dark');
+    window.toolboxAPI?.utils?.getCurrentTheme().then((hostTheme) => {
+      setIsDarkState(hostTheme === 'dark');
+    });
   }, []);
 
   return (
