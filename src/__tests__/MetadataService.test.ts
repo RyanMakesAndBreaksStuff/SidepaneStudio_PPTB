@@ -12,7 +12,7 @@ function makeXrm(
   return {
     getCurrentUserId: vi.fn().mockResolvedValue(userId),
     getAllEntitiesMetadata: vi.fn().mockResolvedValue(entities),
-    dataverseExecute: vi.fn().mockResolvedValue({ Privileges: privileges }),
+    dataverseExecute: vi.fn().mockResolvedValue({ RolePrivileges: privileges }),
   };
 }
 
@@ -51,7 +51,8 @@ describe('MetadataService', () => {
     expect(xrm.dataverseExecute).toHaveBeenCalledWith({
       operationName: 'RetrieveUserPrivileges',
       operationType: 'function',
-      parameters: { UserId: 'user-abc' },
+      entityName: 'systemuser',
+      entityId: 'user-abc',
     }, undefined);
   });
 

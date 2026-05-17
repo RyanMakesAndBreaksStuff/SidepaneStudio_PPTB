@@ -11,7 +11,7 @@ export interface SectionProps {
   children: React.ReactNode;
 }
 
-export function Section({ title, icon, defaultOpen = true, children }: SectionProps): React.ReactElement {
+export function Section({ title, icon, defaultOpen = false, children }: SectionProps): React.ReactElement {
   const { isDark } = useTheme();
   const T = theme(isDark);
   const [open, setOpen] = useState(defaultOpen);

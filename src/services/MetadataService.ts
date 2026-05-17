@@ -33,21 +33,31 @@ export class MetadataService {
         return { status: 'ok', tables: cached.tables };
       }
 
+      const executeRequest = {
+        operationName: 'RetrieveUserPrivileges',
+        operationType: 'function' as const,
+        entityName: 'systemuser',
+        entityId: userId,
+      };
+      console.log('[MetadataService] dataverseExecute request:', executeRequest, 'connectionTarget:', connectionTarget);
+
       const [entities, privResult] = await Promise.all([
         this.xrm.getAllEntitiesMetadata([
           'LogicalName', 'DisplayName', 'ObjectTypeCode',
           'IsIntersect', 'IsPrivate', 'Privileges',
         ], connectionTarget),
-        this.xrm.dataverseExecute<{ Privileges: Array<{ PrivilegeId: string; Depth: number }> }>({
-          operationName: 'RetrieveUserPrivileges',
-          operationType: 'function',
-          parameters: { UserId: userId },
-        }, connectionTarget),
+        this.xrm.dataverseExecute<{ RolePrivileges: Array<{ PrivilegeId: string; Depth: number }> }>(
+          executeRequest, connectionTarget
+        ),
       ]);
 
+      console.log('[MetadataService] privResult:', privResult);
+      console.log('[MetadataService] entities count:', entities.length);
+
       const userPrivilegeIds = new Set(
-        (privResult.Privileges ?? []).map((p) => normalizeGuid(p.PrivilegeId))
+        (privResult.RolePrivileges ?? []).map((p) => normalizeGuid(p.PrivilegeId))
       );
+      console.log('[MetadataService] userPrivilegeIds count:', userPrivilegeIds.size);
 
       const tables: TableInfo[] = [];
       for (const entity of entities) {
@@ -67,6 +77,7 @@ export class MetadataService {
         });
       }
 
+      console.log('[MetadataService] matched tables count:', tables.length);
       tables.sort((a, b) => a.displayName.localeCompare(b.displayName));
       this._cache.set(userId, { tables, expiresAt: Date.now() + CACHE_TTL_MS });
       return { status: 'ok', tables };

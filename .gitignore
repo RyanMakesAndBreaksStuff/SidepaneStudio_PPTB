@@ -9,6 +9,5 @@
 /dist
 /docs
 /data
-
-
+/coverage
 /package-lock.json

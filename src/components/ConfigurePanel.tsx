@@ -80,7 +80,7 @@ export function ConfigurePanel({
     <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', opacity: readOnly ? 0.7 : 1, pointerEvents: readOnly ? 'none' : 'auto' }}>
 
       {/* 1 · What opens in the pane */}
-      <Section title="What opens in the pane" icon="📋" defaultOpen>
+      <Section title="What opens in the pane" icon="📋" defaultOpen={false}>
         <Field label="Content type" required>
           <ChoiceGroup
             name="pageType"
@@ -127,7 +127,7 @@ export function ConfigurePanel({
       </Section>
 
       {/* 2 · Pane Appearance */}
-      <Section title="Pane Appearance" icon="🎨" defaultOpen>
+      <Section title="Pane Appearance" icon="🎨" defaultOpen={false}>
         <Field label="Pane title">
           <Input value={pane.title} onChange={v => patch('pane', 'title', v)} placeholder="My Side Pane" />
         </Field>
@@ -170,7 +170,7 @@ export function ConfigurePanel({
       </Section>
 
       {/* 3 · How makers launch this pane */}
-      <Section title="How makers launch this pane" icon="🚀" defaultOpen>
+      <Section title="How makers launch this pane" icon="🚀" defaultOpen={false}>
         <Field label="Trigger type" required>
           <ChoiceGroup
             name="triggerKind"
@@ -208,7 +208,7 @@ export function ConfigurePanel({
       </Section>
 
       {/* 4 · Record context */}
-      <Section title="Record context" icon="🗂" defaultOpen={true}>
+      <Section title="Record context" icon="🗂" defaultOpen={false}>
         <Field label="Context mode">
           <Select
             value={context.mode}
@@ -240,7 +240,7 @@ export function ConfigurePanel({
       </Section>
 
       {/* 5 · Advanced options */}
-      <Section title="Advanced options" icon="⚙" defaultOpen={true}>
+      <Section title="Advanced options" icon="⚙" defaultOpen={false}>
         <Toggle
           label="Open in foreground (isSelected)"
           desc="Pane expands automatically when opened"
