@@ -71,7 +71,7 @@ export const PreviewPanel = React.memo(function PreviewPanel({
 
       {/* Mock mode */}
       {mode === 'mock' && (
-        <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 16, gap: 12 }}>
+        <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start', padding: 16, gap: 12 }}>
           <MockMDAShell pane={config.pane} target={config.target} validation={validation} />
           <div style={{ display: 'flex', gap: 16, fontSize: 11, color: T.fg3, fontFamily: T.font }}>
             {([
@@ -111,8 +111,8 @@ export const PreviewPanel = React.memo(function PreviewPanel({
               <div style={{
                 display: 'flex',
                 width: '100%',
-                maxWidth: 700,
-                height: 380,
+                maxWidth: 900,
+                height: 480,
                 border: `1px solid #EDEBE9`,
                 borderRadius: 8,
                 boxShadow: '0 8px 20px rgba(0,0,0,.16)',

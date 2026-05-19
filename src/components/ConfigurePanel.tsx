@@ -28,9 +28,9 @@ const PAGE_TYPE_OPTIONS = [
   { value: 'custom',       label: 'Custom page',    desc: 'A canvas app page in your solution' },
   { value: 'entityrecord', label: 'Table record',    desc: 'Open a specific or context-driven record' },
   { value: 'entitylist',   label: 'Table list',      desc: 'Show a view of table records' },
-  { value: 'webresource',  label: 'Web resource',    desc: 'Embed an HTML/JS web resource', phase: 'Phase 1' },
-  { value: 'dashboard',    label: 'Dashboard',       desc: 'System or personal dashboard', phase: 'Phase 2', disabled: true },
-  { value: 'search',       label: 'Search',          desc: 'Global search results', phase: 'Phase 2', disabled: true },
+  { value: 'webresource',  label: 'Web resource',    desc: 'Embed an HTML/JS web resource' },
+  { value: 'dashboard',    label: 'Dashboard',       desc: 'System or personal dashboard', phase: 'Coming soon', disabled: true },
+  { value: 'search',       label: 'Search',          desc: 'Global search results', phase: 'Coming soon', disabled: true },
 ];
 
 const TRIGGER_OPTIONS = [

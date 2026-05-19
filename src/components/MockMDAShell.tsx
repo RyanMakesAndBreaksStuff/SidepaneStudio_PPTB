@@ -60,8 +60,8 @@ export function MockMDAShell({ pane, target, validation }: MockMDAShellProps): R
 
       <div style={{
         background: 'white', borderRadius: FL.rL,
-        boxShadow: FL.shadow16, width: '100%', maxWidth: 620,
-        height: 360, display: 'flex', flexDirection: 'column',
+        boxShadow: FL.shadow16, width: '100%', maxWidth: 900,
+        height: 480, display: 'flex', flexDirection: 'column',
         overflow: 'hidden',
       }}>
         {/* Topbar */}
