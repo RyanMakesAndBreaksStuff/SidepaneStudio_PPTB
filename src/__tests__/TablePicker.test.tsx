@@ -80,7 +80,15 @@ describe('TablePicker', () => {
   });
 
   it('shows an error state and retries after invalidating the service', async () => {
-    const service = makeService(Promise.resolve({ status: 'error', reason: 'metadata unavailable' }));
+    const service = {
+      listAccessibleTables: vi.fn()
+        .mockResolvedValueOnce({ status: 'error', reason: 'metadata unavailable' })
+        .mockResolvedValueOnce({
+          status: 'ok',
+          tables: [{ logicalName: 'account', displayName: 'Account', objectTypeCode: 1 }],
+        }),
+      invalidate: vi.fn(),
+    };
 
     await render(<TablePicker value="" onChange={() => { /* noop */ }} metadataService={service} />);
     await act(async () => { await Promise.resolve(); });
@@ -94,6 +102,7 @@ describe('TablePicker', () => {
 
     expect(service.invalidate).toHaveBeenCalledTimes(1);
     expect(service.listAccessibleTables).toHaveBeenCalledTimes(2);
+    expect(host?.textContent).toContain('Account (account)');
   });
 
   it('keeps a saved inaccessible table visible', async () => {

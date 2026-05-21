@@ -16,6 +16,8 @@ export function SidePaneBuilderWorkbench(): React.ReactElement {
     window.innerWidth >= 900 ? 'wide' : 'narrow'
   );
   const [connectionState, setConnectionState] = useState<ConnectionState>({ status: 'loading' });
+  const [settingsHydrated, setSettingsHydrated] = useState(false);
+  const configDirtyRef = useRef(false);
 
   const adapterRef = useRef<PptbContextAdapter | null>(null);
   if (!adapterRef.current) adapterRef.current = new PptbContextAdapter();
@@ -74,35 +76,44 @@ export function SidePaneBuilderWorkbench(): React.ReactElement {
   // Restore last config from PPTB settings on mount
   useEffect(() => {
     const toolbox = window.toolboxAPI;
-    if (!toolbox) return;
+    if (!toolbox) {
+      setSettingsHydrated(true);
+      return;
+    }
+    let active = true;
     toolbox.settings.get('lastConfig').then((raw: string | null) => {
-      if (!raw) return;
+      if (!active || !raw || configDirtyRef.current) return;
       try {
         setConfig(JSON.parse(raw) as PaneDefinitionConfig);
       } catch {
         // corrupted stored config — ignore
       }
+    }).finally(() => {
+      if (active) setSettingsHydrated(true);
     });
+    return () => { active = false; };
   }, []);
 
   // Persist config to PPTB settings, debounced 500ms
   useEffect(() => {
     const toolbox = window.toolboxAPI;
-    if (!toolbox) return;
+    if (!toolbox || !settingsHydrated || !configDirtyRef.current) return;
     const id = setTimeout(() => {
       toolbox.settings.set('lastConfig', JSON.stringify(config));
     }, 500);
     return () => clearTimeout(id);
-  }, [config]);
+  }, [config, settingsHydrated]);
 
   const handleChange = useCallback(
     (updater: (prev: PaneDefinitionConfig) => PaneDefinitionConfig) => {
+      configDirtyRef.current = true;
       setConfig(prev => updater(prev));
     },
     []
   );
 
   const handleReset = useCallback(() => {
+    configDirtyRef.current = false;
     setConfig(DEFAULT_CONFIG);
     const toolbox = window.toolboxAPI;
     toolbox?.settings?.set('lastConfig', null);

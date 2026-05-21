@@ -1,4 +1,5 @@
 import { PaneDefinitionConfig, TriggerKind } from '../types/PaneDefinitionConfig';
+import { normalizeGuid } from './odataGuards';
 
 const CMD_KINDS: TriggerKind[] = ['FormButton', 'MainGridButton', 'SubgridButton'];
 
@@ -6,6 +7,27 @@ const CMD_KINDS: TriggerKind[] = ['FormButton', 'MainGridButton', 'SubgridButton
 const PENDING_VAR = 'window.__spstudio_pendingPanes';
 /** Milliseconds a pending-panes lock is considered valid before expiring. */
 const PENDING_TTL_MS = 2000;
+const IDENTIFIER_PATTERN = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
+
+function safeIdentifier(value: string, fallback: string): string {
+  const trimmed = value.trim();
+  return IDENTIFIER_PATTERN.test(trimmed) ? trimmed : fallback;
+}
+
+function getSafeTriggerNames(config: PaneDefinitionConfig): { ns: string; fn: string } {
+  return {
+    ns: safeIdentifier(config.trigger.namespace || '', 'MyNamespace'),
+    fn: safeIdentifier(config.trigger.functionName || '', 'openPane'),
+  };
+}
+
+function buildConfiguredRecordIdExpression(config: PaneDefinitionConfig): string {
+  const configuredId = config.context.staticRecordId || config.target.entityId;
+  const normalized = normalizeGuid(configuredId);
+  if (normalized) return JSON.stringify(normalized);
+
+  return `(function() { throw new Error('A valid static record ID is required for entityrecord navigation.'); })()`;
+}
 
 function buildPaneOptions(config: PaneDefinitionConfig): string {
   const { pane } = config;
@@ -39,19 +61,22 @@ function buildPaneOptions(config: PaneDefinitionConfig): string {
 }
 
 function buildNavigateInput(config: PaneDefinitionConfig): string {
-  const { target, trigger } = config;
+  const { target, trigger, context } = config;
   switch (target.pageType) {
     case 'custom':
       return `{ pageType: 'custom', name: ${JSON.stringify(target.name)} }`;
     case 'entityrecord': {
       let entityIdExpr: string;
-      if (trigger.kind === 'FormOnLoad' || trigger.kind === 'FormOnChange') {
+      if (context.mode === 'Static' || trigger.kind === 'ManualJS') {
+        entityIdExpr = buildConfiguredRecordIdExpression(config);
+      } else if (trigger.kind === 'FormOnLoad' || trigger.kind === 'FormOnChange') {
         entityIdExpr = 'formContext.data.entity.getId()';
       } else if (trigger.kind === 'FormButton') {
         entityIdExpr = 'primaryControl.data.entity.getId()';
+      } else if (trigger.kind === 'MainGridButton' || trigger.kind === 'SubgridButton') {
+        entityIdExpr = 'selectedRecordId';
       } else {
-        // MainGridButton, SubgridButton, ManualJS — no single record context available
-        entityIdExpr = `'' /* supply record ID here */`;
+        entityIdExpr = buildConfiguredRecordIdExpression(config);
       }
       return `{ pageType: 'entityrecord', entityName: ${JSON.stringify(target.entityName)}, entityId: ${entityIdExpr} }`;
     }
@@ -90,9 +115,7 @@ function buildGetOrCreateBody(config: PaneDefinitionConfig, indent = '  '): stri
 }
 
 function generateFormOnLoad(config: PaneDefinitionConfig): string {
-  const { trigger } = config;
-  const ns = trigger.namespace || 'MyNamespace';
-  const fn = trigger.functionName || 'openPane';
+  const { ns, fn } = getSafeTriggerNames(config);
   const body = buildGetOrCreateBody(config, '  ');
 
   return `var ${ns} = ${ns} || {};
@@ -112,9 +135,7 @@ ${body
 }
 
 function generateFormButton(config: PaneDefinitionConfig): string {
-  const { trigger } = config;
-  const ns = trigger.namespace || 'MyNamespace';
-  const fn = trigger.functionName || 'openPane';
+  const { ns, fn } = getSafeTriggerNames(config);
   const body = buildGetOrCreateBody(config, '    ');
   const paneIdJson = JSON.stringify(config.pane.paneId);
 
@@ -140,9 +161,7 @@ ${body
 }
 
 function generateMainGridButton(config: PaneDefinitionConfig): string {
-  const { trigger } = config;
-  const ns = trigger.namespace || 'MyNamespace';
-  const fn = trigger.functionName || 'openPane';
+  const { ns, fn } = getSafeTriggerNames(config);
   const body = buildGetOrCreateBody(config, '    ');
   const paneIdJson = JSON.stringify(config.pane.paneId);
 
@@ -150,6 +169,9 @@ function generateMainGridButton(config: PaneDefinitionConfig): string {
 ${PENDING_VAR} = ${PENDING_VAR} || {};
 ${ns}.${fn} = function(primaryControl) {
   // primaryControl is captured at invocation time; assumed stable for command bar actions.
+  var selectedRows = primaryControl.getGrid().getSelectedRows();
+  if (!selectedRows || selectedRows.getLength() === 0) { return; }
+  var selectedRecordId = selectedRows.get(0).getData().getEntity().getId();
   if (${PENDING_VAR}[${paneIdJson}] && (Date.now() - ${PENDING_VAR}[${paneIdJson}]) < ${PENDING_TTL_MS}) return;
   ${PENDING_VAR}[${paneIdJson}] = Date.now();
   (async function() {
@@ -168,9 +190,7 @@ ${body
 }
 
 function generateSubgridButton(config: PaneDefinitionConfig): string {
-  const { trigger } = config;
-  const ns = trigger.namespace || 'MyNamespace';
-  const fn = trigger.functionName || 'openPane';
+  const { ns, fn } = getSafeTriggerNames(config);
   const body = buildGetOrCreateBody(config, '    ');
   const paneIdJson = JSON.stringify(config.pane.paneId);
 
@@ -179,6 +199,7 @@ ${PENDING_VAR} = ${PENDING_VAR} || {};
 ${ns}.${fn} = function(primaryControl) {
   var selectedRows = primaryControl.getGrid().getSelectedRows();
   if (!selectedRows || selectedRows.getLength() === 0) { return; }
+  var selectedRecordId = selectedRows.get(0).getData().getEntity().getId();
   if (${PENDING_VAR}[${paneIdJson}] && (Date.now() - ${PENDING_VAR}[${paneIdJson}]) < ${PENDING_TTL_MS}) return;
   ${PENDING_VAR}[${paneIdJson}] = Date.now();
   (async function() {
@@ -197,8 +218,7 @@ ${body
 }
 
 function generateManualJS(config: PaneDefinitionConfig): string {
-  const { trigger } = config;
-  const fn = trigger.functionName || 'openPane';
+  const { fn } = getSafeTriggerNames(config);
   const body = buildGetOrCreateBody(config, '  ');
 
   return `async function ${fn}() {
@@ -216,8 +236,7 @@ ${fn}().catch(console.error);`;
 
 function generateFormOnChange(config: PaneDefinitionConfig): string {
   const { trigger, pane } = config;
-  const ns = trigger.namespace || 'MyNamespace';
-  const fn = trigger.functionName || 'openPane';
+  const { ns, fn } = getSafeTriggerNames(config);
   const field = trigger.fieldName || '';
   const timerVar = `__spstudio_tmr_${pane.paneId.replace(/[^a-zA-Z0-9_]/g, '_')}`;
   const body = buildGetOrCreateBody(config, '    ');
@@ -264,8 +283,8 @@ export function generateBasicScript(config: PaneDefinitionConfig): string {
 
 export function generateLibraryScript(config: PaneDefinitionConfig): string {
   const { pane, trigger, target, context, behavior } = config;
-  const ns = trigger.namespace || 'MyOrg';
-  const fn = trigger.functionName || 'openPane';
+  const ns = safeIdentifier(trigger.namespace || '', 'MyOrg');
+  const fn = safeIdentifier(trigger.functionName || '', 'openPane');
 
   const optLines: string[] = [
     `    paneId: ${JSON.stringify(pane.paneId)}`,

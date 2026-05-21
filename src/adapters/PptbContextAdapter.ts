@@ -1,4 +1,5 @@
 // src/adapters/PptbContextAdapter.ts
+import { escapeODataStringLiteral } from '../services/odataGuards';
 
 export interface PaneCreateOptions {
   paneId: string;
@@ -61,8 +62,12 @@ export class PptbContextAdapter implements IXrmContext {
     return 'Unknown';
   }
 
-  async checkWebResourceExists(_name: string): Promise<boolean> {
-    return true;
+  async checkWebResourceExists(name: string): Promise<boolean> {
+    const result = await window.dataverseAPI.queryData(
+      `webresourceset?$select=webresourceid&$filter=name eq '${escapeODataStringLiteral(name)}'&$top=1`,
+      undefined
+    );
+    return (result.value ?? []).length > 0;
   }
 
   async readEnvVar(_name: string): Promise<null> {
@@ -78,7 +83,10 @@ export class PptbContextAdapter implements IXrmContext {
       this._whoAmIPromise = this.dataverseExecute<{ UserId: string }>({
         operationName: 'WhoAmI',
         operationType: 'function',
-      }).then(r => r.UserId);
+      }).then(r => r.UserId).catch((error: unknown) => {
+        this._whoAmIPromise = null;
+        throw error;
+      });
     }
     return this._whoAmIPromise;
   }

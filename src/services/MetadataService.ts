@@ -28,7 +28,8 @@ export class MetadataService {
   async listAccessibleTables(connectionTarget?: 'primary' | 'secondary'): Promise<AccessibleTablesResult> {
     try {
       const userId = await this.xrm.getCurrentUserId();
-      const cached = this._cache.get(userId);
+      const cacheKey = `${connectionTarget ?? 'default'}:${userId}`;
+      const cached = this._cache.get(cacheKey);
       if (cached && Date.now() < cached.expiresAt) {
         return { status: 'ok', tables: cached.tables };
       }
@@ -39,8 +40,6 @@ export class MetadataService {
         entityName: 'systemuser',
         entityId: userId,
       };
-      console.log('[MetadataService] dataverseExecute request:', executeRequest, 'connectionTarget:', connectionTarget);
-
       const [entities, privResult] = await Promise.all([
         this.xrm.getAllEntitiesMetadata([
           'LogicalName', 'DisplayName', 'ObjectTypeCode',
@@ -51,13 +50,9 @@ export class MetadataService {
         ),
       ]);
 
-      console.log('[MetadataService] privResult:', privResult);
-      console.log('[MetadataService] entities count:', entities.length);
-
       const userPrivilegeIds = new Set(
         (privResult.RolePrivileges ?? []).map((p) => normalizeGuid(p.PrivilegeId))
       );
-      console.log('[MetadataService] userPrivilegeIds count:', userPrivilegeIds.size);
 
       const tables: TableInfo[] = [];
       for (const entity of entities) {
@@ -77,9 +72,8 @@ export class MetadataService {
         });
       }
 
-      console.log('[MetadataService] matched tables count:', tables.length);
       tables.sort((a, b) => a.displayName.localeCompare(b.displayName));
-      this._cache.set(userId, { tables, expiresAt: Date.now() + CACHE_TTL_MS });
+      this._cache.set(cacheKey, { tables, expiresAt: Date.now() + CACHE_TTL_MS });
       return { status: 'ok', tables };
     } catch (err) {
       const reason = err instanceof Error ? err.message : 'Unknown error loading table list.';

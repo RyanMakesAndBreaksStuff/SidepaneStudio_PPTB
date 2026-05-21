@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 import { theme } from '../theme/tokens';
 import { PaneDefinitionConfig } from '../types/PaneDefinitionConfig';
@@ -31,21 +31,35 @@ export const PreviewPanel = React.memo(function PreviewPanel({
   const T = theme(isDark);
   const [mode, setMode] = useState<PreviewMode>('mock');
   const [formState, setFormState] = useState<FormState>({ status: 'idle' });
+  const formRequestIdRef = useRef(0);
+  const mountedRef = useRef(true);
 
   const formXmlSvcRef = useRef<FormXmlService | null>(null);
   if (!formXmlSvcRef.current) formXmlSvcRef.current = new FormXmlService();
 
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+      formRequestIdRef.current += 1;
+    };
+  }, []);
+
   const handleFormSelected = useCallback(async (selection: FormSelection | null) => {
+    const requestId = formRequestIdRef.current + 1;
+    formRequestIdRef.current = requestId;
+
     if (!selection) {
       setFormState({ status: 'idle' });
       return;
     }
     setFormState({ status: 'loading' });
-    const model = await formXmlSvcRef.current!.getFormModel(selection.formId);
-    if (!model) {
+    const result = await formXmlSvcRef.current!.getFormModelResult(selection.formId);
+    if (!mountedRef.current || formRequestIdRef.current !== requestId) return;
+
+    if (!result.ok) {
       setFormState({ status: 'error', reason: 'Could not load form layout. Check your connection.' });
     } else {
-      setFormState({ status: 'loaded', model });
+      setFormState({ status: 'loaded', model: result.model });
     }
   }, []);
 

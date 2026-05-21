@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { PaneConfig, TargetConfig } from '../types/PaneDefinitionConfig';
 import { ValidationResult } from '../services/ValidationService';
+import { getPreviewPaneWidth, getSafePreviewImageSrc } from './previewHelpers';
 
 // Fluent Light tokens — hardcoded, isolated from app theme (same invariant as MockMDAShell)
 const FL = {
@@ -28,13 +29,6 @@ const PAGE_TYPE_LABELS: Record<string, string> = {
   search: 'Search',
 };
 
-// Maps config width (px) to visual display width in the preview overlay
-function visualWidth(configWidth: number): number {
-  // Scale 300–1000 → 120–270
-  const clamped = Math.min(1000, Math.max(300, configWidth));
-  return Math.round(120 + ((clamped - 300) / 700) * 150);
-}
-
 export const PaneOverlay = React.memo(function PaneOverlay({
   pane,
   target,
@@ -42,7 +36,8 @@ export const PaneOverlay = React.memo(function PaneOverlay({
 }: PaneOverlayProps): React.ReactElement | null {
   if (pane.isSelected === false) return null;
 
-  const width = visualWidth(pane.width);
+  const width = getPreviewPaneWidth(pane.width);
+  const imageSrc = getSafePreviewImageSrc(pane.imageSrc);
 
   return (
     <div
@@ -71,8 +66,8 @@ export const PaneOverlay = React.memo(function PaneOverlay({
             flexShrink: 0,
           }}
         >
-          {pane.imageSrc ? (
-            <img src={pane.imageSrc} alt="" style={{ width: 16, height: 16 }} />
+          {imageSrc ? (
+            <img src={imageSrc} alt="" style={{ width: 16, height: 16 }} />
           ) : (
             <span style={{ fontSize: 14 }}>🔲</span>
           )}

@@ -44,6 +44,19 @@ describe('PptbContextAdapter', () => {
     expect(api.execute).toHaveBeenCalledTimes(1);
   });
 
+  it('getCurrentUserId clears a rejected WhoAmI promise so later calls can retry', async () => {
+    const api = makeMockDataverseAPI('user-retry');
+    api.execute
+      .mockRejectedValueOnce(new Error('temporary WhoAmI failure'))
+      .mockResolvedValueOnce({ UserId: 'user-retry' });
+    vi.stubGlobal('dataverseAPI', api);
+    const adapter = new PptbContextAdapter();
+
+    await expect(adapter.getCurrentUserId()).rejects.toThrow('temporary WhoAmI failure');
+    await expect(adapter.getCurrentUserId()).resolves.toBe('user-retry');
+    expect(api.execute).toHaveBeenCalledTimes(2);
+  });
+
   it('WhoAmI is lazy — no execute call before getCurrentUserId is called', () => {
     const api = makeMockDataverseAPI();
     vi.stubGlobal('dataverseAPI', api);
@@ -127,10 +140,24 @@ describe('PptbContextAdapter', () => {
     expect(adapter.getHostKind()).toBe('Unknown');
   });
 
-  it('checkWebResourceExists always resolves true', async () => {
-    vi.stubGlobal('dataverseAPI', makeMockDataverseAPI());
+  it('checkWebResourceExists queries Dataverse and returns true when a row exists', async () => {
+    const api = makeMockDataverseAPI();
+    api.queryData.mockResolvedValue({ value: [{ webresourceid: 'wr-1' }] });
+    vi.stubGlobal('dataverseAPI', api);
     const adapter = new PptbContextAdapter();
-    expect(await adapter.checkWebResourceExists('anything')).toBe(true);
+    expect(await adapter.checkWebResourceExists("cpp_/icons/o'brien.svg")).toBe(true);
+    expect(api.queryData).toHaveBeenCalledWith(
+      "webresourceset?$select=webresourceid&$filter=name eq 'cpp_/icons/o''brien.svg'&$top=1",
+      undefined
+    );
+  });
+
+  it('checkWebResourceExists queries Dataverse and returns false when no row exists', async () => {
+    const api = makeMockDataverseAPI();
+    api.queryData.mockResolvedValue({ value: [] });
+    vi.stubGlobal('dataverseAPI', api);
+    const adapter = new PptbContextAdapter();
+    expect(await adapter.checkWebResourceExists('missing.svg')).toBe(false);
   });
 
   it('readEnvVar always resolves null', async () => {

@@ -1,3 +1,46 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor">
-  <path fill-rule="evenodd" d="M0 3.5A1.5 1.5 0 0 1 1.5 2h13A1.5 1.5 0 0 1 16 3.5v9A1.5 1.5 0 0 1 14.5 14h-13A1.5 1.5 0 0 1 0 12.5v-9zM1.5 3a.5.5 0 0 0-.5.5v9a.5.5 0 0 0 .5.5H10V3H1.5zm8.5 0v10h4.5a.5.5 0 0 0 .5-.5v-9a.5.5 0 0 0-.5-.5H10z"/>
+<svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<!-- Fluent UI soft drop shadow for the main container -->
+<filter id="fluentShadow" x="12" y="28" width="232" height="208" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+<feFlood flood-opacity="0" result="BackgroundImageFix"/>
+<feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
+<feOffset dy="4"/>
+<feGaussianBlur stdDeviation="6"/>
+<feColorMatrix type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.1 0"/>
+<feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow"/>
+<feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow" result="shape"/>
+</filter>
+<!-- Subtle gradient for the Side Pane surface -->
+<linearGradient id="paneGradient" x1="160" y1="36" x2="236" y2="220" gradientUnits="userSpaceOnUse">
+<stop stop-color="#E6F2FF"/>
+<stop offset="1" stop-color="#C7E0F4"/>
+</linearGradient>
+</defs>
+
+<!-- Main Application Container (White Surface with Shadow) -->
+<g filter="url(#fluentShadow)">
+<rect x="20" y="36" width="216" height="184" rx="12" fill="white"/>
+<rect x="20" y="36" width="216" height="184" rx="12" stroke="#D2D0CE" stroke-width="1"/>
+</g>
+
+<!-- Left Side: Text Area (3 lines stacked) -->
+<g font-family="'Segoe UI Bold', 'Segoe UI', sans-serif" fill="#0078D4" text-anchor="middle" font-weight="700" font-size="20">
+<!-- Centered horizontally within the left area, vertically balanced -->
+<text x="90" y="108">SIDE</text>
+<text x="90" y="134">PANE</text>
+<text x="90" y="160">STUDIO</text>
+</g>
+
+<!-- Right Side: The Side Pane with Plus Symbol -->
+<rect x="160" y="36" width="76" height="184" rx="12" fill="url(#paneGradient)" stroke="#0078D4" stroke-width="2" stroke-opacity="0.5"/>
+<!-- A subtle highlight line on the left edge of the side pane -->
+<line x1="161" y1="48" x2="161" y2="208" stroke="white" stroke-opacity="0.7" stroke-width="2"/>
+
+<!-- The Plus Symbol (Centered in the right pane) -->
+<g stroke="#0078D4" stroke-width="10" stroke-linecap="round" opacity="0.9">
+<!-- Vertical line -->
+<line x1="198" y1="98" x2="198" y2="158"/>
+<!-- Horizontal line -->
+<line x1="168" y1="128" x2="228" y2="128"/>
+</g>
 </svg>

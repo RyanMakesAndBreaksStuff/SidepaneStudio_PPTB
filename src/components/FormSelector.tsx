@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 import { theme } from '../theme/tokens';
 import { FormXmlService, FormMeta } from '../services/FormXmlService';
@@ -25,27 +25,51 @@ export function FormSelector({
   const [forms, setForms] = useState<FormMeta[]>([]);
   const [selectedFormId, setSelectedFormId] = useState<string>('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string>('');
+  const [retryCount, setRetryCount] = useState(0);
+  const requestIdRef = useRef(0);
 
   useEffect(() => {
+    const requestId = requestIdRef.current + 1;
+    requestIdRef.current = requestId;
+
     if (!entityName) {
       setForms([]);
       setSelectedFormId('');
+      setLoading(false);
+      setError('');
       onFormSelected(null);
       return;
     }
+
     setLoading(true);
+    setError('');
     setSelectedFormId('');
     onFormSelected(null);
-    formXmlService.getFormsForEntity(entityName).then(fetched => {
-      setForms(fetched);
-      setLoading(false);
-      if (fetched.length === 1) {
-        setSelectedFormId(fetched[0].id);
-        onFormSelected({ entityLogicalName: entityName, formId: fetched[0].id });
+
+    formXmlService.getFormsForEntityResult(entityName).then(result => {
+      if (requestIdRef.current !== requestId) return;
+
+      if (!result.ok) {
+        setForms([]);
+        setLoading(false);
+        setError('Could not load main forms.');
+        return;
       }
+
+      setForms(result.forms);
+      setLoading(false);
+      if (result.forms.length === 1) {
+        setSelectedFormId(result.forms[0].id);
+        onFormSelected({ entityLogicalName: entityName, formId: result.forms[0].id });
+      }
+    }).catch(() => {
+      if (requestIdRef.current !== requestId) return;
+      setForms([]);
+      setLoading(false);
+      setError('Could not load main forms.');
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [entityName]);
+  }, [entityName, formXmlService, onFormSelected, retryCount]);
 
   const handleFormChange = (formId: string) => {
     setSelectedFormId(formId);
@@ -90,6 +114,17 @@ export function FormSelector({
           <div style={{ ...selectStyle, color: T.fg3 }}>Loading…</div>
         ) : !entityName ? (
           <div style={{ ...selectStyle, color: T.fg3 }}>Configure entity first</div>
+        ) : error ? (
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <div style={{ ...selectStyle, color: T.error }}>{error}</div>
+            <button
+              type="button"
+              onClick={() => setRetryCount(count => count + 1)}
+              style={{ ...selectStyle, width: 'auto', cursor: 'pointer' }}
+            >
+              Retry
+            </button>
+          </div>
         ) : forms.length === 0 ? (
           <div style={{ ...selectStyle, color: T.fg3 }}>No main forms found</div>
         ) : (

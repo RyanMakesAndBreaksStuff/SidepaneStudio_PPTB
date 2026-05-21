@@ -1,4 +1,9 @@
 // src/services/FormXmlService.ts
+import {
+  buildSystemFormXmlPath,
+  buildSystemFormsForEntityPath,
+  isValidLogicalName,
+} from './odataGuards';
 
 export interface FormMeta {
   id: string;
@@ -36,6 +41,27 @@ export interface FormCell {
   empty: boolean;
 }
 
+export type FormServiceErrorCode =
+  | 'invalid-entity-logical-name'
+  | 'invalid-form-id'
+  | 'query-failed'
+  | 'missing-formxml'
+  | 'invalid-formxml';
+
+export interface FormServiceError {
+  code: FormServiceErrorCode;
+  message: string;
+  cause?: unknown;
+}
+
+export type FormsForEntityResult =
+  | { ok: true; forms: FormMeta[] }
+  | { ok: false; error: FormServiceError };
+
+export type FormModelResult =
+  | { ok: true; model: FormModel }
+  | { ok: false; error: FormServiceError };
+
 // Partial classId prefix (first 8 hex chars, lower) → field type
 // Stable GUIDs across all Dynamics 365 environments
 const CLASSID_FIELD_TYPE: Record<string, FormCell['fieldType']> = {
@@ -63,25 +89,92 @@ function firstLabel(el: Element | null): string {
 
 export class FormXmlService {
   async getFormsForEntity(entityLogicalName: string): Promise<FormMeta[]> {
+    const result = await this.getFormsForEntityResult(entityLogicalName);
+    return result.ok ? result.forms : [];
+  }
+
+  async getFormsForEntityResult(entityLogicalName: string): Promise<FormsForEntityResult> {
+    if (!isValidLogicalName(entityLogicalName)) {
+      return {
+        ok: false,
+        error: {
+          code: 'invalid-entity-logical-name',
+          message: `Invalid entity logical name: ${entityLogicalName}`,
+        },
+      };
+    }
+
     try {
       const result = await window.dataverseAPI.queryData(
-        `systemforms?$filter=objecttypecode eq '${entityLogicalName}' and type eq 2` +
-          `&$select=name,formid&$orderby=name asc`
+        buildSystemFormsForEntityPath(entityLogicalName)
       );
-      return (result.value ?? []).map((f: any) => ({ id: f.formid, name: f.name }));
-    } catch {
-      return [];
+      const rows = (result.value ?? []) as Array<Record<string, unknown>>;
+      return {
+        ok: true,
+        forms: rows.map((form) => ({ id: String(form.formid ?? ''), name: String(form.name ?? '') })),
+      };
+    } catch (cause) {
+      return {
+        ok: false,
+        error: {
+          code: 'query-failed',
+          message: 'Failed to load forms for entity.',
+          cause,
+        },
+      };
     }
   }
 
   async getFormModel(formId: string): Promise<FormModel | null> {
+    const result = await this.getFormModelResult(formId);
+    return result.ok ? result.model : null;
+  }
+
+  async getFormModelResult(formId: string): Promise<FormModelResult> {
+    const path = buildSystemFormXmlPath(formId);
+    if (!path) {
+      return {
+        ok: false,
+        error: {
+          code: 'invalid-form-id',
+          message: `Invalid form ID: ${formId}`,
+        },
+      };
+    }
+
     try {
-      const result = await window.dataverseAPI.queryData(
-        `systemforms(${formId})?$select=formxml`
-      ) as unknown as Record<string, unknown>;
-      return this._parseFormXml((result.formxml as string) ?? '');
-    } catch {
-      return null;
+      const result = await window.dataverseAPI.queryData(path) as unknown as Record<string, unknown>;
+      if (typeof result.formxml !== 'string') {
+        return {
+          ok: false,
+          error: {
+            code: 'missing-formxml',
+            message: 'The form XML response did not include formxml.',
+          },
+        };
+      }
+
+      const model = this._parseFormXml(result.formxml);
+      if (!model) {
+        return {
+          ok: false,
+          error: {
+            code: 'invalid-formxml',
+            message: 'The form XML response could not be parsed.',
+          },
+        };
+      }
+
+      return { ok: true, model };
+    } catch (cause) {
+      return {
+        ok: false,
+        error: {
+          code: 'query-failed',
+          message: 'Failed to load form XML.',
+          cause,
+        },
+      };
     }
   }
 

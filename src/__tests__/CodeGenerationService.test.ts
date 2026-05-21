@@ -91,6 +91,27 @@ describe('generateBasicScript — pending cache', () => {
   });
 });
 
+describe('generateBasicScript — safe generated identifiers', () => {
+  it('falls back for malicious namespace and function names', () => {
+    const code = generateBasicScript(
+      cfg({
+        trigger: {
+          kind: 'FormButton',
+          namespace: 'Bad;window.hacked=1//',
+          functionName: 'open);window.hacked=1;//',
+          fieldName: '',
+        },
+      })
+    );
+
+    expect(isValidJS(code)).toBe(true);
+    expect(code).toContain('var MyNamespace = MyNamespace || {};');
+    expect(code).toContain('MyNamespace.openPane = function');
+    expect(code).not.toContain('Bad;window.hacked=1//');
+    expect(code).not.toContain('open);window.hacked=1;//');
+  });
+});
+
 describe('generateBasicScript — reuseExistingPane', () => {
   it('reuseExistingPane: true emits select(); return;', () => {
     const code = generateBasicScript(cfg({ context: { reuseExistingPane: true } as any }));
@@ -163,15 +184,60 @@ describe('buildNavigateInput — pageType branches', () => {
     expect(code).not.toContain('entityId: recordId');
   });
 
-  it('entityrecord + MainGridButton emits empty entityId placeholder comment', () => {
+  it('entityrecord + MainGridButton uses the selected row ID', () => {
     const code = generateBasicScript(
       cfg({
         trigger: { kind: 'MainGridButton' } as any,
         target: { pageType: 'entityrecord', entityName: 'account', entityId: '', name: '' },
       })
     );
-    expect(code).toContain('supply record ID here');
-    expect(code).not.toContain('entityId: recordId');
+    expect(code).toContain('selectedRows.getLength() === 0');
+    expect(code).toContain('var selectedRecordId = selectedRows.get(0).getData().getEntity().getId();');
+    expect(code).toContain('entityId: selectedRecordId');
+    expect(code).not.toContain("entityId: ''");
+  });
+
+  it('entityrecord + SubgridButton uses the selected row ID', () => {
+    const code = generateBasicScript(
+      cfg({
+        trigger: { kind: 'SubgridButton' } as any,
+        target: { pageType: 'entityrecord', entityName: 'account', entityId: '', name: '' },
+      })
+    );
+    expect(code).toContain('var selectedRecordId = selectedRows.get(0).getData().getEntity().getId();');
+    expect(code).toContain('entityId: selectedRecordId');
+    expect(code).not.toContain("entityId: ''");
+  });
+
+  it('entityrecord + ManualJS uses a valid static record ID', () => {
+    const code = generateBasicScript(
+      cfg({
+        trigger: { kind: 'ManualJS' } as any,
+        target: { pageType: 'entityrecord', entityName: 'account', entityId: '', name: '' },
+        context: {
+          mode: 'Static',
+          entityName: 'account',
+          staticRecordId: '{AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE}',
+          reuseExistingPane: true,
+        },
+      })
+    );
+    expect(isValidJS(code)).toBe(true);
+    expect(code).toContain('entityId: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"');
+    expect(code).not.toContain("entityId: ''");
+  });
+
+  it('entityrecord + ManualJS without valid static record ID throws before navigation input is usable', () => {
+    const code = generateBasicScript(
+      cfg({
+        trigger: { kind: 'ManualJS' } as any,
+        target: { pageType: 'entityrecord', entityName: 'account', entityId: '', name: '' },
+        context: { mode: 'Static', entityName: 'account', staticRecordId: 'not-a-guid', reuseExistingPane: true },
+      })
+    );
+    expect(isValidJS(code)).toBe(true);
+    expect(code).toContain('A valid static record ID is required');
+    expect(code).not.toContain("entityId: ''");
   });
 
   it('entitylist emits pageType and entityName but no entityId', () => {

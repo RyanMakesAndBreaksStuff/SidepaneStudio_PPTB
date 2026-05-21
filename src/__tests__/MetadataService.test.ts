@@ -171,6 +171,24 @@ describe('MetadataService', () => {
     );
   });
 
+  it('cache key includes connectionTarget on a single service instance', async () => {
+    const xrm = makeXrm('user-123', [ENTITY_ACCOUNT], [PRIV_WRITE_ACCOUNT]);
+    const svc = new MetadataService(xrm);
+    await svc.listAccessibleTables('primary');
+    await svc.listAccessibleTables('secondary');
+    expect(xrm.getAllEntitiesMetadata).toHaveBeenCalledTimes(2);
+    expect(xrm.dataverseExecute).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not write production console logs while loading metadata', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const xrm = makeXrm('user-123', [ENTITY_ACCOUNT], [PRIV_WRITE_ACCOUNT]);
+    const svc = new MetadataService(xrm);
+    await svc.listAccessibleTables();
+    expect(logSpy).not.toHaveBeenCalled();
+    logSpy.mockRestore();
+  });
+
   it('skips entity privilege with missing PrivilegeId — does not throw', async () => {
     const entityWithBadPriv = {
       ...ENTITY_ACCOUNT,

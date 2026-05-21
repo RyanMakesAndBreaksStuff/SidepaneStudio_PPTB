@@ -34,7 +34,6 @@ export interface MockMDAShellProps {
 
 export function MockMDAShell({ pane, target, validation }: MockMDAShellProps): React.ReactElement {
   const FL = FLUENT_LIGHT;
-  const mappedWidth = Math.round(120 + ((pane.width - 300) / 700) * 150);
 
   // Q-8: Inject animation CSS once; avoid duplicate style tags on re-render
   useEffect(() => {

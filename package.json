@@ -3,12 +3,22 @@
   "version": "0.1.0",
   "displayName": "Side Pane Studio",
   "description": "Do you also think Side Panes are the bees knees but sorely under utilzied due to complicated implementation? With Side Pane Studio you can Build, Preview and Generate Code. Now you can give those Model Driven Forms some rizz",
-  "icon": "icon.svg",
+  "icon": "public/icon.svg",
   "main": "index.html",
   "features": {
+    "multiConnection": "optional",
     "minAPI": "1.2.0"
   },
   "author": "Ryan Rettinger",
+  "configurations": {
+    "repository": "https://github.com/RyanMakesAndBreaksStuff/SidepaneStudio_PPTB",
+    "readmeUrl": "https://raw.githubusercontent.com/RyanMakesAndBreaksStuff/SidepaneStudio_PPTB/main/README.md"
+  },
+  "contributors": [
+    {
+      "name": "Ryan Rettinger"
+    }
+  ],
   "license": "MIT",
   "scripts": {
     "dev": "vite",
@@ -21,14 +31,20 @@
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
-    "@pptb/types": "latest",
+    "@eslint/js": "9.39.4",
+    "@microsoft/eslint-plugin-power-apps": "0.5.1",
+    "@pptb/types": "1.2.1",
     "@types/react": "^18.0.0",
     "@types/react-dom": "^18.0.0",
     "@vitejs/plugin-react": "^5.0.0",
-    "@vitest/coverage-v8": "latest",
+    "@vitest/coverage-v8": "4.1.6",
     "eslint": "^9.0.0",
-    "jsdom": "latest",
+    "eslint-plugin-promise": "7.3.0",
+    "eslint-plugin-react": "7.37.5",
+    "globals": "17.6.0",
+    "jsdom": "29.1.1",
     "typescript": "^5.8.3",
+    "typescript-eslint": "8.59.4",
     "vite": "^8.0.12",
     "vitest": "^4.1.6"
   }
