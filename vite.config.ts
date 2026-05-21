@@ -26,6 +26,7 @@ function fixHtmlForPPTB(): Plugin {
 export default defineConfig({
   plugins: [react(), fixHtmlForPPTB()],
   base: './',
+  publicDir: 'public', 
   build: {
     rollupOptions: {
       output: {

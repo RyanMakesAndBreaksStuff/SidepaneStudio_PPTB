@@ -168,7 +168,7 @@ describe('buildNavigateInput — pageType branches', () => {
         target: { pageType: 'entityrecord', entityName: 'account', entityId: '', name: '' },
       })
     );
-    expect(code).toContain("pageType: 'entityrecord'");
+    expect(code).toContain('pageType: "entityrecord"');
     expect(code).toContain('entityName: "account"');
     expect(code).toContain('formContext.data.entity.getId()');
   });
@@ -244,7 +244,7 @@ describe('buildNavigateInput — pageType branches', () => {
     const code = generateBasicScript(
       cfg({ target: { pageType: 'entitylist', entityName: 'contact', entityId: '', name: '' } })
     );
-    expect(code).toContain("pageType: 'entitylist'");
+    expect(code).toContain('pageType: "entitylist"');
     expect(code).toContain('entityName: "contact"');
     expect(code).not.toContain('entityId');
   });
@@ -253,7 +253,7 @@ describe('buildNavigateInput — pageType branches', () => {
     const code = generateBasicScript(
       cfg({ target: { pageType: 'webresource', name: 'new_mypage.html', entityName: '', entityId: '' } })
     );
-    expect(code).toContain("pageType: 'webresource'");
+    expect(code).toContain('pageType: "webresource"');
     expect(code).toContain('webresourceName: "new_mypage.html"');
     expect(code).not.toContain('entityName');
   });

@@ -64,7 +64,7 @@ function buildNavigateInput(config: PaneDefinitionConfig): string {
   const { target, trigger, context } = config;
   switch (target.pageType) {
     case 'custom':
-      return `{ pageType: 'custom', name: ${JSON.stringify(target.name)} }`;
+      return `{ pageType: ${JSON.stringify(target.pageType)}, name: ${JSON.stringify(target.name)} }`;
     case 'entityrecord': {
       let entityIdExpr: string;
       if (context.mode === 'Static' || trigger.kind === 'ManualJS') {
@@ -78,12 +78,12 @@ function buildNavigateInput(config: PaneDefinitionConfig): string {
       } else {
         entityIdExpr = buildConfiguredRecordIdExpression(config);
       }
-      return `{ pageType: 'entityrecord', entityName: ${JSON.stringify(target.entityName)}, entityId: ${entityIdExpr} }`;
+      return `{ pageType: ${JSON.stringify(target.pageType)}, entityName: ${JSON.stringify(target.entityName)}, entityId: ${entityIdExpr} }`;
     }
     case 'entitylist':
-      return `{ pageType: 'entitylist', entityName: ${JSON.stringify(target.entityName)} }`;
+      return `{ pageType: ${JSON.stringify(target.pageType)}, entityName: ${JSON.stringify(target.entityName)} }`;
     case 'webresource':
-      return `{ pageType: 'webresource', webresourceName: ${JSON.stringify(target.name)} }`;
+      return `{ pageType: ${JSON.stringify(target.pageType)}, webresourceName: ${JSON.stringify(target.name)} }`;
     default:
       return `{ pageType: ${JSON.stringify(target.pageType)}, name: ${JSON.stringify(target.name)} }`;
   }
