@@ -153,9 +153,59 @@ export function ConfigurePanel({
               onChange={e => patch('pane', 'width', +e.target.value)}
               style={{ flex: 1, height: 4, accentColor: T.accentTeal, cursor: 'pointer' }}
             />
-            <span style={{ fontFamily: T.mono, fontSize: 12, fontWeight: 600, color: T.fg2, minWidth: 40, textAlign: 'right' }}>
-              {pane.width}px
-            </span>
+            <input
+              type="number"
+              min={300}
+              max={1200}
+              step={10}
+              value={pane.width}
+              onChange={e => {
+                const raw = +e.target.value;
+                if (Number.isNaN(raw)) return;
+                patch('pane', 'width', Math.max(300, Math.min(1200, Math.round(raw))));
+              }}
+              aria-label="Pane width in pixels"
+              style={{
+                width: 64,
+                padding: '4px 6px',
+                border: `1px solid ${T.stroke1}`,
+                borderRadius: T.rS,
+                background: T.surface1,
+                color: T.fg1,
+                fontFamily: T.mono,
+                fontSize: 12,
+                fontWeight: 600,
+                textAlign: 'right',
+                boxSizing: 'border-box',
+                MozAppearance: 'textfield' as React.CSSProperties['MozAppearance'],
+              }}
+            />
+            <span style={{ fontFamily: T.mono, fontSize: 11, color: T.fg3, flexShrink: 0 }}>px</span>
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+            {[320, 400, 480, 600, 800].map(preset => {
+              const active = pane.width === preset;
+              return (
+                <button
+                  key={preset}
+                  type="button"
+                  onClick={() => patch('pane', 'width', preset)}
+                  style={{
+                    padding: '3px 10px',
+                    border: `1px solid ${active ? T.accentTeal : T.stroke1}`,
+                    borderRadius: 999,
+                    background: active ? T.accentTealBg : 'transparent',
+                    color: active ? T.accentTeal : T.fg2,
+                    fontFamily: T.mono,
+                    fontSize: 11,
+                    fontWeight: active ? 600 : 500,
+                    cursor: 'pointer',
+                  }}
+                >
+                  {preset}
+                </button>
+              );
+            })}
           </div>
         </Field>
 

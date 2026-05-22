@@ -72,6 +72,7 @@ export function CodeBlock({ code, lang = 'js' }: CodeBlockProps): React.ReactEle
   const T = theme(isDark);
   const [copied, setCopied] = useState(false);
   const [fallback, setFallback] = useState(false);
+  const [wrap, setWrap] = useState(true);
 
   const copy = useCallback(() => {
     navigator.clipboard.writeText(code)
@@ -91,22 +92,56 @@ export function CodeBlock({ code, lang = 'js' }: CodeBlockProps): React.ReactEle
           <span style={{ fontFamily: T.mono, fontSize: 10, color: '#9CDCFE', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.6px' }}>
             {lang === 'json' ? 'JSON' : 'JavaScript'}
           </span>
-          <button
-            onClick={copy}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 4,
-              padding: '3px 9px', background: 'rgba(255,255,255,.08)',
-              border: '1px solid rgba(255,255,255,.12)', borderRadius: T.rS,
-              color: copied ? '#4EC9B0' : 'rgba(255,255,255,.75)',
-              fontSize: 11, fontFamily: T.font, cursor: 'pointer',
-            }}
-          >
-            {copied ? '✓ Copied!' : '📋 Copy'}
-          </button>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <button
+              type="button"
+              onClick={() => setWrap(w => !w)}
+              aria-pressed={wrap}
+              title={wrap ? 'Disable word wrap' : 'Enable word wrap'}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 4,
+                padding: '3px 9px',
+                background: wrap ? 'rgba(78,201,176,.18)' : 'rgba(255,255,255,.08)',
+                border: `1px solid ${wrap ? 'rgba(78,201,176,.45)' : 'rgba(255,255,255,.12)'}`,
+                borderRadius: T.rS,
+                color: wrap ? '#4EC9B0' : 'rgba(255,255,255,.75)',
+                fontSize: 11, fontFamily: T.font, cursor: 'pointer',
+              }}
+            >
+              {/* word-wrap glyph: arrow returning to start of next line */}
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M2 4h12M2 12h6" />
+                <path d="M2 8h9a2.5 2.5 0 0 1 0 5H8" />
+                <path d="M10 11.5 8 13l2 1.5" />
+              </svg>
+              Wrap
+            </button>
+            <button
+              onClick={copy}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 4,
+                padding: '3px 9px', background: 'rgba(255,255,255,.08)',
+                border: '1px solid rgba(255,255,255,.12)', borderRadius: T.rS,
+                color: copied ? '#4EC9B0' : 'rgba(255,255,255,.75)',
+                fontSize: 11, fontFamily: T.font, cursor: 'pointer',
+              }}
+            >
+              {copied ? '✓ Copied!' : '📋 Copy'}
+            </button>
+          </div>
         </div>
-        <div style={{ padding: '14px', overflowX: 'auto' }}>
+        <div style={{ padding: '14px', overflowX: wrap ? 'hidden' : 'auto' }}>
           <pre
-            style={{ fontFamily: T.mono, fontSize: 12, lineHeight: 1.65, color: '#D4D4D4', margin: 0, whiteSpace: 'pre' }}
+            style={{
+              fontFamily: T.mono,
+              fontSize: 12,
+              lineHeight: 1.65,
+              color: '#D4D4D4',
+              margin: 0,
+              whiteSpace: wrap ? 'pre-wrap' : 'pre',
+              wordBreak: wrap ? 'break-word' : 'normal',
+              overflowWrap: wrap ? 'anywhere' : 'normal',
+            }}
             dangerouslySetInnerHTML={{ __html: highlighted }}
           />
         </div>

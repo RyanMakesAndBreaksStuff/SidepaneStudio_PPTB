@@ -1,4 +1,7 @@
 // src/theme/tokens.ts
+// Deep Ocean palette — light & dark variants.
+// Source: design-system palette uploads (Deep Ocean — bioluminescent accents).
+
 import { TokenSet } from './types';
 
 const INVARIANT = {
@@ -11,59 +14,65 @@ const INVARIANT = {
   mono: "'Cascadia Code','Fira Code','Consolas','Courier New',monospace",
 };
 
+// ────────────────────────────────────────────────────────────────────────────
+// DARK — Abyssal depths · bioluminescent accents
+// ────────────────────────────────────────────────────────────────────────────
 const DARK: TokenSet = {
-  pageBg: '#1A1A1A',
-  surface1: '#2D2D21',
-  surface2: '#30321A',
-  surface3: '#1E201A',
-  accentTeal: '#2BC0B0',
-  accentOrange: '#E67E22',
-  accentTealBg: 'rgba(43,192,176,.12)',
-  fg1: '#E8E8E8',
-  fg2: '#B0B0B0',
-  fg3: '#808080',
-  stroke1: '#3A3A3A',
-  strokeAcc: '#5A5A5A',
-  success: '#2ECC71',
-  warning: '#F1C40F',
-  error: '#E74C3C',
-  info: '#3498DB',
-  warnBg: 'rgba(241,196,15,.12)',
-  errBg: 'rgba(231,76,60,.12)',
-  okBg: 'rgba(46,204,113,.12)',
-  infoBg: 'rgba(52,152,219,.12)',
-  shadow2: '0 1px 2px rgba(0,0,0,.5),0 0 2px rgba(0,0,0,.3)',
-  shadow4: '0 2px 4px rgba(0,0,0,.5),0 0 2px rgba(0,0,0,.3)',
-  shadow8: '0 4px 8px rgba(0,0,0,.5),0 0 2px rgba(0,0,0,.3)',
-  shadow16: '0 8px 20px rgba(0,0,0,.6),0 0 2px rgba(0,0,0,.3)',
+  pageBg:       '#060D18', // Abyssal Dark
+  surface1:     '#0C1A2E', // Trench Layer (input / subtle elevation)
+  surface2:     '#112540', // Deep Shelf (panel headers / chips)
+  surface3:     '#0A1426', // Between page and surface1 — subtle ambient
+  accentTeal:   '#1AB8CC', // Bioluminescent Blue (primary)
+  accentOrange: '#3DD6CC', // Seafoam (secondary accent — repurposed slot)
+  accentTealBg: 'rgba(26,184,204,.14)',
+  fg1:          '#D6EAF5', // AA text
+  fg2:          '#95B5C8', // Between primary and muted
+  fg3:          '#5A8FA8', // Muted Tide
+  stroke1:      '#1A3D5C', // Subtle Current
+  strokeAcc:    '#2E5876', // Stronger border
+  success:      '#28B870',
+  warning:      '#D4A443',
+  error:        '#DF5C5C',
+  info:         '#3AACD4',
+  okBg:         'rgba(40,184,112,.14)',
+  warnBg:       'rgba(212,164,67,.14)',
+  errBg:        'rgba(223,92,92,.14)',
+  infoBg:       'rgba(58,172,212,.14)',
+  shadow2:      '0 1px 2px rgba(0,0,0,.5),0 0 2px rgba(0,0,0,.3)',
+  shadow4:      '0 2px 4px rgba(0,0,0,.5),0 0 2px rgba(0,0,0,.3)',
+  shadow8:      '0 4px 8px rgba(0,0,0,.5),0 0 2px rgba(0,0,0,.3)',
+  shadow16:     '0 8px 20px rgba(0,0,0,.6),0 0 2px rgba(0,0,0,.3)',
   ...INVARIANT,
 };
 
+// ────────────────────────────────────────────────────────────────────────────
+// LIGHT — Airy coastal light · bioluminescent accents
+// ────────────────────────────────────────────────────────────────────────────
 const LIGHT: TokenSet = {
-  pageBg: '#FFFFFF',
-  surface1: '#F0F0FA',
-  surface2: '#FAFAFA',
-  surface3: '#F5F5F5',
-  accentTeal: '#1A9A8C',
-  accentOrange: '#D4690F',
-  accentTealBg: 'rgba(26,154,140,.10)',
-  fg1: '#1A1A1A',
-  fg2: '#424242',
-  fg3: '#616161',
-  stroke1: '#D1D1D1',
-  strokeAcc: '#898989',
-  success: '#107C10',
-  warning: '#7D5400',
-  error: '#A4000F',
-  info: '#004578',
-  warnBg: '#FFF8E7',
-  errBg: '#FDF3F4',
-  okBg: '#F1FAF1',
-  infoBg: '#EBF3FC',
-  shadow2: '0 1px 2px rgba(0,0,0,.14),0 0 2px rgba(0,0,0,.10)',
-  shadow4: '0 2px 4px rgba(0,0,0,.14),0 0 2px rgba(0,0,0,.10)',
-  shadow8: '0 4px 8px rgba(0,0,0,.14),0 0 2px rgba(0,0,0,.10)',
-  shadow16: '0 8px 20px rgba(0,0,0,.16),0 0 2px rgba(0,0,0,.10)',
+  pageBg:       '#EEF6FC', // Ocean Mist
+  surface1:     '#DCEEF8', // Shallow Tide (input / subtle elevation)
+  surface2:     '#F8F4EC', // Warm Sand Shelf (panel headers / chips)
+  surface3:     '#E8F1F8', // Between page and surface1 — subtle ambient
+  accentTeal:   '#1080A0', // Bioluminescent Blue (primary)
+  accentOrange: '#2A9A8A', // Seafoam (secondary accent — repurposed slot)
+  accentTealBg: 'rgba(16,128,160,.10)',
+  fg1:          '#06101A', // AA text
+  fg2:          '#2A4858', // Between primary and muted
+  fg3:          '#4A7A90', // Muted Tide
+  stroke1:      '#C0D8E8', // Subtle Current
+  strokeAcc:    '#9CBED2', // Stronger border
+  success:      '#1A9055',
+  warning:      '#B07A1A',
+  error:        '#BB3A3A',
+  info:         '#1A80B0',
+  okBg:         '#E4F4EB',
+  warnBg:       '#FBF1DF',
+  errBg:        '#FAEAEA',
+  infoBg:       '#E4F0F7',
+  shadow2:      '0 1px 2px rgba(6,16,26,.10),0 0 2px rgba(6,16,26,.06)',
+  shadow4:      '0 2px 4px rgba(6,16,26,.10),0 0 2px rgba(6,16,26,.06)',
+  shadow8:      '0 4px 8px rgba(6,16,26,.12),0 0 2px rgba(6,16,26,.06)',
+  shadow16:     '0 8px 20px rgba(6,16,26,.14),0 0 2px rgba(6,16,26,.06)',
   ...INVARIANT,
 };
 

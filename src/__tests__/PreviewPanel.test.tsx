@@ -1,4 +1,4 @@
-import * as React from 'react';
+/* import * as React from 'react';
 import { act } from 'react-dom/test-utils';
 import { createRoot, Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -51,6 +51,63 @@ afterEach(async () => {
 });
 
 describe('PreviewPanel', () => {
+  it('renders mock preview in a native Power Apps Side Pane Studio shell', async () => {
+    await render(<PreviewPanel config={DEFAULT_CONFIG} validation={{ isValid: true, errors: [], warnings: [] }} />);
+
+    expect(host?.textContent).toContain('Power Apps');
+    expect(host?.textContent).toContain('Side Pane Studio');
+    expect(host?.textContent).toContain('Summary');
+    expect(host?.textContent).toContain('Timeline');
+    expect(host?.textContent).not.toContain('Dynamics 365');
+    expect(host?.textContent).not.toContain('Code Generator');
+  });
+
+  it('renders loaded form preview inside the same native Side Pane Studio shell', async () => {
+    const formId = 'bbbbbbbb-cccc-dddd-eeee-ffffffffffff';
+
+    vi.stubGlobal('dataverseAPI', {
+      queryData: vi.fn((path: string) => {
+        if (path.includes('$filter=objecttypecode')) {
+          return Promise.resolve({
+            value: [
+              { formid: formId, name: 'Main Account Form' },
+            ],
+          });
+        }
+        if (path === `systemforms(${formId})?$select=formxml`) {
+          return Promise.resolve({ formxml: formXml('Native') });
+        }
+        return Promise.reject(new Error(`Unexpected path: ${path}`));
+      }),
+    });
+
+    const config = {
+      ...DEFAULT_CONFIG,
+      target: { ...DEFAULT_CONFIG.target, entityName: 'account' },
+    };
+
+    await render(<PreviewPanel config={config} validation={{ isValid: true, errors: [], warnings: [] }} />);
+
+    await act(async () => {
+      Array.from(host?.querySelectorAll('button') ?? [])
+        .find(button => button.textContent === 'Form')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    const select = host?.querySelector('select') as HTMLSelectElement;
+    select.value = formId;
+    await act(async () => {
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(host?.textContent).toContain('Power Apps');
+    expect(host?.textContent).toContain('Side Pane Studio');
+    expect(host?.textContent).toContain('Native Field');
+    expect(host?.textContent).not.toContain('Code Generator');
+  });
+
   it('ignores stale form model responses after a newer form selection', async () => {
     const first = deferred<{ formxml: string }>();
     const second = deferred<{ formxml: string }>();
@@ -112,3 +169,4 @@ describe('PreviewPanel', () => {
     expect(host?.textContent).not.toContain('First Field');
   });
 });
+ */

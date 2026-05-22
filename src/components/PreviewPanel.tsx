@@ -1,18 +1,25 @@
 import * as React from 'react';
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 import { theme } from '../theme/tokens';
 import { PaneDefinitionConfig } from '../types/PaneDefinitionConfig';
 import { ValidationResult } from '../services/ValidationService';
 import { FormXmlService, FormModel } from '../services/FormXmlService';
+import { MetadataService } from '../services/MetadataService';
 import { FormSelector, FormSelection } from './FormSelector';
 import { FormXmlRenderer } from './FormXmlRenderer';
 import { MockMDAShell } from './MockMDAShell';
-import { PaneOverlay } from './PaneOverlay';
+import { NativeMdaFrame } from './NativeMdaFrame';
+import { PreviewSizeProvider, usePreviewSize } from './previewSize';
 
 export interface PreviewPanelProps {
   config: PaneDefinitionConfig;
   validation: ValidationResult;
+  /**
+   * Shared MetadataService — the cache is the same one Configure's TablePicker
+   * uses, so the preview entity dropdown reuses the already-fetched table list.
+   */
+  metadataService: MetadataService;
 }
 
 type PreviewMode = 'mock' | 'form';
@@ -26,13 +33,39 @@ type FormState =
 export const PreviewPanel = React.memo(function PreviewPanel({
   config,
   validation,
+  metadataService,
 }: PreviewPanelProps): React.ReactElement {
   const { isDark } = useTheme();
   const T = theme(isDark);
   const [mode, setMode] = useState<PreviewMode>('mock');
   const [formState, setFormState] = useState<FormState>({ status: 'idle' });
+  // Preview-local host entity. Independent of config.target.entityName so the
+  // preview can mimic the pane sitting on a different table than the one the
+  // pane itself targets. Initialized ONCE from the configured target (if any)
+  // so the cold start isn't punitive — the user can resync on demand via the
+  // FormSelector's "Use configured" affordance if config diverges later.
+  const [previewHostEntity, setPreviewHostEntity] = useState<string>(
+    () => config.target.entityName ?? ''
+  );
   const formRequestIdRef = useRef(0);
   const mountedRef = useRef(true);
+
+  // Container-query: observe our own width and broadcast a layout mode to children.
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const [containerWidth, setContainerWidth] = useState<number>(0);
+
+  useEffect(() => {
+    const node = rootRef.current;
+    if (!node || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(entries => {
+      for (const entry of entries) {
+        const w = entry.contentRect.width;
+        setContainerWidth(prev => (Math.abs(prev - w) < 0.5 ? prev : w));
+      }
+    });
+    ro.observe(node);
+    return () => ro.disconnect();
+  }, []);
 
   const formXmlSvcRef = useRef<FormXmlService | null>(null);
   if (!formXmlSvcRef.current) formXmlSvcRef.current = new FormXmlService();
@@ -76,71 +109,129 @@ export const PreviewPanel = React.memo(function PreviewPanel({
   });
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden', background: T.pageBg }}>
-      {/* Mode tab strip */}
-      <div style={{ display: 'flex', borderBottom: `1px solid ${T.stroke1}`, background: T.surface2, flexShrink: 0 }}>
-        <button style={tabStyle(mode === 'mock')} onClick={() => setMode('mock')}>Mock</button>
-        <button style={tabStyle(mode === 'form')} onClick={() => setMode('form')}>Form</button>
-      </div>
-
-      {/* Mock mode */}
-      {mode === 'mock' && (
-        <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start', padding: 16, gap: 12 }}>
-          <MockMDAShell pane={config.pane} target={config.target} validation={validation} />
-          <div style={{ display: 'flex', gap: 16, fontSize: 11, color: T.fg3, fontFamily: T.font }}>
-            {([
-              ['Width', `${config.pane.width}px`],
-              ['Header', config.pane.hideHeader ? 'Hidden' : 'Visible'],
-              ['Close', config.pane.canClose ? '✓' : '–'],
-            ] as [string, string][]).map(([label, val]) => (
-              <span key={label}>{label}: <strong style={{ color: T.fg1 }}>{val}</strong></span>
-            ))}
-          </div>
+    <div
+      ref={rootRef}
+      style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden', background: T.pageBg, minWidth: 0 }}
+    >
+      <PreviewSizeProvider width={containerWidth}>
+        {/* Mode tab strip */}
+        <div style={{ display: 'flex', borderBottom: `1px solid ${T.stroke1}`, background: T.surface2, flexShrink: 0 }}>
+          <button style={tabStyle(mode === 'mock')} onClick={() => setMode('mock')}>Mock</button>
+          <button style={tabStyle(mode === 'form')} onClick={() => setMode('form')}>Form</button>
         </div>
-      )}
 
-      {/* Form mode */}
-      {mode === 'form' && (
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          <FormSelector
-            entityName={config.target.entityName}
-            formXmlService={formXmlSvcRef.current}
-            onFormSelected={handleFormSelected}
-          />
+        {/* Mock mode */}
+        {mode === 'mock' && (
+          <div
+            style={{
+              flex: 1,
+              overflow: 'auto',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'stretch',
+              padding: 12,
+              gap: 12,
+              minWidth: 0,
+            }}
+          >
+            <MockMDAShell pane={config.pane} target={config.target} validation={validation} />
+            <PreviewMeta config={config} />
+          </div>
+        )}
 
-          <div style={{ flex: 1, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-            {formState.status === 'idle' && (
-              <MockMDAShell pane={config.pane} target={config.target} validation={validation} />
-            )}
+        {/* Form mode */}
+        {mode === 'form' && (
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
+            <FormSelector
+              entityName={previewHostEntity}
+              onEntityNameChange={setPreviewHostEntity}
+              entityNameHint={config.target.entityName || undefined}
+              configuredEntity={config.target.entityName || undefined}
+              onUseConfigured={() => {
+                if (config.target.entityName) setPreviewHostEntity(config.target.entityName);
+              }}
+              formXmlService={formXmlSvcRef.current}
+              metadataService={metadataService}
+              onFormSelected={handleFormSelected}
+            />
 
-            {formState.status === 'loading' && (
-              <div style={{ color: T.fg3, fontFamily: T.font, fontSize: 13 }}>Loading form layout…</div>
-            )}
-
-            {formState.status === 'error' && (
-              <div style={{ color: T.error, fontFamily: T.font, fontSize: 13 }}>{formState.reason}</div>
-            )}
-
-            {formState.status === 'loaded' && (
-              <div style={{
+            <div
+              style={{
+                flex: 1,
+                overflow: 'auto',
                 display: 'flex',
-                width: '100%',
-                maxWidth: 900,
-                height: 480,
-                border: `1px solid #EDEBE9`,
-                borderRadius: 8,
-                boxShadow: '0 8px 20px rgba(0,0,0,.16)',
-                overflow: 'hidden',
-              }}>
-                <div style={{ flex: 1, overflow: 'hidden' }}>
-                  <FormXmlRenderer model={formState.model} />
+                flexDirection: 'column',
+                alignItems: 'stretch',
+                padding: 12,
+                minWidth: 0,
+              }}
+            >
+              {formState.status === 'idle' && (
+                <MockMDAShell pane={config.pane} target={config.target} validation={validation} />
+              )}
+
+              {formState.status === 'loading' && (
+                <div style={{ color: T.fg3, fontFamily: T.font, fontSize: 13, textAlign: 'center', padding: 24 }}>
+                  Loading form layout…
                 </div>
-                <PaneOverlay pane={config.pane} target={config.target} validation={validation} />
-              </div>
-            )}
+              )}
+
+              {formState.status === 'error' && (
+                <div style={{ color: T.error, fontFamily: T.font, fontSize: 13, textAlign: 'center', padding: 24 }}>
+                  {formState.reason}
+                </div>
+              )}
+
+              {formState.status === 'loaded' && (
+                <NativeMdaFrame
+                  pane={config.pane}
+                  hostTarget={{
+                    pageType: 'entityrecord',
+                    name: '',
+                    entityName: previewHostEntity,
+                    entityId: '',
+                  }}
+                  paneTarget={config.target}
+                  validation={validation}
+                  formModel={formState.model}
+                >
+                  <FormXmlRenderer model={formState.model} />
+                </NativeMdaFrame>
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </PreviewSizeProvider>
     </div>
   );
 });
+
+function PreviewMeta({ config }: { config: PaneDefinitionConfig }): React.ReactElement {
+  const { isDark } = useTheme();
+  const T = theme(isDark);
+  const { mode } = usePreviewSize();
+  const items: [string, string][] = useMemo(() => ([
+    ['Width',  `${config.pane.width}px`],
+    ['Header', config.pane.hideHeader ? 'Hidden' : 'Visible'],
+    ['Close',  config.pane.canClose ? '✓' : '–'],
+  ]), [config.pane.width, config.pane.hideHeader, config.pane.canClose]);
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexWrap: 'wrap',
+        rowGap: 4,
+        columnGap: mode === 'compact' ? 12 : 16,
+        fontSize: 11,
+        color: T.fg3,
+        fontFamily: T.font,
+        justifyContent: mode === 'compact' ? 'flex-start' : 'center',
+      }}
+    >
+      {items.map(([label, val]) => (
+        <span key={label}>{label}: <strong style={{ color: T.fg1 }}>{val}</strong></span>
+      ))}
+    </div>
+  );
+}

@@ -37,13 +37,9 @@ function buildPaneOptions(config: PaneDefinitionConfig): string {
     `    width: ${pane.width}`,
   ];
 
-  // P1-CGS-E: defensively coerce canClose to false when hideHeader hides the entire header bar
+  // P1-CGS-E: defensively coerce canClose to false when hideHeader hides the entire header bar.
   const effectiveCanClose = pane.hideHeader ? false : pane.canClose;
-  if (!effectiveCanClose) {
-    opts.push(`    canClose: false`);
-  } else {
-    opts.push(`    // canClose: omitted — defaults to true`);
-  }
+  opts.push(`    canClose: ${effectiveCanClose ? 'true' : 'false'}`);
 
   if (!pane.isResizable) {
     opts.push(`    isResizable: false`);

@@ -18,61 +18,99 @@ export interface ChoiceGroupProps {
   onChange: (value: string) => void;
 }
 
+/**
+ * Pill-style single-select. Wraps to multiple rows, highlights the active
+ * choice with the accent color, and surfaces `desc` of the selected option
+ * below the pill row so descriptions stay visible without bloating each pill.
+ * `phase` renders as a small inline subscript (e.g. "Dashboard · Soon") and
+ * `disabled` greys the pill + blocks selection.
+ */
 export function ChoiceGroup({ name, options, value, onChange }: ChoiceGroupProps): React.ReactElement {
   const { isDark } = useTheme();
   const T = theme(isDark);
 
+  const selected = options.find(o => o.value === value);
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-      {options.map(opt => {
-        const sel = value === opt.value;
-        const dis = opt.disabled ?? false;
-        return (
-          <label
-            key={opt.value}
-            style={{
-              display: 'flex', alignItems: 'flex-start', gap: 8, padding: '7px 9px',
-              border: `1px solid ${sel ? T.accentTeal : T.stroke1}`,
-              borderRadius: T.rM,
-              background: sel ? T.accentTealBg : T.pageBg,
-              cursor: dis ? 'not-allowed' : 'pointer',
-              opacity: dis ? 0.5 : 1,
-              transition: 'border-color 80ms, background 80ms',
-            }}
-            onClick={() => { if (!dis) onChange(opt.value); }}
-          >
-            <input
-              type="radio"
-              name={name}
-              value={opt.value}
-              checked={sel}
-              onChange={() => { if (!dis) onChange(opt.value); }}
+    <div role="radiogroup" aria-label={name} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+        {options.map(opt => {
+          const sel = value === opt.value;
+          const dis = opt.disabled ?? false;
+          return (
+            <button
+              key={opt.value}
+              type="button"
+              role="radio"
+              aria-checked={sel}
+              aria-disabled={dis || undefined}
               disabled={dis}
-              style={{ display: 'none' }}
-            />
-            <div style={{
-              width: 14, height: 14, borderRadius: '50%', flexShrink: 0,
-              border: `1.5px solid ${sel ? T.accentTeal : T.strokeAcc}`,
-              background: sel ? T.accentTeal : 'transparent',
-              marginTop: 2, display: 'flex', alignItems: 'center', justifyContent: 'center',
-              transition: 'border-color 80ms, background 80ms',
-            }}>
-              {sel && <div style={{ width: 5, height: 5, borderRadius: '50%', background: 'white' }} />}
-            </div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: T.fg1 }}>
-                {opt.label}
-                {opt.phase && (
-                  <span style={{ fontWeight: 400, fontSize: 10, color: T.fg3, marginLeft: 4 }}>
-                    — {opt.phase}
-                  </span>
-                )}
-              </div>
-              {opt.desc && <div style={{ fontSize: 11, color: T.fg3 }}>{opt.desc}</div>}
-            </div>
-          </label>
-        );
-      })}
+              title={opt.desc}
+              onClick={() => { if (!dis) onChange(opt.value); }}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '5px 12px',
+                border: `1px solid ${sel ? T.accentTeal : T.stroke1}`,
+                borderRadius: T.rFull,
+                background: sel ? T.accentTealBg : 'transparent',
+                color: sel ? T.accentTeal : (dis ? T.fg3 : T.fg1),
+                fontFamily: T.font,
+                fontSize: 12,
+                fontWeight: sel ? 600 : 500,
+                cursor: dis ? 'not-allowed' : 'pointer',
+                opacity: dis ? 0.55 : 1,
+                whiteSpace: 'nowrap',
+                transition: 'border-color 80ms, background 80ms, color 80ms',
+              }}
+            >
+              {sel && (
+                <span
+                  aria-hidden="true"
+                  style={{
+                    width: 6,
+                    height: 6,
+                    borderRadius: '50%',
+                    background: T.accentTeal,
+                    flexShrink: 0,
+                  }}
+                />
+              )}
+              <span>{opt.label}</span>
+              {opt.phase && (
+                <span
+                  style={{
+                    fontFamily: T.mono,
+                    fontSize: 10,
+                    fontWeight: 500,
+                    color: T.fg3,
+                    paddingLeft: 6,
+                    borderLeft: `1px solid ${T.stroke1}`,
+                    marginLeft: 2,
+                    textTransform: 'uppercase',
+                    letterSpacing: '.4px',
+                  }}
+                >
+                  {opt.phase}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+      {selected?.desc && (
+        <div
+          style={{
+            fontSize: 11,
+            color: T.fg3,
+            lineHeight: 1.45,
+            paddingLeft: 2,
+          }}
+        >
+          {selected.desc}
+        </div>
+      )}
     </div>
   );
 }

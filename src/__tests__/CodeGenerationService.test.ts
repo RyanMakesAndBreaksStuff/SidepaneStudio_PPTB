@@ -351,6 +351,12 @@ describe('buildPaneOptions — isSelected and canClose', () => {
     const code = generateBasicScript(cfg({ pane: { hideHeader: true, canClose: true } as any }));
     expect(code).toContain('canClose: false');
   });
+
+  it('canClose: true is emitted explicitly because the runtime default does not show the close button', () => {
+    const code = generateBasicScript(cfg({ pane: { hideHeader: false, canClose: true } as any }));
+    expect(code).toContain('canClose: true');
+    expect(code).not.toContain('canClose: omitted');
+  });
 });
 
 describe('generateLibraryScript', () => {

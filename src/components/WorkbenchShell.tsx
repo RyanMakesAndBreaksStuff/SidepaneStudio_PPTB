@@ -50,7 +50,7 @@ export function WorkbenchShell({
     metadataService,
     onAccessibleTablesChange: setAccessibleTables,
   };
-  const previewPanelProps = { config, validation };
+  const previewPanelProps = { config, validation, metadataService };
   const outputPanelProps = { config, xrm, validation };
 
   return (
@@ -62,10 +62,10 @@ export function WorkbenchShell({
           <aside style={{ width: 308, minWidth: 268, borderRight: `1px solid ${T.stroke1}`, overflow: 'auto', flexShrink: 0 }}>
             <ConfigurePanel {...configurePanelProps} />
           </aside>
-          <section style={{ flex: 1, borderRight: `1px solid ${T.stroke1}`, minWidth: 320, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          <section style={{ flex: 1, borderRight: `1px solid ${T.stroke1}`, minWidth: 300, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
             <PreviewPanel {...previewPanelProps} />
           </section>
-          <section style={{ width: 360, minWidth: 320, overflow: 'auto', flexShrink: 0 }}>
+          <section style={{ width: 420, minWidth: 360, overflow: 'auto', flexShrink: 0 }}>
             <OutputPanel {...outputPanelProps} />
           </section>
         </div>
