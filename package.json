@@ -5,10 +5,6 @@
   "description": "Do you also think Side Panes are the bees knees but sorely under utilzied due to complicated implementation? With Side Pane Studio you can Build, Preview and Generate Code. Now you can give those Model Driven Forms some rizz",
   "icon": "icon/icon.svg",
   "main": "index.html",
-  "features": {
-    "multiConnection": "optional",
-    "minAPI": "1.2.0"
-  },
   "author": "Ryan Rettinger",
   "configurations": {
     "repository": "https://github.com/RyanMakesAndBreaksStuff/SidepaneStudio_PPTB",
