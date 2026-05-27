@@ -25,3 +25,21 @@ export function buildSystemFormXmlPath(formId: string): string | null {
   const normalizedFormId = normalizeGuid(formId);
   return normalizedFormId ? `systemforms(${normalizedFormId})?$select=formxml` : null;
 }
+
+export function buildEntityDefinitionsPath(): string {
+  return (
+    'EntityDefinitions' +
+    '?$select=LogicalName,SchemaName,DisplayName,EntitySetName,ObjectTypeCode,' +
+    'IsCustomEntity,IsActivity,IsIntersect,IsPrivate,OwnershipType,' +
+    'CanCreateForms,CanModifyAdditionalSettings,IsCustomizable' +
+    '&$filter=IsValidForAdvancedFind eq true and IsIntersect eq false and IsPrivate eq false'
+  );
+}
+
+export function buildSystemDashboardsPath(): string {
+  return 'systemdashboards?$select=name,dashboardid&$orderby=name asc';
+}
+
+export function buildUserDashboardsPath(): string {
+  return 'userdashboards?$select=name,userdashboardid&$orderby=name asc';
+}
