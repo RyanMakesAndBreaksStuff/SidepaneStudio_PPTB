@@ -86,7 +86,7 @@ export function SidePaneBuilderWorkbench(): React.ReactElement {
       try {
         setConfig(JSON.parse(raw) as PaneDefinitionConfig);
       } catch {
-        // corrupted stored config — ignore
+        console.warn('SidePaneBuilderWorkbench: corrupted stored config, resetting to default');
       }
     }).finally(() => {
       if (active) setSettingsHydrated(true);

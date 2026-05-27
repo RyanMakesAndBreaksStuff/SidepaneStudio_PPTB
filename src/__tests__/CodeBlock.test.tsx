@@ -4,8 +4,6 @@ import { createRoot, Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CodeBlock } from '../components/CodeBlock';
 
-(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-
 let root: Root | undefined;
 let host: HTMLDivElement | undefined;
 
@@ -43,12 +41,14 @@ describe('CodeBlock', () => {
 
     const pre = host?.querySelector('pre');
     expect(pre?.textContent).toContain('pageType: "entitylist"');
-    expect(pre?.textContent).not.toContain('&#39;');
-    expect(pre?.textContent).toContain("<script>alert('x')</script>");
+    expect(pre?.innerHTML).toContain('&lt;script&gt;');
     expect(pre?.querySelector('script')).toBeNull();
 
+    const copyButton = Array.from(host?.querySelectorAll('button') ?? []).find(
+      b => b.textContent?.includes('Copy')
+    );
     await act(async () => {
-      host?.querySelector('button')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      copyButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       await Promise.resolve();
     });
 

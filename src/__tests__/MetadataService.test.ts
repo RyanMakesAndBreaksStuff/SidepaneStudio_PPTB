@@ -18,14 +18,14 @@ function makeXrm(
 
 const ENTITY_ACCOUNT = {
   LogicalName: 'account',
-  DisplayName: { UserLocalizedLabel: { Label: 'Account' } },
+  DisplayName: { LocalizedLabels: [{ Label: 'Account' }] },
   ObjectTypeCode: 1,
   IsIntersect: false,
   IsPrivate: false,
-  Privileges: [{ PrivilegeId: 'priv-write-account', Name: 'prvWriteaccount' }],
+  Privileges: [{ PrivilegeId: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee', Name: 'prvWriteaccount' }],
 };
 
-const PRIV_WRITE_ACCOUNT = { PrivilegeId: 'priv-write-account', Depth: 1 };
+const PRIV_WRITE_ACCOUNT = { PrivilegeId: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee', Depth: 1 };
 
 describe('MetadataService', () => {
   beforeEach(() => {

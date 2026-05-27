@@ -14,6 +14,8 @@ import { TablePicker } from './TablePicker';
 import { Toggle } from './Toggle';
 import { ChoiceGroup } from './ChoiceGroup';
 import { Callout } from './Callout';
+import { WidthPicker } from './WidthPicker';
+import { MIN_CONFIG_WIDTH, MAX_CONFIG_WIDTH } from './previewHelpers';
 
 export interface ConfigurePanelProps {
   config: PaneDefinitionConfig;
@@ -146,67 +148,12 @@ export function ConfigurePanel({
           )}
         </Field>
 
-        <Field label="Width" hint={`Min 300px · Max 1200px · Recommended 400–600px · Current: ${pane.width}px`}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <input
-              type="range" min={300} max={1200} value={pane.width}
-              onChange={e => patch('pane', 'width', +e.target.value)}
-              style={{ flex: 1, height: 4, accentColor: T.accentTeal, cursor: 'pointer' }}
-            />
-            <input
-              type="number"
-              min={300}
-              max={1200}
-              step={10}
-              value={pane.width}
-              onChange={e => {
-                const raw = +e.target.value;
-                if (Number.isNaN(raw)) return;
-                patch('pane', 'width', Math.max(300, Math.min(1200, Math.round(raw))));
-              }}
-              aria-label="Pane width in pixels"
-              style={{
-                width: 64,
-                padding: '4px 6px',
-                border: `1px solid ${T.stroke1}`,
-                borderRadius: T.rS,
-                background: T.surface1,
-                color: T.fg1,
-                fontFamily: T.mono,
-                fontSize: 12,
-                fontWeight: 600,
-                textAlign: 'right',
-                boxSizing: 'border-box',
-                MozAppearance: 'textfield' as React.CSSProperties['MozAppearance'],
-              }}
-            />
-            <span style={{ fontFamily: T.mono, fontSize: 11, color: T.fg3, flexShrink: 0 }}>px</span>
-          </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
-            {[320, 400, 480, 600, 800].map(preset => {
-              const active = pane.width === preset;
-              return (
-                <button
-                  key={preset}
-                  type="button"
-                  onClick={() => patch('pane', 'width', preset)}
-                  style={{
-                    padding: '3px 10px',
-                    border: `1px solid ${active ? T.accentTeal : T.stroke1}`,
-                    borderRadius: 999,
-                    background: active ? T.accentTealBg : 'transparent',
-                    color: active ? T.accentTeal : T.fg2,
-                    fontFamily: T.mono,
-                    fontSize: 11,
-                    fontWeight: active ? 600 : 500,
-                    cursor: 'pointer',
-                  }}
-                >
-                  {preset}
-                </button>
-              );
-            })}
-          </div>
+        <Field label="Width" hint={`Min ${MIN_CONFIG_WIDTH}px · Max ${MAX_CONFIG_WIDTH}px · Recommended 400–600px · Current: ${pane.width}px`}>
+          <WidthPicker
+            value={pane.width}
+            onChange={v => patch('pane', 'width', v)}
+            step={10}
+          />
         </Field>
 
         <Toggle label="Show close button" desc="Users can dismiss the pane with ×" checked={pane.canClose} onChange={v => patch('pane', 'canClose', v)} />

@@ -10,6 +10,7 @@ function fixHtmlForPPTB(): Plugin {
     transformIndexHtml(html: string) {
       const scriptTagRegex = /<script([^>]*)>([\s\S]*?)<\/script>/gi
       const scripts: string[] = []
+      // Callback always returns '' so every match is removed from html.
       let cleaned = html.replace(scriptTagRegex, (match) => {
         scripts.push(match)
         return ''

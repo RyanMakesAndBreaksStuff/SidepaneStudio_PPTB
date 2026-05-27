@@ -1,15 +1,10 @@
 import * as React from 'react';
-import { act } from 'react-dom/test-utils';
+import { act } from 'react';
 import { createRoot, Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TablePicker } from '../components/TablePicker';
 import { TableInfo } from '../services/MetadataService';
-
-function deferred<T>() {
-  let resolve!: (value: T) => void;
-  const promise = new Promise<T>(r => { resolve = r; });
-  return { promise, resolve };
-}
+import { deferred } from './testHelpers';
 
 function makeService(result: Promise<{ status: 'ok'; tables: TableInfo[] } | { status: 'error'; reason: string }>) {
   return {

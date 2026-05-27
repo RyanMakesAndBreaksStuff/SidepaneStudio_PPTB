@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { act } from 'react';
 import { createRoot, Root } from 'react-dom/client';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ThemeProvider, useTheme } from '../contexts/ThemeContext';
 
 type ToolboxEventPayload = {
@@ -34,10 +34,6 @@ async function flushTheme() {
     await Promise.resolve();
   });
 }
-
-beforeEach(() => {
-  (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-});
 
 afterEach(async () => {
   if (root) {

@@ -6,8 +6,6 @@ import { NativeMdaFrame } from '../components/NativeMdaFrame';
 import { FormModel } from '../services/FormXmlService';
 import { DEFAULT_CONFIG } from '../types/PaneDefinitionConfig';
 
-(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-
 let root: Root | undefined;
 let host: HTMLDivElement | undefined;
 

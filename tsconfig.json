@@ -17,5 +17,5 @@
     "types": ["@pptb/types"]
   },
   "include": ["src"],
-  "exclude": ["node_modules", "coverage", "dist", "SidePaneBuilderForPPTB", "runtime"]
+  "exclude": ["node_modules", "coverage", "dist"]
 }

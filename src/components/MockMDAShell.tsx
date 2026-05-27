@@ -1,7 +1,8 @@
 import * as React from 'react';
 import { PaneConfig, TargetConfig } from '../types/PaneDefinitionConfig';
 import { ValidationResult } from '../services/ValidationService';
-import { MockNativeForm, NativeMdaFrame } from './NativeMdaFrame';
+import { NativeMdaFrame } from './NativeMdaFrame';
+import { MockNativeForm } from './MockNativeForm';
 
 export interface MockMDAShellProps {
   pane: PaneConfig;

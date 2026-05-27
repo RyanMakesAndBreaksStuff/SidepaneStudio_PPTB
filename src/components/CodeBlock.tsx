@@ -4,18 +4,11 @@ import { useState, useMemo, useCallback } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 import { theme } from '../theme/tokens';
 import { Callout } from './Callout';
+import { escapeHtml } from './previewHelpers';
 
 export interface CodeBlockProps {
   code: string;
   lang?: 'js' | 'json';
-}
-
-function escapeHtml(str: string): string {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
 }
 
 type HlSpan = { start: number; end: number; color: string; italic?: boolean };

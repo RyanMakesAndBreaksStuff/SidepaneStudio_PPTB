@@ -20,10 +20,12 @@ export function Toggle({ label, desc, checked, onChange }: ToggleProps): React.R
         <div style={{ fontSize: 13, fontWeight: 500, color: T.fg1 }}>{label}</div>
         {desc && <div style={{ fontSize: 11, color: T.fg3 }}>{desc}</div>}
       </div>
-      <label
+      <div
         role="switch"
         aria-checked={checked}
+        aria-label={label}
         style={{ cursor: 'pointer', flexShrink: 0, display: 'inline-flex', alignItems: 'center' }}
+        onClick={() => onChange(!checked)}
       >
         <input
           type="checkbox"
@@ -47,7 +49,7 @@ export function Toggle({ label, desc, checked, onChange }: ToggleProps): React.R
             boxShadow: '0 1px 3px rgba(0,0,0,.25)',
           }} />
         </div>
-      </label>
+      </div>
     </div>
   );
 }

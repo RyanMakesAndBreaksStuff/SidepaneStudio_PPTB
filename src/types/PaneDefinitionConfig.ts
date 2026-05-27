@@ -13,6 +13,7 @@ export interface PaneConfig {
   hideHeader: boolean;
   isSelected: boolean;
   width: number;
+  /** @deprecated Never consumed by any consumer. Preserved for backward compatibility with stored configs. */
   hidden: boolean;
   alwaysRender: boolean;
   keepBadgeOnSelect: boolean;

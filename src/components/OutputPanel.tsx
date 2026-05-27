@@ -11,6 +11,7 @@ import { CodeBlock } from './CodeBlock';
 import { SummaryCard } from './SummaryCard';
 import { Callout } from './Callout';
 import { CommandStepsTab, TRIGGER_SUMMARIES, DEPLOY_STEPS } from './CommandStepsTab';
+import { escapeHtml } from './previewHelpers';
 
 export interface OutputPanelProps {
   config: PaneDefinitionConfig;
@@ -19,17 +20,7 @@ export interface OutputPanelProps {
 }
 
 
-// Shared constant — must match the name used in DefinitionRepository.checkRuntimeWebResource()
-const RUNTIME_WEB_RESOURCE_NAME = 'spstudio_/scripts/sidepane.runtime.js';
-
-function escapeHtml(str: string): string {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
+import { RUNTIME_WEB_RESOURCE_NAME } from '../constants';
 
 function generateRawConfig(config: PaneDefinitionConfig): string {
   return JSON.stringify(config, null, 2);

@@ -1,18 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { validate } from '../services/ValidationService';
-import { DEFAULT_CONFIG, PaneDefinitionConfig } from '../types/PaneDefinitionConfig';
-
-function cfg(overrides: Partial<PaneDefinitionConfig> = {}): PaneDefinitionConfig {
-  return {
-    ...DEFAULT_CONFIG,
-    ...overrides,
-    pane: { ...DEFAULT_CONFIG.pane, ...(overrides.pane ?? {}) },
-    target: { ...DEFAULT_CONFIG.target, ...(overrides.target ?? {}) },
-    trigger: { ...DEFAULT_CONFIG.trigger, ...(overrides.trigger ?? {}) },
-    context: { ...DEFAULT_CONFIG.context, ...(overrides.context ?? {}) },
-    behavior: { ...DEFAULT_CONFIG.behavior, ...(overrides.behavior ?? {}) },
-  };
-}
+import { cfg } from './testHelpers';
 
 describe('ValidationService errors', () => {
   it('errors on empty paneId', () => {

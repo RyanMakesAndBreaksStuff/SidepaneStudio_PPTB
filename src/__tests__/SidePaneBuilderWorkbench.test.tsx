@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { act } from 'react-dom/test-utils';
+import { act } from 'react';
 import { createRoot, Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_CONFIG, PaneDefinitionConfig } from '../types/PaneDefinitionConfig';
@@ -25,12 +25,7 @@ vi.mock('../components/WorkbenchShell', () => ({
 }));
 
 import { SidePaneBuilderWorkbench } from '../SidePaneBuilderWorkbench';
-
-function deferred<T>() {
-  let resolve!: (value: T) => void;
-  const promise = new Promise<T>(r => { resolve = r; });
-  return { promise, resolve };
-}
+import { deferred } from './testHelpers';
 
 let root: Root | undefined;
 let host: HTMLDivElement | undefined;

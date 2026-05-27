@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { act } from 'react-dom/test-utils';
+import { act } from 'react';
 import { createRoot, Root } from 'react-dom/client';
 import { afterEach, describe, expect, it } from 'vitest';
 import { PaneOverlay } from '../components/PaneOverlay';
@@ -31,6 +31,7 @@ afterEach(async () => {
 
 describe('preview helpers', () => {
   it('scales pane widths across the full 300 to 1200 config range', () => {
+    // Two-segment linear interpolation: [300→120, 1000→270] then [1000→270, 1200→300]
     expect(getPreviewPaneWidth(300)).toBe(120);
     expect(getPreviewPaneWidth(1000)).toBe(270);
     expect(getPreviewPaneWidth(1200)).toBe(300);

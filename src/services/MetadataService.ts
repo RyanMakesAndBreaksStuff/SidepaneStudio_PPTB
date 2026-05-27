@@ -1,5 +1,6 @@
 // src/services/MetadataService.ts
 import type { IXrmContext } from '../adapters/PptbContextAdapter';
+import { normalizeGuid } from './odataGuards';
 
 export interface TableInfo {
   logicalName: string;
@@ -51,7 +52,9 @@ export class MetadataService {
       ]);
 
       const userPrivilegeIds = new Set(
-        (privResult.RolePrivileges ?? []).map((p) => normalizeGuid(p.PrivilegeId))
+        (privResult.RolePrivileges ?? [])
+          .map((p) => normalizeGuid(p.PrivilegeId))
+          .filter((g): g is string => g !== null)
       );
 
       const tables: TableInfo[] = [];
@@ -62,12 +65,13 @@ export class MetadataService {
           (p: any) => typeof p.Name === 'string' && p.Name.toLowerCase().startsWith('prvwrite')
         );
         if (!writePriv?.PrivilegeId) continue;
-        if (!userPrivilegeIds.has(normalizeGuid(writePriv.PrivilegeId))) continue;
+        const writePrivGuid = normalizeGuid(writePriv.PrivilegeId);
+        if (!writePrivGuid || !userPrivilegeIds.has(writePrivGuid)) continue;
 
         tables.push({
           logicalName: entity.LogicalName,
           displayName:
-            entity.DisplayName?.UserLocalizedLabel?.Label ?? entity.LogicalName,
+            entity.DisplayName?.LocalizedLabels?.[0]?.Label ?? entity.LogicalName,
           objectTypeCode: entity.ObjectTypeCode ?? 0,
         });
       }
@@ -86,6 +90,4 @@ export class MetadataService {
   }
 }
 
-function normalizeGuid(guid: string): string {
-  return guid.toLowerCase().replace(/[{}]/g, '');
-}
+

@@ -7,6 +7,8 @@ import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 import { theme } from '../theme/tokens';
 import { TableInfo } from '../services/MetadataService';
+import { filterTables } from './previewHelpers';
+import { TableComboDropdown } from './TableComboDropdown';
 
 export interface TableComboBoxProps {
   /** Selected table logical name (or '' for none). */
@@ -20,36 +22,6 @@ export interface TableComboBoxProps {
   placeholder?: string;
   /** Optional aria-label for the input. */
   ariaLabel?: string;
-}
-
-interface FilteredEntry {
-  table: TableInfo;
-  matchedOn: 'display' | 'logical' | 'both';
-}
-
-function filterTables(tables: TableInfo[], query: string): FilteredEntry[] {
-  const q = query.trim().toLowerCase();
-  if (!q) {
-    return tables.map(t => ({ table: t, matchedOn: 'display' as const }));
-  }
-  const out: FilteredEntry[] = [];
-  for (const t of tables) {
-    const inDisplay = t.displayName.toLowerCase().includes(q);
-    const inLogical = t.logicalName.toLowerCase().includes(q);
-    if (!inDisplay && !inLogical) continue;
-    out.push({
-      table: t,
-      matchedOn: inDisplay && inLogical ? 'both' : inDisplay ? 'display' : 'logical',
-    });
-  }
-  // Prefix matches first (more relevant), then alpha
-  out.sort((a, b) => {
-    const ap = a.table.displayName.toLowerCase().startsWith(q) || a.table.logicalName.toLowerCase().startsWith(q);
-    const bp = b.table.displayName.toLowerCase().startsWith(q) || b.table.logicalName.toLowerCase().startsWith(q);
-    if (ap !== bp) return ap ? -1 : 1;
-    return a.table.displayName.localeCompare(b.table.displayName);
-  });
-  return out;
 }
 
 export function TableComboBox({
@@ -153,95 +125,6 @@ export function TableComboBox({
     transition: 'border-color 80ms',
   };
 
-  const renderPanelContent = () => {
-    if (loading) {
-      return <div style={{ padding: 10, color: T.fg3, fontSize: 12, textAlign: 'center' }}>Loading tables…</div>;
-    }
-    if (error) {
-      return (
-        <div style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-start' }}>
-          <span style={{ color: T.error, fontSize: 12 }}>{error}</span>
-          {onRetry && (
-            <button
-              type="button"
-              onClick={onRetry}
-              style={{
-                padding: '3px 10px',
-                border: `1px solid ${T.error}`,
-                background: 'transparent',
-                color: T.error,
-                borderRadius: T.rS,
-                fontFamily: T.font,
-                fontSize: 11,
-                fontWeight: 600,
-                cursor: 'pointer',
-              }}
-            >
-              Retry
-            </button>
-          )}
-        </div>
-      );
-    }
-    if (filtered.length === 0) {
-      return (
-        <div style={{ padding: 10, color: T.fg3, fontSize: 12, textAlign: 'center' }}>
-          {query ? `No tables match "${query}"` : 'No accessible tables found'}
-        </div>
-      );
-    }
-    return (
-      <div
-        ref={listRef}
-        role="listbox"
-        style={{ maxHeight: 280, overflowY: 'auto' }}
-      >
-        {filtered.map((entry, idx) => {
-          const isHighlighted = idx === highlight;
-          const isSelected = entry.table.logicalName === value;
-          return (
-            <button
-              key={entry.table.logicalName}
-              type="button"
-              role="option"
-              data-idx={idx}
-              aria-selected={isSelected}
-              onMouseEnter={() => setHighlight(idx)}
-              onMouseDown={e => {
-                // Prevent input blur before click registers
-                e.preventDefault();
-                commit(entry.table.logicalName);
-              }}
-              style={{
-                width: '100%',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'flex-start',
-                gap: 2,
-                padding: '6px 10px',
-                border: 'none',
-                background: isHighlighted ? T.accentTealBg : 'transparent',
-                color: T.fg1,
-                fontFamily: T.font,
-                fontSize: 13,
-                textAlign: 'left',
-                cursor: 'pointer',
-                borderLeft: `2px solid ${isSelected ? T.accentTeal : 'transparent'}`,
-              }}
-            >
-              <span style={{ fontWeight: isSelected ? 600 : 500, color: isSelected ? T.accentTeal : T.fg1 }}>
-                {entry.table.displayName}
-              </span>
-              <span style={{ fontFamily: T.mono, fontSize: 11, color: T.fg3 }}>
-                {entry.table.logicalName}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-    );
-  };
-
   return (
     <div ref={rootRef} style={{ position: 'relative', width: '100%' }}>
       <div
@@ -316,23 +199,18 @@ export function TableComboBox({
         </svg>
       </div>
       {open && (
-        <div
-          id="tablecombo-listbox"
-          style={{
-            position: 'absolute',
-            top: 'calc(100% + 4px)',
-            left: 0,
-            right: 0,
-            zIndex: 20,
-            background: T.pageBg,
-            border: `1px solid ${T.stroke1}`,
-            borderRadius: T.rM,
-            boxShadow: T.shadow8,
-            overflow: 'hidden',
-          }}
-        >
-          {renderPanelContent()}
-        </div>
+        <TableComboDropdown
+          loading={loading}
+          error={error}
+          onRetry={onRetry}
+          filtered={filtered}
+          query={query}
+          highlight={highlight}
+          value={value}
+          onCommit={commit}
+          onHighlight={setHighlight}
+          listRef={listRef}
+        />
       )}
     </div>
   );

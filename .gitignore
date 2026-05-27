@@ -1,4 +1,4 @@
-﻿################################################################################
+################################################################################
 # This .gitignore file was automatically created by Microsoft(R) Visual Studio.
 ################################################################################
 /node_modules
@@ -16,3 +16,11 @@
 /AGENTS.md.bak
 /LEAN-CTX.md
 /.agents/skills
+
+# Secrets
+.env
+.env.*
+*.key
+*.pem
+secrets/
+/remainingreviewitems.md

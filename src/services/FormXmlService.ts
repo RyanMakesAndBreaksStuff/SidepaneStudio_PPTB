@@ -88,11 +88,6 @@ function firstLabel(el: Element | null): string {
 }
 
 export class FormXmlService {
-  async getFormsForEntity(entityLogicalName: string): Promise<FormMeta[]> {
-    const result = await this.getFormsForEntityResult(entityLogicalName);
-    return result.ok ? result.forms : [];
-  }
-
   async getFormsForEntityResult(entityLogicalName: string): Promise<FormsForEntityResult> {
     if (!isValidLogicalName(entityLogicalName)) {
       return {
@@ -123,11 +118,6 @@ export class FormXmlService {
         },
       };
     }
-  }
-
-  async getFormModel(formId: string): Promise<FormModel | null> {
-    const result = await this.getFormModelResult(formId);
-    return result.ok ? result.model : null;
   }
 
   async getFormModelResult(formId: string): Promise<FormModelResult> {

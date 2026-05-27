@@ -70,13 +70,16 @@ function makeApi(forms: object[] = [], formXml = MINIMAL_FORM_XML) {
 describe('FormXmlService', () => {
   beforeEach(() => vi.unstubAllGlobals());
 
-  it('getFormsForEntity returns list of form metadata', async () => {
+  it('getFormsForEntityResult returns ok with form metadata', async () => {
     vi.stubGlobal('dataverseAPI', makeApi([{ formid: 'f1', name: 'Main Form' }]));
     const svc = new FormXmlService();
-    const forms = await svc.getFormsForEntity('account');
-    expect(forms).toHaveLength(1);
-    expect(forms[0].id).toBe('f1');
-    expect(forms[0].name).toBe('Main Form');
+    const result = await svc.getFormsForEntityResult('account');
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.forms).toHaveLength(1);
+      expect(result.forms[0].id).toBe('f1');
+      expect(result.forms[0].name).toBe('Main Form');
+    }
   });
 
   it('getFormsForEntityResult rejects invalid logical names before querying Dataverse', async () => {
@@ -94,26 +97,31 @@ describe('FormXmlService', () => {
     expect(escapeODataStringLiteral("account's")).toBe("account''s");
   });
 
-  it('getFormsForEntity returns empty array when none found', async () => {
+  it('getFormsForEntityResult returns empty forms array when ok', async () => {
     vi.stubGlobal('dataverseAPI', makeApi([]));
     const svc = new FormXmlService();
-    const forms = await svc.getFormsForEntity('noentity');
-    expect(forms).toEqual([]);
+    const result = await svc.getFormsForEntityResult('noentity');
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.forms).toEqual([]);
+    }
   });
 
-  it('getFormModel parses tabs, sections, rows and cells', async () => {
+  it('getFormModelResult returns ok with parsed model', async () => {
     vi.stubGlobal('dataverseAPI', makeApi([], MINIMAL_FORM_XML));
     const svc = new FormXmlService();
-    const model = await svc.getFormModel('aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee');
-    expect(model).not.toBeNull();
-    expect(model!.tabs).toHaveLength(1);
-    expect(model!.tabs[0].label).toBe('General');
-    expect(model!.tabs[0].sections).toHaveLength(1);
-    expect(model!.tabs[0].sections[0].columnCount).toBe(2);
-    expect(model!.tabs[0].sections[0].rows[0].cells).toHaveLength(2);
-    expect(model!.tabs[0].sections[0].rows[0].cells[0].label).toBe('Name');
-    expect(model!.tabs[0].sections[0].rows[0].cells[0].fieldName).toBe('name');
-    expect(model!.tabs[0].sections[0].rows[0].cells[0].fieldType).toBe('text');
+    const result = await svc.getFormModelResult('aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee');
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.model.tabs).toHaveLength(1);
+      expect(result.model.tabs[0].label).toBe('General');
+      expect(result.model.tabs[0].sections).toHaveLength(1);
+      expect(result.model.tabs[0].sections[0].columnCount).toBe(2);
+      expect(result.model.tabs[0].sections[0].rows[0].cells).toHaveLength(2);
+      expect(result.model.tabs[0].sections[0].rows[0].cells[0].label).toBe('Name');
+      expect(result.model.tabs[0].sections[0].rows[0].cells[0].fieldName).toBe('name');
+      expect(result.model.tabs[0].sections[0].rows[0].cells[0].fieldType).toBe('text');
+    }
   });
 
   it('getFormModelResult normalizes valid form IDs before querying Dataverse', async () => {
@@ -138,21 +146,27 @@ describe('FormXmlService', () => {
     expect(api.queryData).not.toHaveBeenCalled();
   });
 
-  it('getFormModel returns null when XML is malformed', async () => {
+  it('getFormModelResult returns error when XML is malformed', async () => {
     vi.stubGlobal('dataverseAPI', {
       queryData: vi.fn().mockResolvedValue({ formxml: 'NOT_XML<<<' }),
     });
     const svc = new FormXmlService();
-    const model = await svc.getFormModel('aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee');
-    expect(model).toBeNull();
+    const result = await svc.getFormModelResult('aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee');
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe('invalid-formxml');
+    }
   });
 
-  it('getFormModel returns null when queryData throws', async () => {
+  it('getFormModelResult returns error when queryData throws', async () => {
     vi.stubGlobal('dataverseAPI', {
       queryData: vi.fn().mockRejectedValue(new Error('Network error')),
     });
     const svc = new FormXmlService();
-    const model = await svc.getFormModel('aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee');
-    expect(model).toBeNull();
+    const result = await svc.getFormModelResult('aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee');
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe('query-failed');
+    }
   });
 });

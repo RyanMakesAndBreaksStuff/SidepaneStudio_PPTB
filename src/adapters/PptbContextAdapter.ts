@@ -70,7 +70,8 @@ export class PptbContextAdapter implements IXrmContext {
     return (result.value ?? []).length > 0;
   }
 
-  async readEnvVar(_name: string): Promise<null> {
+  async readEnvVar(name: string): Promise<null> {
+    console.warn(`PptbContextAdapter: readEnvVar("${name}") is not implemented in this host`);
     return null;
   }
 

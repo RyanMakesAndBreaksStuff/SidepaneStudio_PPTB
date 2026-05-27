@@ -5,7 +5,11 @@ import { SidePaneBuilderWorkbench } from './SidePaneBuilderWorkbench';
 
 function ConnectionGuard(): React.ReactElement {
   const hasDataverseAPI = typeof window.dataverseAPI !== 'undefined';
-  if (!hasDataverseAPI) {
+  const hasToolboxAPI = typeof window.toolboxAPI !== 'undefined';
+  if (!hasDataverseAPI || !hasToolboxAPI) {
+    const missing = [];
+    if (!hasDataverseAPI) missing.push('Dataverse API');
+    if (!hasToolboxAPI) missing.push('Toolbox API');
     return (
       <div style={{
         display: 'flex',
@@ -19,7 +23,7 @@ function ConnectionGuard(): React.ReactElement {
         gap: 12,
       }}>
         <div style={{ fontSize: 32 }}>⚠</div>
-        <div style={{ fontWeight: 600, fontSize: 16 }}>Dataverse API unavailable</div>
+        <div style={{ fontWeight: 600, fontSize: 16 }}>{missing.join(' + ')} unavailable</div>
         <div style={{ fontSize: 13, color: '#808080', maxWidth: 340, textAlign: 'center' }}>
           Open this tool inside a Power Platform Toolbox (PPTB) environment connected to Dataverse.
         </div>

@@ -1,6 +1,37 @@
-const MIN_CONFIG_WIDTH = 300;
+import { TableInfo } from '../services/MetadataService';
+
+export interface FilteredEntry {
+  table: TableInfo;
+  matchedOn: 'display' | 'logical' | 'both';
+}
+
+export function filterTables(tables: TableInfo[], query: string): FilteredEntry[] {
+  const q = query.trim().toLowerCase();
+  if (!q) {
+    return tables.map(t => ({ table: t, matchedOn: 'display' as const }));
+  }
+  const out: FilteredEntry[] = [];
+  for (const t of tables) {
+    const inDisplay = t.displayName.toLowerCase().includes(q);
+    const inLogical = t.logicalName.toLowerCase().includes(q);
+    if (!inDisplay && !inLogical) continue;
+    out.push({
+      table: t,
+      matchedOn: inDisplay && inLogical ? 'both' : inDisplay ? 'display' : 'logical',
+    });
+  }
+  out.sort((a, b) => {
+    const ap = a.table.displayName.toLowerCase().startsWith(q) || a.table.logicalName.toLowerCase().startsWith(q);
+    const bp = b.table.displayName.toLowerCase().startsWith(q) || b.table.logicalName.toLowerCase().startsWith(q);
+    if (ap !== bp) return ap ? -1 : 1;
+    return a.table.displayName.localeCompare(b.table.displayName);
+  });
+  return out;
+}
+
+export const MIN_CONFIG_WIDTH = 300;
 const MID_CONFIG_WIDTH = 1000;
-const MAX_CONFIG_WIDTH = 1200;
+export const MAX_CONFIG_WIDTH = 1200;
 const MIN_PREVIEW_WIDTH = 120;
 const MID_PREVIEW_WIDTH = 270;
 const MAX_PREVIEW_WIDTH = 300;
@@ -38,4 +69,13 @@ export function getSafePreviewImageSrc(imageSrc: string): string | null {
   }
 
   return trimmed;
+}
+
+export function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }

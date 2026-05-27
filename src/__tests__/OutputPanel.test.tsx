@@ -3,10 +3,8 @@ import { act } from 'react';
 import { createRoot, Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { OutputPanel } from '../components/OutputPanel';
-import { IXrmContext } from '../adapters/PptbContextAdapter';
 import { DEFAULT_CONFIG } from '../types/PaneDefinitionConfig';
-
-(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+import { xrmStub } from './testHelpers';
 
 let root: Root | undefined;
 let host: HTMLDivElement | undefined;
@@ -18,23 +16,6 @@ async function render(element: React.ReactElement) {
   await act(async () => {
     root?.render(element);
   });
-}
-
-function xrmStub(): IXrmContext {
-  return {
-    isAvailable: true,
-    sidePanesAvailable: true,
-    createPane: vi.fn(),
-    getPane: vi.fn(),
-    getHostKind: () => 'Unknown',
-    checkWebResourceExists: vi.fn().mockResolvedValue(true),
-    readEnvVar: vi.fn().mockResolvedValue(null),
-    getCurrentAppId: vi.fn(() => null),
-    getCurrentUserId: vi.fn().mockResolvedValue('user-1'),
-    webApiGet: vi.fn(),
-    dataverseExecute: vi.fn(),
-    getAllEntitiesMetadata: vi.fn().mockResolvedValue([]),
-  };
 }
 
 afterEach(async () => {

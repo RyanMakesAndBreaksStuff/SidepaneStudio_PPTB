@@ -1,18 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { generateBasicScript, generateLibraryScript } from '../services/CodeGenerationService';
-import { DEFAULT_CONFIG, PaneDefinitionConfig } from '../types/PaneDefinitionConfig';
-
-function cfg(overrides: Partial<PaneDefinitionConfig> = {}): PaneDefinitionConfig {
-  return {
-    ...DEFAULT_CONFIG,
-    ...overrides,
-    pane: { ...DEFAULT_CONFIG.pane, ...(overrides.pane ?? {}) },
-    target: { ...DEFAULT_CONFIG.target, ...(overrides.target ?? {}) },
-    trigger: { ...DEFAULT_CONFIG.trigger, ...(overrides.trigger ?? {}) },
-    context: { ...DEFAULT_CONFIG.context, ...(overrides.context ?? {}) },
-    behavior: { ...DEFAULT_CONFIG.behavior, ...(overrides.behavior ?? {}) },
-  };
-}
+import { cfg } from './testHelpers';
 
 function isValidJS(code: string): boolean {
   try {
@@ -240,6 +228,38 @@ describe('buildNavigateInput — pageType branches', () => {
     expect(code).not.toContain("entityId: ''");
   });
 
+  it('entityrecord uses context.entityName when set', () => {
+    const code = generateBasicScript(
+      cfg({
+        trigger: { kind: 'FormButton' } as any,
+        target: { pageType: 'entityrecord', entityName: 'account', entityId: '', name: '' },
+        context: { mode: 'CurrentRecord', entityName: 'contact', staticRecordId: '', reuseExistingPane: true },
+      })
+    );
+    expect(code).toContain('entityName: "contact"');
+  });
+
+  it('entityrecord falls back to target.entityName when context.entityName is empty', () => {
+    const code = generateBasicScript(
+      cfg({
+        trigger: { kind: 'FormButton' } as any,
+        target: { pageType: 'entityrecord', entityName: 'account', entityId: '', name: '' },
+        context: { mode: 'CurrentRecord', entityName: '', staticRecordId: '', reuseExistingPane: true },
+      })
+    );
+    expect(code).toContain('entityName: "account"');
+  });
+
+  it('entitylist uses context.entityName when set', () => {
+    const code = generateBasicScript(
+      cfg({
+        target: { pageType: 'entitylist', entityName: 'account', entityId: '', name: '' },
+        context: { mode: 'None', entityName: 'contact', staticRecordId: '', reuseExistingPane: true },
+      })
+    );
+    expect(code).toContain('entityName: "contact"');
+  });
+
   it('entitylist emits pageType and entityName but no entityId', () => {
     const code = generateBasicScript(
       cfg({ target: { pageType: 'entitylist', entityName: 'contact', entityId: '', name: '' } })
@@ -258,12 +278,20 @@ describe('buildNavigateInput — pageType branches', () => {
     expect(code).not.toContain('entityName');
   });
 
-  it('unknown pageType falls through to default branch emitting pageType and name', () => {
-    const code = generateBasicScript(
-      cfg({ target: { pageType: 'dashboard' as any, name: 'myDashboard', entityName: '', entityId: '' } })
-    );
-    expect(code).toContain('"dashboard"');
-    expect(code).toContain('"myDashboard"');
+  it('dashboard pageType throws descriptive error', () => {
+    expect(() =>
+      generateBasicScript(
+        cfg({ target: { pageType: 'dashboard' as any, name: 'myDashboard', entityName: '', entityId: '' } })
+      )
+    ).toThrow('dashboard pageType is not yet supported');
+  });
+
+  it('search pageType throws descriptive error', () => {
+    expect(() =>
+      generateBasicScript(
+        cfg({ target: { pageType: 'search' as any, name: 'mySearch', entityName: '', entityId: '' } })
+      )
+    ).toThrow('search pageType is not yet supported');
   });
 });
 
@@ -357,6 +385,16 @@ describe('buildPaneOptions — isSelected and canClose', () => {
     expect(code).toContain('canClose: true');
     expect(code).not.toContain('canClose: omitted');
   });
+
+  it('badgeValue is emitted when non-zero', () => {
+    const code = generateBasicScript(cfg({ pane: { badgeValue: 5 } as any }));
+    expect(code).toContain('badge: 5');
+  });
+
+  it('badgeValue is omitted when zero', () => {
+    const code = generateBasicScript(cfg({ pane: { badgeValue: 0 } as any }));
+    expect(code).not.toContain('badge');
+  });
 });
 
 describe('generateLibraryScript', () => {
@@ -392,5 +430,17 @@ describe('generateLibraryScript', () => {
     const code = generateLibraryScript(cfg({ pane: { keepBadgeOnSelect: true } as any }));
     expect(isValidJS(code)).toBe(true);
     expect(code).toContain('keepBadgeOnSelect: true');
+  });
+
+  it('badgeValue is included in library script output when non-zero', () => {
+    const code = generateLibraryScript(cfg({ pane: { badgeValue: 3 } as any }));
+    expect(isValidJS(code)).toBe(true);
+    expect(code).toContain('badge: 3');
+  });
+
+  it('badgeValue is omitted in library script output when zero', () => {
+    const code = generateLibraryScript(cfg({ pane: { badgeValue: 0 } as any }));
+    expect(isValidJS(code)).toBe(true);
+    expect(code).not.toContain('badge');
   });
 });

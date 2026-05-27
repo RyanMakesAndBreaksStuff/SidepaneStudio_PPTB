@@ -2,22 +2,7 @@ import * as React from 'react';
 import { useState } from 'react';
 import { FormModel, FormSection, FormCell } from '../services/FormXmlService';
 
-const FL = {
-  pageBg: 'transparent',
-  surface: '#FFFFFF',
-  fg: '#201F1E',
-  fg2: '#323130',
-  fgLabel: '#605E5C',
-  fgSubtle: '#8A8886',
-  fieldBg: '#F3F2F1',
-  stroke: '#EDEBE9',
-  tabActiveBorder: '#0078D4',
-  tabActiveFg: '#0078D4',
-  tabFg: '#605E5C',
-  font: "'Segoe UI Variable','Segoe UI',system-ui,sans-serif",
-  shadow: '0 1px 2px rgba(0,0,0,.14),0 0 2px rgba(0,0,0,.10)',
-};
-
+import { FL } from './flTokens';
 function DisabledInput({ type }: { type: FormCell['fieldType'] }): React.ReactElement {
   const base: React.CSSProperties = {
     width: '100%',

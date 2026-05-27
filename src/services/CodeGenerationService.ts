@@ -53,6 +53,7 @@ function buildPaneOptions(config: PaneDefinitionConfig): string {
   if (pane.alwaysRender) opts.push(`    alwaysRender: true`);
   if (pane.keepBadgeOnSelect) opts.push(`    keepBadgeOnSelect: true`);
   if (pane.imageSrc) opts.push(`    imageSrc: ${JSON.stringify(pane.imageSrc)}`);
+  if (pane.badgeValue) opts.push(`    badge: ${JSON.stringify(pane.badgeValue)}`);
   return `{\n${opts.join(',\n')}\n  }`;
 }
 
@@ -74,12 +75,19 @@ function buildNavigateInput(config: PaneDefinitionConfig): string {
       } else {
         entityIdExpr = buildConfiguredRecordIdExpression(config);
       }
-      return `{ pageType: ${JSON.stringify(target.pageType)}, entityName: ${JSON.stringify(target.entityName)}, entityId: ${entityIdExpr} }`;
+      const effectiveEntityName = context.entityName || target.entityName;
+      return `{ pageType: ${JSON.stringify(target.pageType)}, entityName: ${JSON.stringify(effectiveEntityName)}, entityId: ${entityIdExpr} }`;
     }
-    case 'entitylist':
-      return `{ pageType: ${JSON.stringify(target.pageType)}, entityName: ${JSON.stringify(target.entityName)} }`;
+    case 'entitylist': {
+      const effectiveEntityName = context.entityName || target.entityName;
+      return `{ pageType: ${JSON.stringify(target.pageType)}, entityName: ${JSON.stringify(effectiveEntityName)} }`;
+    }
     case 'webresource':
       return `{ pageType: ${JSON.stringify(target.pageType)}, webresourceName: ${JSON.stringify(target.name)} }`;
+    case 'dashboard':
+      throw new Error('dashboard pageType is not yet supported for side pane navigation');
+    case 'search':
+      throw new Error('search pageType is not yet supported for side pane navigation');
     default:
       return `{ pageType: ${JSON.stringify(target.pageType)}, name: ${JSON.stringify(target.name)} }`;
   }
@@ -156,7 +164,7 @@ ${body
 };`;
 }
 
-function generateMainGridButton(config: PaneDefinitionConfig): string {
+function generateGridButtonScript(config: PaneDefinitionConfig): string {
   const { ns, fn } = getSafeTriggerNames(config);
   const body = buildGetOrCreateBody(config, '    ');
   const paneIdJson = JSON.stringify(config.pane.paneId);
@@ -164,7 +172,6 @@ function generateMainGridButton(config: PaneDefinitionConfig): string {
   return `var ${ns} = ${ns} || {};
 ${PENDING_VAR} = ${PENDING_VAR} || {};
 ${ns}.${fn} = function(primaryControl) {
-  // primaryControl is captured at invocation time; assumed stable for command bar actions.
   var selectedRows = primaryControl.getGrid().getSelectedRows();
   if (!selectedRows || selectedRows.getLength() === 0) { return; }
   var selectedRecordId = selectedRows.get(0).getData().getEntity().getId();
@@ -185,32 +192,12 @@ ${body
 };`;
 }
 
-function generateSubgridButton(config: PaneDefinitionConfig): string {
-  const { ns, fn } = getSafeTriggerNames(config);
-  const body = buildGetOrCreateBody(config, '    ');
-  const paneIdJson = JSON.stringify(config.pane.paneId);
+function generateMainGridButton(config: PaneDefinitionConfig): string {
+  return generateGridButtonScript(config);
+}
 
-  return `var ${ns} = ${ns} || {};
-${PENDING_VAR} = ${PENDING_VAR} || {};
-${ns}.${fn} = function(primaryControl) {
-  var selectedRows = primaryControl.getGrid().getSelectedRows();
-  if (!selectedRows || selectedRows.getLength() === 0) { return; }
-  var selectedRecordId = selectedRows.get(0).getData().getEntity().getId();
-  if (${PENDING_VAR}[${paneIdJson}] && (Date.now() - ${PENDING_VAR}[${paneIdJson}]) < ${PENDING_TTL_MS}) return;
-  ${PENDING_VAR}[${paneIdJson}] = Date.now();
-  (async function() {
-    try {
-${body
-  .split('\n')
-  .map(l => '    ' + l)
-  .join('\n')}
-    } catch(e) {
-      console.error(${JSON.stringify(`${ns}.${fn}`)}, e);
-    } finally {
-      delete ${PENDING_VAR}[${paneIdJson}];
-    }
-  })();
-};`;
+function generateSubgridButton(config: PaneDefinitionConfig): string {
+  return generateGridButtonScript(config);
 }
 
 function generateManualJS(config: PaneDefinitionConfig): string {
@@ -304,6 +291,7 @@ export function generateLibraryScript(config: PaneDefinitionConfig): string {
   if (behavior.closeOthers) optLines.push(`    closeOthers: true`);
   if (pane.keepBadgeOnSelect) optLines.push(`    keepBadgeOnSelect: true`);
   if (pane.imageSrc) optLines.push(`    imageSrc: ${JSON.stringify(pane.imageSrc)}`);
+  if (pane.badgeValue) optLines.push(`    badge: ${JSON.stringify(pane.badgeValue)}`);
 
   const param = (trigger.kind === 'FormOnLoad' || trigger.kind === 'FormOnChange') ? 'executionContext'
     : trigger.kind === 'ManualJS' ? ''

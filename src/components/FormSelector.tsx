@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 import { theme } from '../theme/tokens';
 import { FormXmlService, FormMeta } from '../services/FormXmlService';
@@ -57,6 +57,8 @@ export function FormSelector({
   const [error, setError] = useState<string>('');
   const [retryCount, setRetryCount] = useState(0);
   const requestIdRef = useRef(0);
+  const onFormSelectedRef = useRef(onFormSelected);
+  onFormSelectedRef.current = onFormSelected;
 
   // Table list state — mirrors TablePicker's loading shape so the combobox
   // can show loading / error / loaded states. Cache is per-MetadataService
@@ -107,14 +109,14 @@ export function FormSelector({
       setSelectedFormId('');
       setLoading(false);
       setError('');
-      onFormSelected(null);
+      onFormSelectedRef.current(null);
       return;
     }
 
     setLoading(true);
     setError('');
     setSelectedFormId('');
-    onFormSelected(null);
+    onFormSelectedRef.current(null);
 
     formXmlService.getFormsForEntityResult(entityName).then(result => {
       if (requestIdRef.current !== requestId) return;
@@ -130,7 +132,7 @@ export function FormSelector({
       setLoading(false);
       if (result.forms.length === 1) {
         setSelectedFormId(result.forms[0].id);
-        onFormSelected({ entityLogicalName: entityName, formId: result.forms[0].id });
+        onFormSelectedRef.current({ entityLogicalName: entityName, formId: result.forms[0].id });
       }
     }).catch(() => {
       if (requestIdRef.current !== requestId) return;
@@ -138,7 +140,7 @@ export function FormSelector({
       setLoading(false);
       setError('Could not load main forms.');
     });
-  }, [entityName, formXmlService, onFormSelected, retryCount]);
+  }, [entityName, formXmlService, retryCount]);
 
   const handleFormChange = (formId: string) => {
     setSelectedFormId(formId);
@@ -149,7 +151,7 @@ export function FormSelector({
     }
   };
 
-  const labelStyle: React.CSSProperties = {
+  const labelStyle = useMemo(() => ({
     fontSize: 11,
     color: T.fg3,
     fontFamily: T.font,
@@ -157,8 +159,9 @@ export function FormSelector({
     textTransform: 'uppercase',
     letterSpacing: '0.4px',
     marginBottom: 2,
-  };
-  const fieldStyle: React.CSSProperties = {
+  } as React.CSSProperties), [T]);
+
+  const fieldStyle = useMemo(() => ({
     width: '100%',
     padding: '4px 8px',
     border: `1px solid ${T.stroke1}`,
@@ -168,7 +171,7 @@ export function FormSelector({
     fontFamily: T.font,
     fontSize: 13,
     boxSizing: 'border-box',
-  };
+  } as React.CSSProperties), [T]);
 
   return (
     <div

@@ -1,9 +1,10 @@
-/* import * as React from 'react';
-import { act } from 'react-dom/test-utils';
+import * as React from 'react';
+import { act } from 'react';
 import { createRoot, Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { FormSelector } from '../components/FormSelector';
 import { FormXmlService } from '../services/FormXmlService';
+import { MetadataService } from '../services/MetadataService';
 
 let root: Root | undefined;
 let host: HTMLDivElement | undefined;
@@ -28,6 +29,11 @@ afterEach(async () => {
   host = undefined;
 });
 
+const mockMetadataService = {
+  listAccessibleTables: vi.fn().mockResolvedValue({ status: 'ok', tables: [] }),
+  invalidate: vi.fn(),
+} as unknown as MetadataService;
+
 describe('FormSelector', () => {
   it('shows load failure and retries to recovered form data', async () => {
     const getFormsForEntityResult = vi.fn()
@@ -37,17 +43,27 @@ describe('FormSelector', () => {
       getFormsForEntityResult,
     } as unknown as FormXmlService;
     const onFormSelected = vi.fn();
+    const onEntityNameChange = vi.fn();
 
     await render(
-      <FormSelector entityName="account" formXmlService={formXmlService} onFormSelected={onFormSelected} />
+      <FormSelector
+        entityName="account"
+        onEntityNameChange={onEntityNameChange}
+        formXmlService={formXmlService}
+        metadataService={mockMetadataService}
+        onFormSelected={onFormSelected}
+      />
     );
     await act(async () => { await Promise.resolve(); });
 
     expect(host?.textContent).toContain('Could not load main forms');
-    expect(host?.querySelector('button')?.textContent).toContain('Retry');
+    const retryButton = Array.from(host?.querySelectorAll('button') ?? []).find(
+      b => b.textContent?.includes('Retry')
+    );
+    expect(retryButton).toBeTruthy();
 
     await act(async () => {
-      host?.querySelector('button')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      retryButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       await Promise.resolve();
     });
 
@@ -55,5 +71,35 @@ describe('FormSelector', () => {
     expect(host?.textContent).toContain('Main Form');
     expect(host?.textContent).not.toContain('Could not load main forms');
   });
+
+  it('validates error payload shape on failed load', async () => {
+    const getFormsForEntityResult = vi.fn().mockResolvedValueOnce({
+      ok: false,
+      error: { code: 'query-failed', message: 'offline' },
+    });
+    const formXmlService = {
+      getFormsForEntityResult,
+    } as unknown as FormXmlService;
+    const onFormSelected = vi.fn();
+    const onEntityNameChange = vi.fn();
+
+    await render(
+      <FormSelector
+        entityName="account"
+        onEntityNameChange={onEntityNameChange}
+        formXmlService={formXmlService}
+        metadataService={mockMetadataService}
+        onFormSelected={onFormSelected}
+      />
+    );
+    await act(async () => { await Promise.resolve(); });
+
+    const result = await getFormsForEntityResult.mock.results[0].value;
+    expect(result.ok).toBe(false);
+    expect(result.error).toBeDefined();
+    expect(result.error.code).toBe('query-failed');
+    expect(result.error.message).toBe('offline');
+    expect(host?.textContent).toContain('Could not load main forms');
+    expect(getFormsForEntityResult).toHaveBeenCalledWith('account');
+  });
 });
- */
