@@ -68,6 +68,29 @@ describe('ValidationService warnings', () => {
     expect(r.warnings.some(w => w.field === 'pane.paneId')).toBe(true);
   });
 
+  it('errors when dashboard pageType has empty dashboardId', () => {
+    const config = cfg({ target: { pageType: 'dashboard', dashboardId: '', dashboardName: '' } });
+    const result = validate(config);
+    expect(result.isValid).toBe(false);
+    expect(result.errors.some(e => e.field === 'target.dashboardId')).toBe(true);
+  });
+
+  it('is valid when dashboard pageType has a non-empty dashboardId', () => {
+    const config = cfg({
+      target: { pageType: 'dashboard', dashboardId: 'aaa-bbb-ccc', dashboardName: 'Sales' },
+    });
+    const result = validate(config);
+    const dashboardErrors = result.errors.filter(e => e.field === 'target.dashboardId');
+    expect(dashboardErrors).toHaveLength(0);
+  });
+
+  it('is valid when search pageType has empty searchText', () => {
+    const config = cfg({ target: { pageType: 'search', searchText: '' } });
+    const result = validate(config);
+    const searchErrors = result.errors.filter(e => e.field.startsWith('target'));
+    expect(searchErrors).toHaveLength(0);
+  });
+
   it('warns on MainGridButton + entityrecord (no single record context)', () => {
     const r = validate(cfg({
       trigger: { kind: 'MainGridButton' } as any,

@@ -80,6 +80,11 @@ export function validate(config: PaneDefinitionConfig, accessibleTables?: Set<st
     });
   }
 
+  // Error: dashboard with no dashboardId
+  if (config.target.pageType === 'dashboard' && !config.target.dashboardId.trim()) {
+    errors.push({ field: 'target.dashboardId', message: 'Dashboard is required.' });
+  }
+
   // Warning: webresource pageType
   if (config.target.pageType === 'webresource') {
     warnings.push({

@@ -71,7 +71,7 @@ function keepEntity(e: RawEntityMetadata): boolean {
   if (e.CanCreateForms?.Value === false) return false;
   if (e.CanModifyAdditionalSettings?.Value === false) return false;
   if (e.IsCustomEntity === true) return true;
-  if (e.IsCustomizable?.Value === true && e.CanCreateForms?.Value !== false) return true;
+  if (e.IsCustomizable?.Value === true) return true;
   if (ALLOWED_STANDARD_TABLES.has(logicalName)) return true;
   return false;
 }
