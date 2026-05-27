@@ -227,4 +227,94 @@ describe('MetadataService', () => {
       expect(xrm.webApiGet).toHaveBeenCalledTimes(2);
     });
   });
+
+  describe('listAccessibleDashboards', () => {
+    const SYS_DASH = { name: 'Sales Dashboard', dashboardid: 'aaaaaaaa-0000-0000-0000-000000000001' };
+    const USER_DASH = { name: 'My Dashboard', userdashboardid: 'bbbbbbbb-0000-0000-0000-000000000002' };
+
+    function makeXrmForDashboards(
+      sysValue: object[] = [],
+      userValue: object[] = []
+    ): Pick<IXrmContext, 'webApiGet'> {
+      return {
+        webApiGet: vi.fn()
+          .mockResolvedValueOnce({ value: sysValue })
+          .mockResolvedValueOnce({ value: userValue }),
+      };
+    }
+
+    it('returns system and personal dashboards merged and sorted by name', async () => {
+      const xrm = makeXrmForDashboards([SYS_DASH], [USER_DASH]);
+      const svc = new MetadataService(xrm);
+      const result = await svc.listAccessibleDashboards();
+      expect(result.status).toBe('ok');
+      if (result.status !== 'ok') return;
+      expect(result.dashboards).toHaveLength(2);
+      const names = result.dashboards.map(d => d.name);
+      expect(names).toContain('Sales Dashboard');
+      expect(names).toContain('My Dashboard');
+    });
+
+    it('marks system dashboards as isPersonal: false', async () => {
+      const xrm = makeXrmForDashboards([SYS_DASH], []);
+      const svc = new MetadataService(xrm);
+      const result = await svc.listAccessibleDashboards();
+      if (result.status !== 'ok') return;
+      expect(result.dashboards[0].isPersonal).toBe(false);
+      expect(result.dashboards[0].id).toBe(SYS_DASH.dashboardid);
+    });
+
+    it('marks user dashboards as isPersonal: true', async () => {
+      const xrm = makeXrmForDashboards([], [USER_DASH]);
+      const svc = new MetadataService(xrm);
+      const result = await svc.listAccessibleDashboards();
+      if (result.status !== 'ok') return;
+      expect(result.dashboards[0].isPersonal).toBe(true);
+      expect(result.dashboards[0].id).toBe(USER_DASH.userdashboardid);
+    });
+
+    it('returns empty list when no dashboards exist', async () => {
+      const xrm = makeXrmForDashboards([], []);
+      const svc = new MetadataService(xrm);
+      const result = await svc.listAccessibleDashboards();
+      if (result.status !== 'ok') return;
+      expect(result.dashboards).toHaveLength(0);
+    });
+
+    it('caches result — second call does not re-fetch', async () => {
+      const xrm = makeXrmForDashboards([SYS_DASH], []);
+      const svc = new MetadataService(xrm);
+      await svc.listAccessibleDashboards();
+      // Second call should hit cache — mock only has one set of responses
+      const result = await svc.listAccessibleDashboards();
+      expect(result.status).toBe('ok');
+      expect(xrm.webApiGet).toHaveBeenCalledTimes(2); // 2 calls for the first fetch (sys + user), not 4
+    });
+
+    it('invalidate clears dashboard cache', async () => {
+      const xrm = {
+        webApiGet: vi.fn()
+          .mockResolvedValueOnce({ value: [SYS_DASH] })
+          .mockResolvedValueOnce({ value: [] })
+          .mockResolvedValueOnce({ value: [SYS_DASH] })
+          .mockResolvedValueOnce({ value: [] }),
+      };
+      const svc = new MetadataService(xrm);
+      await svc.listAccessibleDashboards();
+      svc.invalidate();
+      await svc.listAccessibleDashboards();
+      expect(xrm.webApiGet).toHaveBeenCalledTimes(4); // 2 per fetch × 2 fetches
+    });
+
+    it('returns error status when fetch throws', async () => {
+      const xrm: Pick<IXrmContext, 'webApiGet'> = {
+        webApiGet: vi.fn().mockRejectedValue(new Error('Dashboard fetch failed')),
+      };
+      const svc = new MetadataService(xrm);
+      const result = await svc.listAccessibleDashboards();
+      expect(result.status).toBe('error');
+      if (result.status !== 'error') return;
+      expect(result.reason).toBe('Dashboard fetch failed');
+    });
+  });
 });
