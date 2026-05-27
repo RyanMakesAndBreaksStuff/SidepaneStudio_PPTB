@@ -220,7 +220,10 @@ function capitalizeEntity(entityName: string): string {
 }
 
 function FormHeader({ target, mode, formModel }: { target: TargetConfig; mode: PreviewSizeMode; formModel?: FormModel }): React.ReactElement {
-  const entityLabel = target.entityName || 'account';
+  const entityLabel =
+    (target.pageType === 'entityrecord' || target.pageType === 'entitylist')
+      ? target.entityName
+      : 'account';
   const isCompact = mode === 'compact';
   const isDynamic = formModel != null;
 

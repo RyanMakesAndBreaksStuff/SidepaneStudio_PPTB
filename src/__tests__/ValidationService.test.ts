@@ -10,18 +10,18 @@ describe('ValidationService errors', () => {
   });
 
   it('errors on custom pageType with empty name', () => {
-    const r = validate(cfg({ target: { pageType: 'custom', name: '' } as any }));
+    const r = validate(cfg({ target: { pageType: 'custom', name: '' } }));
     expect(r.isValid).toBe(false);
   });
 
   it('errors on entityrecord with empty entityName', () => {
-    const r = validate(cfg({ target: { pageType: 'entityrecord', entityName: '' } as any }));
+    const r = validate(cfg({ target: { pageType: 'entityrecord', entityName: '', entityId: '' } }));
     expect(r.isValid).toBe(false);
   });
 
   it('keeps missing entityName blocking even when accessible tables are provided', () => {
     const r = validate(
-      cfg({ target: { pageType: 'entityrecord', entityName: '' } as any }),
+      cfg({ target: { pageType: 'entityrecord', entityName: '', entityId: '' } }),
       new Set(['account'])
     );
     expect(r.isValid).toBe(false);
@@ -48,7 +48,7 @@ describe('ValidationService warnings', () => {
   });
 
   it('warns on webresource pageType', () => {
-    const r = validate(cfg({ target: { pageType: 'webresource', name: 'test' } as any }));
+    const r = validate(cfg({ target: { pageType: 'webresource', name: 'test' } }));
     expect(r.warnings.some(w => w.field === 'target.pageType')).toBe(true);
   });
 
@@ -80,7 +80,7 @@ describe('ValidationService warnings', () => {
 
   it('does not warn when selected table is accessible', () => {
     const r = validate(
-      cfg({ target: { pageType: 'entitylist', entityName: 'account' } as any }),
+      cfg({ target: { pageType: 'entitylist', entityName: 'account' } }),
       new Set(['account'])
     );
     expect(r.warnings.some(w => w.field === 'target.entityName')).toBe(false);
@@ -88,7 +88,7 @@ describe('ValidationService warnings', () => {
 
   it('warns without blocking when selected table is no longer accessible', () => {
     const r = validate(
-      cfg({ target: { pageType: 'entityrecord', entityName: 'account' } as any }),
+      cfg({ target: { pageType: 'entityrecord', entityName: 'account', entityId: '' } }),
       new Set(['contact'])
     );
     expect(r.isValid).toBe(true);

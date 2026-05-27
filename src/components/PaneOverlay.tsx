@@ -270,9 +270,19 @@ export const PaneOverlay = React.memo(function PaneOverlay({
         <div style={{ fontSize: 10, color: FL.fgMuted, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
           {PAGE_TYPE_LABELS[target.pageType] ?? target.pageType}
         </div>
-        {target.entityName && (
+        {(target.pageType === 'entityrecord' || target.pageType === 'entitylist') && target.entityName && (
           <div style={{ fontSize: 12, color: FL.fg, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {target.entityName}
+          </div>
+        )}
+        {target.pageType === 'dashboard' && target.dashboardName && (
+          <div style={{ fontSize: 12, color: FL.fg, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {target.dashboardName}
+          </div>
+        )}
+        {target.pageType === 'search' && target.searchText && (
+          <div style={{ fontSize: 12, color: FL.fg, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            Search: {target.searchText}
           </div>
         )}
         {/* Type-aware skeleton — hints at what the live pane will actually render */}

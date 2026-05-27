@@ -3,7 +3,7 @@ import * as React from 'react';
 import { useCallback } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 import { theme } from '../theme/tokens';
-import { PaneDefinitionConfig } from '../types/PaneDefinitionConfig';
+import { PaneDefinitionConfig, TargetConfig, PageType } from '../types/PaneDefinitionConfig';
 import { ValidationResult } from '../services/ValidationService';
 import { MetadataService } from '../services/MetadataService';
 import { Section } from './Section';
@@ -24,6 +24,17 @@ export interface ConfigurePanelProps {
   readOnly?: boolean;
   metadataService: MetadataService;
   onAccessibleTablesChange?: (tables: Set<string> | undefined) => void;
+}
+
+function resetTarget(pageType: PageType): TargetConfig {
+  switch (pageType) {
+    case 'custom':       return { pageType: 'custom', name: '' };
+    case 'entityrecord': return { pageType: 'entityrecord', entityName: '', entityId: '' };
+    case 'entitylist':   return { pageType: 'entitylist', entityName: '' };
+    case 'webresource':  return { pageType: 'webresource', name: '' };
+    case 'dashboard':    return { pageType: 'dashboard', dashboardId: '', dashboardName: '' };
+    case 'search':       return { pageType: 'search', searchText: '' };
+  }
 }
 
 const PAGE_TYPE_OPTIONS = [
@@ -88,15 +99,21 @@ export function ConfigurePanel({
             name="pageType"
             options={PAGE_TYPE_OPTIONS}
             value={target.pageType}
-            onChange={v => patch('target', 'pageType', v as PaneDefinitionConfig['target']['pageType'])}
+            onChange={v => onChange(prev => ({ ...prev, target: resetTarget(v as PageType) }))}
           />
         </Field>
 
         {target.pageType === 'custom' && (
           <Field label="Custom page name" required hint="Logical name from your solution (e.g. cpp_MyPage)" error={vErrors['target.name']}>
             <Input
-              value={target.name}
-              onChange={v => patch('target', 'name', v)}
+              value={target.pageType === 'custom' ? target.name : ''}
+              onChange={v =>
+                onChange(prev => {
+                  const t = prev.target;
+                  if (t.pageType !== 'custom') return prev;
+                  return { ...prev, target: { ...t, name: v } };
+                })
+              }
               placeholder="cpp_SidePaneBuilderPage"
               error={!!vErrors['target.name']}
             />
@@ -106,8 +123,14 @@ export function ConfigurePanel({
         {(target.pageType === 'entityrecord' || target.pageType === 'entitylist') && (
           <Field label="Table name" required hint="Logical name of the Dataverse table" error={vErrors['target.entityName']}>
             <TablePicker
-              value={target.entityName}
-              onChange={v => patch('target', 'entityName', v)}
+              value={(target.pageType === 'entityrecord' || target.pageType === 'entitylist') ? target.entityName : ''}
+              onChange={v =>
+                onChange(prev => {
+                  const t = prev.target;
+                  if (t.pageType !== 'entityrecord' && t.pageType !== 'entitylist') return prev;
+                  return { ...prev, target: { ...t, entityName: v } };
+                })
+              }
               metadataService={metadataService}
               error={!!vErrors['target.entityName']}
               disabled={readOnly}
@@ -119,7 +142,18 @@ export function ConfigurePanel({
         {target.pageType === 'webresource' && (
           <>
             <Field label="Web resource name" required hint="Logical name (e.g. cpp_/pages/helper.html)" error={vErrors['target.name']}>
-              <Input value={target.name} onChange={v => patch('target', 'name', v)} placeholder="cpp_/pages/helper.html" error={!!vErrors['target.name']} />
+              <Input
+                value={target.pageType === 'webresource' ? target.name : ''}
+                onChange={v =>
+                  onChange(prev => {
+                    const t = prev.target;
+                    if (t.pageType !== 'webresource') return prev;
+                    return { ...prev, target: { ...t, name: v } };
+                  })
+                }
+                placeholder="cpp_/pages/helper.html"
+                error={!!vErrors['target.name']}
+              />
             </Field>
             <Callout type="warn" icon="⚠">
               Web resources inside a side pane do NOT have access to <code>Xrm</code> or <code>parent.Xrm</code>. Pass data via URL <code>data</code> parameter (URL-encoded JSON).

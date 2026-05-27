@@ -1,6 +1,6 @@
 import { vi } from 'vitest';
 import type { IXrmContext } from '../adapters/PptbContextAdapter';
-import { DEFAULT_CONFIG, PaneDefinitionConfig } from '../types/PaneDefinitionConfig';
+import { DEFAULT_CONFIG, PaneDefinitionConfig, TargetConfig } from '../types/PaneDefinitionConfig';
 
 export function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -8,14 +8,14 @@ export function deferred<T>() {
   return { promise, resolve };
 }
 
-export function cfg(overrides: Partial<PaneDefinitionConfig> = {}): PaneDefinitionConfig {
+export function cfg(
+  overrides: Partial<Omit<PaneDefinitionConfig, 'target'>> & { target?: TargetConfig } = {}
+): PaneDefinitionConfig {
   return {
-    ...DEFAULT_CONFIG,
-    ...overrides,
-    pane: { ...DEFAULT_CONFIG.pane, ...(overrides.pane ?? {}) },
-    target: { ...DEFAULT_CONFIG.target, ...(overrides.target ?? {}) },
-    trigger: { ...DEFAULT_CONFIG.trigger, ...(overrides.trigger ?? {}) },
-    context: { ...DEFAULT_CONFIG.context, ...(overrides.context ?? {}) },
+    pane:     { ...DEFAULT_CONFIG.pane,     ...(overrides.pane     ?? {}) },
+    target:   overrides.target ?? DEFAULT_CONFIG.target,
+    trigger:  { ...DEFAULT_CONFIG.trigger,  ...(overrides.trigger  ?? {}) },
+    context:  { ...DEFAULT_CONFIG.context,  ...(overrides.context  ?? {}) },
     behavior: { ...DEFAULT_CONFIG.behavior, ...(overrides.behavior ?? {}) },
   };
 }

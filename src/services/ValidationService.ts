@@ -26,14 +26,14 @@ export function validate(config: PaneDefinitionConfig, accessibleTables?: Set<st
   }
 
   // Error: custom pageType with empty name
-  if (config.target.pageType === 'custom' && !config.target.name?.trim()) {
+  if (config.target.pageType === 'custom' && !config.target.name.trim()) {
     errors.push({ field: 'target.name', message: 'Custom page name is required.' });
   }
 
   // Error: entityrecord/entitylist with empty entityName
   if (
-    ['entityrecord', 'entitylist'].includes(config.target.pageType) &&
-    !config.target.entityName?.trim()
+    (config.target.pageType === 'entityrecord' || config.target.pageType === 'entitylist') &&
+    !config.target.entityName.trim()
   ) {
     errors.push({
       field: 'target.entityName',
@@ -42,8 +42,8 @@ export function validate(config: PaneDefinitionConfig, accessibleTables?: Set<st
   }
 
   if (
-    ['entityrecord', 'entitylist'].includes(config.target.pageType) &&
-    !!config.target.entityName?.trim() &&
+    (config.target.pageType === 'entityrecord' || config.target.pageType === 'entitylist') &&
+    !!config.target.entityName.trim() &&
     accessibleTables &&
     !accessibleTables.has(config.target.entityName.trim())
   ) {

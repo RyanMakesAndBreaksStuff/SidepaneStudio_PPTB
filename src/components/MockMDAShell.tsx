@@ -18,7 +18,6 @@ export interface MockMDAShellProps {
  */
 const FIXED_MOCK_HOST: TargetConfig = {
   pageType: 'entityrecord',
-  name: '',
   entityName: 'account',
   entityId: '',
 };

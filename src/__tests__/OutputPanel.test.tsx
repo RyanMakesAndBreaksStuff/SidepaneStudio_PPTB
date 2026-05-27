@@ -35,11 +35,8 @@ describe('OutputPanel', () => {
     const config = {
       ...DEFAULT_CONFIG,
       target: {
-        ...DEFAULT_CONFIG.target,
         pageType: 'entitylist' as const,
         entityName: 'contact',
-        name: '',
-        entityId: '',
       },
       trigger: {
         ...DEFAULT_CONFIG.trigger,

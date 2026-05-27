@@ -153,7 +153,7 @@ describe('buildNavigateInput — pageType branches', () => {
     const code = generateBasicScript(
       cfg({
         trigger: { kind: 'FormOnLoad' } as any,
-        target: { pageType: 'entityrecord', entityName: 'account', entityId: '', name: '' },
+        target: { pageType: 'entityrecord', entityName: 'account', entityId: '' },
       })
     );
     expect(code).toContain('pageType: "entityrecord"');
@@ -165,7 +165,7 @@ describe('buildNavigateInput — pageType branches', () => {
     const code = generateBasicScript(
       cfg({
         trigger: { kind: 'FormButton' } as any,
-        target: { pageType: 'entityrecord', entityName: 'account', entityId: '', name: '' },
+        target: { pageType: 'entityrecord', entityName: 'account', entityId: '' },
       })
     );
     expect(code).toContain('primaryControl.data.entity.getId()');
@@ -176,7 +176,7 @@ describe('buildNavigateInput — pageType branches', () => {
     const code = generateBasicScript(
       cfg({
         trigger: { kind: 'MainGridButton' } as any,
-        target: { pageType: 'entityrecord', entityName: 'account', entityId: '', name: '' },
+        target: { pageType: 'entityrecord', entityName: 'account', entityId: '' },
       })
     );
     expect(code).toContain('selectedRows.getLength() === 0');
@@ -189,7 +189,7 @@ describe('buildNavigateInput — pageType branches', () => {
     const code = generateBasicScript(
       cfg({
         trigger: { kind: 'SubgridButton' } as any,
-        target: { pageType: 'entityrecord', entityName: 'account', entityId: '', name: '' },
+        target: { pageType: 'entityrecord', entityName: 'account', entityId: '' },
       })
     );
     expect(code).toContain('var selectedRecordId = selectedRows.get(0).getData().getEntity().getId();');
@@ -201,7 +201,7 @@ describe('buildNavigateInput — pageType branches', () => {
     const code = generateBasicScript(
       cfg({
         trigger: { kind: 'ManualJS' } as any,
-        target: { pageType: 'entityrecord', entityName: 'account', entityId: '', name: '' },
+        target: { pageType: 'entityrecord', entityName: 'account', entityId: '' },
         context: {
           mode: 'Static',
           entityName: 'account',
@@ -219,7 +219,7 @@ describe('buildNavigateInput — pageType branches', () => {
     const code = generateBasicScript(
       cfg({
         trigger: { kind: 'ManualJS' } as any,
-        target: { pageType: 'entityrecord', entityName: 'account', entityId: '', name: '' },
+        target: { pageType: 'entityrecord', entityName: 'account', entityId: '' },
         context: { mode: 'Static', entityName: 'account', staticRecordId: 'not-a-guid', reuseExistingPane: true },
       })
     );
@@ -232,7 +232,7 @@ describe('buildNavigateInput — pageType branches', () => {
     const code = generateBasicScript(
       cfg({
         trigger: { kind: 'FormButton' } as any,
-        target: { pageType: 'entityrecord', entityName: 'account', entityId: '', name: '' },
+        target: { pageType: 'entityrecord', entityName: 'account', entityId: '' },
         context: { mode: 'CurrentRecord', entityName: 'contact', staticRecordId: '', reuseExistingPane: true },
       })
     );
@@ -243,7 +243,7 @@ describe('buildNavigateInput — pageType branches', () => {
     const code = generateBasicScript(
       cfg({
         trigger: { kind: 'FormButton' } as any,
-        target: { pageType: 'entityrecord', entityName: 'account', entityId: '', name: '' },
+        target: { pageType: 'entityrecord', entityName: 'account', entityId: '' },
         context: { mode: 'CurrentRecord', entityName: '', staticRecordId: '', reuseExistingPane: true },
       })
     );
@@ -253,7 +253,7 @@ describe('buildNavigateInput — pageType branches', () => {
   it('entitylist uses context.entityName when set', () => {
     const code = generateBasicScript(
       cfg({
-        target: { pageType: 'entitylist', entityName: 'account', entityId: '', name: '' },
+        target: { pageType: 'entitylist', entityName: 'account' },
         context: { mode: 'None', entityName: 'contact', staticRecordId: '', reuseExistingPane: true },
       })
     );
@@ -262,7 +262,7 @@ describe('buildNavigateInput — pageType branches', () => {
 
   it('entitylist emits pageType and entityName but no entityId', () => {
     const code = generateBasicScript(
-      cfg({ target: { pageType: 'entitylist', entityName: 'contact', entityId: '', name: '' } })
+      cfg({ target: { pageType: 'entitylist', entityName: 'contact' } })
     );
     expect(code).toContain('pageType: "entitylist"');
     expect(code).toContain('entityName: "contact"');
@@ -271,27 +271,57 @@ describe('buildNavigateInput — pageType branches', () => {
 
   it('webresource emits webresourceName key', () => {
     const code = generateBasicScript(
-      cfg({ target: { pageType: 'webresource', name: 'new_mypage.html', entityName: '', entityId: '' } })
+      cfg({ target: { pageType: 'webresource', name: 'new_mypage.html' } })
     );
     expect(code).toContain('pageType: "webresource"');
     expect(code).toContain('webresourceName: "new_mypage.html"');
     expect(code).not.toContain('entityName');
   });
 
-  it('dashboard pageType throws descriptive error', () => {
-    expect(() =>
-      generateBasicScript(
-        cfg({ target: { pageType: 'dashboard' as any, name: 'myDashboard', entityName: '', entityId: '' } })
-      )
-    ).toThrow('dashboard pageType is not yet supported');
+  it('generates dashboard pane code with dashboardId', () => {
+    const config = cfg({
+      target: { pageType: 'dashboard', dashboardId: 'aaa-bbb-ccc', dashboardName: 'Sales Dashboard' },
+      trigger: { kind: 'FormButton', functionName: 'openPane', namespace: 'Contoso', fieldName: '' },
+    });
+    const code = generateBasicScript(config);
+    expect(code).toContain('pageType: "dashboard"');
+    expect(code).toContain('dashboardId: "aaa-bbb-ccc"');
   });
 
-  it('search pageType throws descriptive error', () => {
-    expect(() =>
-      generateBasicScript(
-        cfg({ target: { pageType: 'search' as any, name: 'mySearch', entityName: '', entityId: '' } })
-      )
-    ).toThrow('search pageType is not yet supported');
+  it('generates search pane code with searchText when provided', () => {
+    const config = cfg({
+      target: { pageType: 'search', searchText: 'Contoso' },
+      trigger: { kind: 'FormButton', functionName: 'openPane', namespace: 'Contoso', fieldName: '' },
+    });
+    const code = generateBasicScript(config);
+    expect(code).toContain('pageType: "search"');
+    expect(code).toContain('searchText: "Contoso"');
+  });
+
+  it('generates search pane code without searchText when empty', () => {
+    const config = cfg({
+      target: { pageType: 'search', searchText: '' },
+      trigger: { kind: 'FormButton', functionName: 'openPane', namespace: 'Contoso', fieldName: '' },
+    });
+    const code = generateBasicScript(config);
+    expect(code).toContain('pageType: "search"');
+    expect(code).not.toContain('searchText');
+  });
+
+  it('generateLibraryScript includes dashboardId for dashboard type', () => {
+    const config = cfg({
+      target: { pageType: 'dashboard', dashboardId: 'aaa-bbb-ccc', dashboardName: 'Sales' },
+    });
+    const code = generateLibraryScript(config);
+    expect(code).toContain('dashboardId: "aaa-bbb-ccc"');
+  });
+
+  it('generateLibraryScript includes searchText for search type when non-empty', () => {
+    const config = cfg({
+      target: { pageType: 'search', searchText: 'test query' },
+    });
+    const code = generateLibraryScript(config);
+    expect(code).toContain('searchText: "test query"');
   });
 });
 

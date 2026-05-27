@@ -1,5 +1,4 @@
 // src/types/PaneDefinitionConfig.ts
-// FROZEN AT GATE A — do not modify without updating all dependent work streams
 
 export type TriggerKind = 'FormOnLoad' | 'FormButton' | 'MainGridButton' | 'SubgridButton' | 'ManualJS' | 'FormOnChange';
 export type PageType = 'custom' | 'entityrecord' | 'entitylist' | 'webresource' | 'dashboard' | 'search';
@@ -21,12 +20,13 @@ export interface PaneConfig {
   badgeValue: number;
 }
 
-export interface TargetConfig {
-  pageType: PageType;
-  name: string;
-  entityName: string;
-  entityId: string;
-}
+export type TargetConfig =
+  | { pageType: 'custom';       name: string }
+  | { pageType: 'entityrecord'; entityName: string; entityId: string }
+  | { pageType: 'entitylist';   entityName: string }
+  | { pageType: 'webresource';  name: string }
+  | { pageType: 'dashboard';    dashboardId: string; dashboardName: string }
+  | { pageType: 'search';       searchText: string };
 
 export interface TriggerConfig {
   kind: TriggerKind;
@@ -70,7 +70,7 @@ export const DEFAULT_CONFIG: PaneDefinitionConfig = {
     isResizable: true,
     badgeValue: 0,
   },
-  target: { pageType: 'custom', name: 'cpp_SidePaneBuilderPage', entityName: '', entityId: '' },
+  target: { pageType: 'custom', name: 'cpp_SidePaneBuilderPage' },
   trigger: { kind: 'FormButton', functionName: 'openRelatedRecordsPane', namespace: 'Contoso', fieldName: '' },
   context: { mode: 'CurrentRecord', entityName: '', staticRecordId: '', reuseExistingPane: true },
   behavior: { expandOnOpen: true, closeOthers: false },

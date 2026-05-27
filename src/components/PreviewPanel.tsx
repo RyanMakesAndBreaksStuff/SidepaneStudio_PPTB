@@ -45,7 +45,10 @@ export const PreviewPanel = React.memo(function PreviewPanel({
   // so the cold start isn't punitive — the user can resync on demand via the
   // FormSelector's "Use configured" affordance if config diverges later.
   const [previewHostEntity, setPreviewHostEntity] = useState<string>(
-    () => config.target.entityName ?? ''
+    () =>
+      (config.target.pageType === 'entityrecord' || config.target.pageType === 'entitylist')
+        ? config.target.entityName
+        : ''
   );
   const formRequestIdRef = useRef(0);
   const mountedRef = useRef(true);
@@ -145,10 +148,23 @@ export const PreviewPanel = React.memo(function PreviewPanel({
             <FormSelector
               entityName={previewHostEntity}
               onEntityNameChange={setPreviewHostEntity}
-              entityNameHint={config.target.entityName || undefined}
-              configuredEntity={config.target.entityName || undefined}
+              entityNameHint={
+                (config.target.pageType === 'entityrecord' || config.target.pageType === 'entitylist')
+                  ? config.target.entityName || undefined
+                  : undefined
+              }
+              configuredEntity={
+                (config.target.pageType === 'entityrecord' || config.target.pageType === 'entitylist')
+                  ? config.target.entityName || undefined
+                  : undefined
+              }
               onUseConfigured={() => {
-                if (config.target.entityName) setPreviewHostEntity(config.target.entityName);
+                if (
+                  (config.target.pageType === 'entityrecord' || config.target.pageType === 'entitylist') &&
+                  config.target.entityName
+                ) {
+                  setPreviewHostEntity(config.target.entityName);
+                }
               }}
               formXmlService={formXmlSvcRef.current}
               metadataService={metadataService}
@@ -187,7 +203,6 @@ export const PreviewPanel = React.memo(function PreviewPanel({
                   pane={config.pane}
                   hostTarget={{
                     pageType: 'entityrecord',
-                    name: '',
                     entityName: previewHostEntity,
                     entityId: '',
                   }}

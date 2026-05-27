@@ -22,7 +22,9 @@ function getSafeTriggerNames(config: PaneDefinitionConfig): { ns: string; fn: st
 }
 
 function buildConfiguredRecordIdExpression(config: PaneDefinitionConfig): string {
-  const configuredId = config.context.staticRecordId || config.target.entityId;
+  const configuredId =
+    config.context.staticRecordId ||
+    (config.target.pageType === 'entityrecord' ? config.target.entityId : '');
   const normalized = normalizeGuid(configuredId);
   if (normalized) return JSON.stringify(normalized);
 
@@ -85,11 +87,12 @@ function buildNavigateInput(config: PaneDefinitionConfig): string {
     case 'webresource':
       return `{ pageType: ${JSON.stringify(target.pageType)}, webresourceName: ${JSON.stringify(target.name)} }`;
     case 'dashboard':
-      throw new Error('dashboard pageType is not yet supported for side pane navigation');
+      return `{ pageType: ${JSON.stringify(target.pageType)}, dashboardId: ${JSON.stringify(target.dashboardId)} }`;
+
     case 'search':
-      throw new Error('search pageType is not yet supported for side pane navigation');
-    default:
-      return `{ pageType: ${JSON.stringify(target.pageType)}, name: ${JSON.stringify(target.name)} }`;
+      return target.searchText
+        ? `{ pageType: ${JSON.stringify(target.pageType)}, searchText: ${JSON.stringify(target.searchText)} }`
+        : `{ pageType: ${JSON.stringify(target.pageType)} }`;
   }
 }
 
@@ -279,6 +282,10 @@ export function generateLibraryScript(config: PaneDefinitionConfig): string {
     optLines.push(`    name: ${JSON.stringify(target.name)}`);
   } else if (target.pageType === 'entityrecord' || target.pageType === 'entitylist') {
     optLines.push(`    entityName: ${JSON.stringify(target.entityName)}`);
+  } else if (target.pageType === 'dashboard') {
+    optLines.push(`    dashboardId: ${JSON.stringify(target.dashboardId)}`);
+  } else if (target.pageType === 'search' && target.searchText) {
+    optLines.push(`    searchText: ${JSON.stringify(target.searchText)}`);
   }
 
   if (pane.width !== 480) optLines.push(`    width: ${pane.width}`);
