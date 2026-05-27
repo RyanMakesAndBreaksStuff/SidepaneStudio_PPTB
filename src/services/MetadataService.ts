@@ -1,6 +1,10 @@
 // src/services/MetadataService.ts
 import type { IXrmContext } from '../adapters/PptbContextAdapter';
-import { normalizeGuid } from './odataGuards';
+import {
+  buildEntityDefinitionsPath,
+  buildSystemDashboardsPath,
+  buildUserDashboardsPath,
+} from './odataGuards';
 
 export interface TableInfo {
   logicalName: string;
@@ -8,76 +12,102 @@ export interface TableInfo {
   objectTypeCode: number;
 }
 
+export interface DashboardInfo {
+  id: string;
+  name: string;
+  isPersonal: boolean;
+}
+
 export type AccessibleTablesResult =
   | { status: 'ok'; tables: TableInfo[] }
   | { status: 'error'; reason: string };
 
-interface CacheEntry {
-  tables: TableInfo[];
-  expiresAt: number;
+export type AccessibleDashboardsResult =
+  | { status: 'ok'; dashboards: DashboardInfo[] }
+  | { status: 'error'; reason: string };
+
+interface RawEntityMetadata {
+  LogicalName: string;
+  SchemaName: string;
+  DisplayName?: { UserLocalizedLabel?: { Label: string } | null } | null;
+  EntitySetName?: string | null;
+  ObjectTypeCode?: number | null;
+  IsCustomEntity?: boolean;
+  IsActivity?: boolean;
+  IsIntersect?: boolean;
+  IsPrivate?: boolean;
+  OwnershipType?: string;
+  CanCreateForms?: { Value: boolean };
+  CanModifyAdditionalSettings?: { Value: boolean };
+  IsCustomizable?: { Value: boolean };
+}
+
+const DENY_PREFIXES = [
+  'adx_', 'cdm_', 'msdyn_', 'mspp_', 'workflow', 'process',
+  'sdkmessage', 'solution', 'appmodule', 'ribbon', 'dependency',
+  'component', 'duplicaterule',
+];
+const DENY_EXACT = new Set([
+  'systemuser', 'team', 'businessunit', 'role', 'privilege', 'organization',
+  'publisher', 'solution', 'savedquery', 'userquery', 'systemform', 'appmodule',
+  'sitemap', 'webresource', 'pluginassembly', 'plugintype', 'sdkmessageprocessingstep',
+  'environmentvariabledefinition', 'environmentvariablevalue',
+]);
+const ALLOWED_STANDARD_TABLES = new Set([
+  'account', 'contact', 'lead', 'opportunity', 'incident', 'quote',
+  'salesorder', 'invoice', 'task', 'phonecall', 'appointment', 'email',
+]);
+
+function keepEntity(e: RawEntityMetadata): boolean {
+  const logicalName = e.LogicalName ?? '';
+  const schemaName = e.SchemaName ?? '';
+  if (!e.EntitySetName) return false;
+  if (e.IsIntersect === true) return false;
+  if (e.IsPrivate === true) return false;
+  if (e.IsActivity === true) return false;
+  if (e.OwnershipType === 'OrganizationOwned' && !schemaName.includes('_')) return false;
+  if (DENY_EXACT.has(logicalName)) return false;
+  if (DENY_PREFIXES.some(p => logicalName.startsWith(p))) return false;
+  if (e.CanCreateForms?.Value === false) return false;
+  if (e.CanModifyAdditionalSettings?.Value === false) return false;
+  if (e.IsCustomEntity === true) return true;
+  if (e.IsCustomizable?.Value === true && e.CanCreateForms?.Value !== false) return true;
+  if (ALLOWED_STANDARD_TABLES.has(logicalName)) return true;
+  return false;
 }
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
 export class MetadataService {
-  private _cache = new Map<string, CacheEntry>();
+  private _tableCache = new Map<string, { tables: TableInfo[]; expiresAt: number }>();
+  private _dashboardCache = new Map<string, { dashboards: DashboardInfo[]; expiresAt: number }>();
 
   constructor(
-    private readonly xrm: Pick<IXrmContext, 'getCurrentUserId' | 'dataverseExecute' | 'getAllEntitiesMetadata'>
+    private readonly xrm: Pick<IXrmContext, 'webApiGet'>
   ) {}
 
-  async listAccessibleTables(connectionTarget?: 'primary' | 'secondary'): Promise<AccessibleTablesResult> {
+  async listAccessibleTables(
+    connectionTarget?: 'primary' | 'secondary'
+  ): Promise<AccessibleTablesResult> {
     try {
-      const userId = await this.xrm.getCurrentUserId();
-      const cacheKey = `${connectionTarget ?? 'default'}:${userId}`;
-      const cached = this._cache.get(cacheKey);
+      const cacheKey = connectionTarget ?? 'default';
+      const cached = this._tableCache.get(cacheKey);
       if (cached && Date.now() < cached.expiresAt) {
         return { status: 'ok', tables: cached.tables };
       }
-
-      const executeRequest = {
-        operationName: 'RetrieveUserPrivileges',
-        operationType: 'function' as const,
-        entityName: 'systemuser',
-        entityId: userId,
-      };
-      const [entities, privResult] = await Promise.all([
-        this.xrm.getAllEntitiesMetadata([
-          'LogicalName', 'DisplayName', 'ObjectTypeCode',
-          'IsIntersect', 'IsPrivate', 'Privileges',
-        ], connectionTarget),
-        this.xrm.dataverseExecute<{ RolePrivileges: Array<{ PrivilegeId: string; Depth: number }> }>(
-          executeRequest, connectionTarget
-        ),
-      ]);
-
-      const userPrivilegeIds = new Set(
-        (privResult.RolePrivileges ?? [])
-          .map((p) => normalizeGuid(p.PrivilegeId))
-          .filter((g): g is string => g !== null)
+      const response = await this.xrm.webApiGet<{ value: RawEntityMetadata[] }>(
+        buildEntityDefinitionsPath(),
+        connectionTarget
       );
-
-      const tables: TableInfo[] = [];
-      for (const entity of entities) {
-        if (entity.IsIntersect || entity.IsPrivate) continue;
-
-        const writePriv = (entity.Privileges ?? []).find(
-          (p: any) => typeof p.Name === 'string' && p.Name.toLowerCase().startsWith('prvwrite')
-        );
-        if (!writePriv?.PrivilegeId) continue;
-        const writePrivGuid = normalizeGuid(writePriv.PrivilegeId);
-        if (!writePrivGuid || !userPrivilegeIds.has(writePrivGuid)) continue;
-
-        tables.push({
-          logicalName: entity.LogicalName,
-          displayName:
-            entity.DisplayName?.LocalizedLabels?.[0]?.Label ?? entity.LogicalName,
-          objectTypeCode: entity.ObjectTypeCode ?? 0,
-        });
-      }
-
-      tables.sort((a, b) => a.displayName.localeCompare(b.displayName));
-      this._cache.set(cacheKey, { tables, expiresAt: Date.now() + CACHE_TTL_MS });
+      const tables: TableInfo[] = response.value
+        .filter(keepEntity)
+        .map(e => ({
+          logicalName: e.LogicalName,
+          displayName: e.DisplayName?.UserLocalizedLabel?.Label ?? e.LogicalName,
+          objectTypeCode: e.ObjectTypeCode ?? 0,
+        }))
+        .sort((a, b) => a.displayName.localeCompare(b.displayName));
+      this._tableCache.set(cacheKey, { tables, expiresAt: Date.now() + CACHE_TTL_MS });
       return { status: 'ok', tables };
     } catch (err) {
       const reason = err instanceof Error ? err.message : 'Unknown error loading table list.';
@@ -85,9 +115,39 @@ export class MetadataService {
     }
   }
 
+  async listAccessibleDashboards(
+    connectionTarget?: 'primary' | 'secondary'
+  ): Promise<AccessibleDashboardsResult> {
+    try {
+      const cacheKey = `dashboards:${connectionTarget ?? 'default'}`;
+      const cached = this._dashboardCache.get(cacheKey);
+      if (cached && Date.now() < cached.expiresAt) {
+        return { status: 'ok', dashboards: cached.dashboards };
+      }
+      const [sysResult, userResult] = await Promise.all([
+        this.xrm.webApiGet<{ value: Array<{ name: string; dashboardid: string }> }>(
+          buildSystemDashboardsPath(),
+          connectionTarget
+        ),
+        this.xrm.webApiGet<{ value: Array<{ name: string; userdashboardid: string }> }>(
+          buildUserDashboardsPath(),
+          connectionTarget
+        ),
+      ]);
+      const dashboards: DashboardInfo[] = [
+        ...sysResult.value.map(d => ({ id: d.dashboardid, name: d.name, isPersonal: false })),
+        ...userResult.value.map(d => ({ id: d.userdashboardid, name: d.name, isPersonal: true })),
+      ].sort((a, b) => a.name.localeCompare(b.name));
+      this._dashboardCache.set(cacheKey, { dashboards, expiresAt: Date.now() + CACHE_TTL_MS });
+      return { status: 'ok', dashboards };
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : 'Unknown error loading dashboards.';
+      return { status: 'error', reason };
+    }
+  }
+
   invalidate(): void {
-    this._cache.clear();
+    this._tableCache.clear();
+    this._dashboardCache.clear();
   }
 }
-
-
