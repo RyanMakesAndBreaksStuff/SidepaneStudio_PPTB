@@ -37,9 +37,9 @@ export function buildEntityDefinitionsPath(): string {
 }
 
 export function buildSystemDashboardsPath(): string {
-  return 'systemdashboards?$select=name,dashboardid&$orderby=name asc';
+  return 'systemforms?$filter=type eq 0&$select=name,formid&$orderby=name asc';
 }
 
 export function buildUserDashboardsPath(): string {
-  return 'userdashboards?$select=name,userdashboardid&$orderby=name asc';
+  return 'userforms?$filter=type eq 0&$select=name,userformid&$orderby=name asc';
 }

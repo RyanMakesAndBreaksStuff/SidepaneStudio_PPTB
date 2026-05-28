@@ -16,17 +16,19 @@ describe('OData path builders', () => {
     expect(path).toContain('LogicalName');
   });
 
-  it('buildSystemDashboardsPath returns systemdashboards with name and dashboardid', () => {
+  it('buildSystemDashboardsPath returns systemforms dashboard query', () => {
     const path = buildSystemDashboardsPath();
-    expect(path).toMatch(/^systemdashboards\?/);
+    expect(path).toMatch(/^systemforms\?/);
     expect(path).toContain('name');
-    expect(path).toContain('dashboardid');
+    expect(path).toContain('formid');
+    expect(path).toContain('type eq 0');
   });
 
-  it('buildUserDashboardsPath returns userdashboards with name and userdashboardid', () => {
+  it('buildUserDashboardsPath returns userforms dashboard query', () => {
     const path = buildUserDashboardsPath();
-    expect(path).toMatch(/^userdashboards\?/);
+    expect(path).toMatch(/^userforms\?/);
     expect(path).toContain('name');
-    expect(path).toContain('userdashboardid');
+    expect(path).toContain('userformid');
+    expect(path).toContain('type eq 0');
   });
 });

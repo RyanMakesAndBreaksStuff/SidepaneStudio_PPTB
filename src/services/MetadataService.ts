@@ -42,6 +42,16 @@ interface RawEntityMetadata {
   IsCustomizable?: { Value: boolean };
 }
 
+interface RawSystemDashboard {
+  name: string;
+  formid: string;
+}
+
+interface RawUserDashboard {
+  name: string;
+  userformid: string;
+}
+
 const DENY_PREFIXES = [
   'adx_', 'cdm_', 'msdyn_', 'mspp_', 'workflow', 'process',
   'sdkmessage', 'solution', 'appmodule', 'ribbon', 'dependency',
@@ -95,11 +105,11 @@ export class MetadataService {
       if (cached && Date.now() < cached.expiresAt) {
         return { status: 'ok', tables: cached.tables };
       }
-      const response = await this.xrm.webApiGet<{ value: RawEntityMetadata[] }>(
+      const response = await this.xrm.webApiGet<RawEntityMetadata[]>(
         buildEntityDefinitionsPath(),
         connectionTarget
       );
-      const tables: TableInfo[] = response.value
+      const tables: TableInfo[] = response
         .filter(keepEntity)
         .map(e => ({
           logicalName: e.LogicalName,
@@ -125,18 +135,18 @@ export class MetadataService {
         return { status: 'ok', dashboards: cached.dashboards };
       }
       const [sysResult, userResult] = await Promise.all([
-        this.xrm.webApiGet<{ value: Array<{ name: string; dashboardid: string }> }>(
+        this.xrm.webApiGet<RawSystemDashboard[]>(
           buildSystemDashboardsPath(),
           connectionTarget
         ),
-        this.xrm.webApiGet<{ value: Array<{ name: string; userdashboardid: string }> }>(
+        this.xrm.webApiGet<RawUserDashboard[]>(
           buildUserDashboardsPath(),
           connectionTarget
         ),
       ]);
       const dashboards: DashboardInfo[] = [
-        ...sysResult.value.map(d => ({ id: d.dashboardid, name: d.name, isPersonal: false })),
-        ...userResult.value.map(d => ({ id: d.userdashboardid, name: d.name, isPersonal: true })),
+        ...sysResult.map(d => ({ id: d.formid, name: d.name, isPersonal: false })),
+        ...userResult.map(d => ({ id: d.userformid, name: d.name, isPersonal: true })),
       ].sort((a, b) => a.name.localeCompare(b.name));
       this._dashboardCache.set(cacheKey, { dashboards, expiresAt: Date.now() + CACHE_TTL_MS });
       return { status: 'ok', dashboards };

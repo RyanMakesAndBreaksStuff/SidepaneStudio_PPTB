@@ -4,7 +4,7 @@ import type { IXrmContext } from '../adapters/PptbContextAdapter';
 
 type MetaXrm = Pick<IXrmContext, 'webApiGet'>;
 
-function makeXrm(entityResponse: object = { value: [] }, dashboardResponse?: { sys: object; user: object }): MetaXrm {
+function makeXrm(entityResponse: object = [], dashboardResponse?: { sys: object; user: object }): MetaXrm {
   const xrm: MetaXrm = {
     webApiGet: vi.fn(),
   };
@@ -13,8 +13,8 @@ function makeXrm(entityResponse: object = { value: [] }, dashboardResponse?: { s
   if (dashboardResponse) {
     mock
       .mockResolvedValueOnce(entityResponse)      // first call: EntityDefinitions
-      .mockResolvedValueOnce(dashboardResponse.sys)  // second: systemdashboards
-      .mockResolvedValueOnce(dashboardResponse.user); // third: userdashboards
+      .mockResolvedValueOnce(dashboardResponse.sys)  // second: systemforms
+      .mockResolvedValueOnce(dashboardResponse.user); // third: userforms
   } else {
     mock.mockResolvedValue(entityResponse);
   }
@@ -76,7 +76,7 @@ describe('MetadataService', () => {
 
   describe('listAccessibleTables', () => {
     it('returns tables that pass keepEntity filter', async () => {
-      const xrm = makeXrm({ value: [ENTITY_ACCOUNT, ENTITY_CUSTOM] });
+      const xrm = makeXrm([ENTITY_ACCOUNT, ENTITY_CUSTOM]);
       const svc = new MetadataService(xrm);
       const result = await svc.listAccessibleTables();
       expect(result.status).toBe('ok');
@@ -85,8 +85,20 @@ describe('MetadataService', () => {
       expect(result.tables.map(t => t.logicalName)).toContain('new_widget');
     });
 
+    it('accepts unwrapped collection arrays from webApiGet', async () => {
+      const xrm: MetaXrm = {
+        webApiGet: vi.fn().mockResolvedValue([ENTITY_ACCOUNT]),
+      };
+      const svc = new MetadataService(xrm);
+      const result = await svc.listAccessibleTables();
+      expect(result.status).toBe('ok');
+      if (result.status !== 'ok') return;
+      expect(result.tables).toHaveLength(1);
+      expect(result.tables[0].logicalName).toBe('account');
+    });
+
     it('excludes intersect entities', async () => {
-      const xrm = makeXrm({ value: [ENTITY_INTERSECT] });
+      const xrm = makeXrm([ENTITY_INTERSECT]);
       const svc = new MetadataService(xrm);
       const result = await svc.listAccessibleTables();
       expect(result.status).toBe('ok');
@@ -95,7 +107,7 @@ describe('MetadataService', () => {
     });
 
     it('excludes private entities', async () => {
-      const xrm = makeXrm({ value: [ENTITY_PRIVATE] });
+      const xrm = makeXrm([ENTITY_PRIVATE]);
       const svc = new MetadataService(xrm);
       const result = await svc.listAccessibleTables();
       if (result.status !== 'ok') return;
@@ -103,7 +115,7 @@ describe('MetadataService', () => {
     });
 
     it('excludes activity entities', async () => {
-      const xrm = makeXrm({ value: [ENTITY_ACTIVITY] });
+      const xrm = makeXrm([ENTITY_ACTIVITY]);
       const svc = new MetadataService(xrm);
       const result = await svc.listAccessibleTables();
       if (result.status !== 'ok') return;
@@ -111,7 +123,7 @@ describe('MetadataService', () => {
     });
 
     it('excludes entities with no EntitySetName', async () => {
-      const xrm = makeXrm({ value: [ENTITY_NO_ENTITY_SET] });
+      const xrm = makeXrm([ENTITY_NO_ENTITY_SET]);
       const svc = new MetadataService(xrm);
       const result = await svc.listAccessibleTables();
       if (result.status !== 'ok') return;
@@ -119,7 +131,7 @@ describe('MetadataService', () => {
     });
 
     it('excludes entities with denied prefixes (msdyn_, adx_, etc.)', async () => {
-      const xrm = makeXrm({ value: [ENTITY_DENY_PREFIX] });
+      const xrm = makeXrm([ENTITY_DENY_PREFIX]);
       const svc = new MetadataService(xrm);
       const result = await svc.listAccessibleTables();
       if (result.status !== 'ok') return;
@@ -127,7 +139,7 @@ describe('MetadataService', () => {
     });
 
     it('excludes exact-denied entity names (webresource, savedquery, etc.)', async () => {
-      const xrm = makeXrm({ value: [ENTITY_DENY_EXACT] });
+      const xrm = makeXrm([ENTITY_DENY_EXACT]);
       const svc = new MetadataService(xrm);
       const result = await svc.listAccessibleTables();
       if (result.status !== 'ok') return;
@@ -135,7 +147,7 @@ describe('MetadataService', () => {
     });
 
     it('excludes entities where CanCreateForms is false', async () => {
-      const xrm = makeXrm({ value: [ENTITY_NO_FORMS] });
+      const xrm = makeXrm([ENTITY_NO_FORMS]);
       const svc = new MetadataService(xrm);
       const result = await svc.listAccessibleTables();
       if (result.status !== 'ok') return;
@@ -143,7 +155,7 @@ describe('MetadataService', () => {
     });
 
     it('excludes OrganizationOwned tables with no underscore in schema name', async () => {
-      const xrm = makeXrm({ value: [ENTITY_ORG_OWNED_NO_PREFIX] });
+      const xrm = makeXrm([ENTITY_ORG_OWNED_NO_PREFIX]);
       const svc = new MetadataService(xrm);
       const result = await svc.listAccessibleTables();
       if (result.status !== 'ok') return;
@@ -151,7 +163,7 @@ describe('MetadataService', () => {
     });
 
     it('uses displayName from UserLocalizedLabel', async () => {
-      const xrm = makeXrm({ value: [ENTITY_ACCOUNT] });
+      const xrm = makeXrm([ENTITY_ACCOUNT]);
       const svc = new MetadataService(xrm);
       const result = await svc.listAccessibleTables();
       if (result.status !== 'ok') return;
@@ -160,7 +172,7 @@ describe('MetadataService', () => {
 
     it('falls back to LogicalName when no DisplayName', async () => {
       const noLabel = { ...ENTITY_CUSTOM, DisplayName: null };
-      const xrm = makeXrm({ value: [noLabel] });
+      const xrm = makeXrm([noLabel]);
       const svc = new MetadataService(xrm);
       const result = await svc.listAccessibleTables();
       if (result.status !== 'ok') return;
@@ -168,7 +180,7 @@ describe('MetadataService', () => {
     });
 
     it('caches result — second call does not re-fetch', async () => {
-      const xrm = makeXrm({ value: [ENTITY_ACCOUNT] });
+      const xrm = makeXrm([ENTITY_ACCOUNT]);
       const svc = new MetadataService(xrm);
       await svc.listAccessibleTables();
       await svc.listAccessibleTables();
@@ -176,7 +188,7 @@ describe('MetadataService', () => {
     });
 
     it('invalidate clears cache — next call re-fetches', async () => {
-      const xrm = makeXrm({ value: [ENTITY_ACCOUNT] });
+      const xrm = makeXrm([ENTITY_ACCOUNT]);
       const svc = new MetadataService(xrm);
       await svc.listAccessibleTables();
       svc.invalidate();
@@ -196,7 +208,7 @@ describe('MetadataService', () => {
     });
 
     it('uses buildEntityDefinitionsPath — call starts with EntityDefinitions', async () => {
-      const xrm = makeXrm({ value: [] });
+      const xrm = makeXrm([]);
       const svc = new MetadataService(xrm);
       await svc.listAccessibleTables();
       const calledPath = (xrm.webApiGet as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
@@ -205,7 +217,7 @@ describe('MetadataService', () => {
 
     it('does not log to console during normal operation', async () => {
       const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-      const xrm = makeXrm({ value: [ENTITY_ACCOUNT] });
+      const xrm = makeXrm([ENTITY_ACCOUNT]);
       const svc = new MetadataService(xrm);
       await svc.listAccessibleTables();
       expect(logSpy).not.toHaveBeenCalled();
@@ -213,14 +225,14 @@ describe('MetadataService', () => {
     });
 
     it('forwards connectionTarget to webApiGet', async () => {
-      const xrm = makeXrm({ value: [] });
+      const xrm = makeXrm([]);
       const svc = new MetadataService(xrm);
       await svc.listAccessibleTables('secondary');
       expect(xrm.webApiGet).toHaveBeenCalledWith(expect.any(String), 'secondary');
     });
 
     it('cache key includes connectionTarget — primary and secondary are independent', async () => {
-      const xrm = makeXrm({ value: [] });
+      const xrm = makeXrm([]);
       const svc = new MetadataService(xrm);
       await svc.listAccessibleTables('primary');
       await svc.listAccessibleTables('secondary');
@@ -229,8 +241,8 @@ describe('MetadataService', () => {
   });
 
   describe('listAccessibleDashboards', () => {
-    const SYS_DASH = { name: 'Sales Dashboard', dashboardid: 'aaaaaaaa-0000-0000-0000-000000000001' };
-    const USER_DASH = { name: 'My Dashboard', userdashboardid: 'bbbbbbbb-0000-0000-0000-000000000002' };
+    const SYS_DASH = { name: 'Sales Dashboard', formid: 'aaaaaaaa-0000-0000-0000-000000000001' };
+    const USER_DASH = { name: 'My Dashboard', userformid: 'bbbbbbbb-0000-0000-0000-000000000002' };
 
     function makeXrmForDashboards(
       sysValue: object[] = [],
@@ -238,8 +250,8 @@ describe('MetadataService', () => {
     ): Pick<IXrmContext, 'webApiGet'> {
       return {
         webApiGet: vi.fn()
-          .mockResolvedValueOnce({ value: sysValue })
-          .mockResolvedValueOnce({ value: userValue }),
+          .mockResolvedValueOnce(sysValue)
+          .mockResolvedValueOnce(userValue),
       };
     }
 
@@ -255,13 +267,29 @@ describe('MetadataService', () => {
       expect(names).toContain('My Dashboard');
     });
 
+    it('maps dashboard ids from systemform and userform collections', async () => {
+      const xrm: Pick<IXrmContext, 'webApiGet'> = {
+        webApiGet: vi.fn()
+          .mockResolvedValueOnce([SYS_DASH])
+          .mockResolvedValueOnce([USER_DASH]),
+      };
+      const svc = new MetadataService(xrm);
+      const result = await svc.listAccessibleDashboards();
+      expect(result.status).toBe('ok');
+      if (result.status !== 'ok') return;
+      expect(result.dashboards).toEqual([
+        { id: USER_DASH.userformid, name: 'My Dashboard', isPersonal: true },
+        { id: SYS_DASH.formid, name: 'Sales Dashboard', isPersonal: false },
+      ]);
+    });
+
     it('marks system dashboards as isPersonal: false', async () => {
       const xrm = makeXrmForDashboards([SYS_DASH], []);
       const svc = new MetadataService(xrm);
       const result = await svc.listAccessibleDashboards();
       if (result.status !== 'ok') return;
       expect(result.dashboards[0].isPersonal).toBe(false);
-      expect(result.dashboards[0].id).toBe(SYS_DASH.dashboardid);
+      expect(result.dashboards[0].id).toBe(SYS_DASH.formid);
     });
 
     it('marks user dashboards as isPersonal: true', async () => {
@@ -270,7 +298,7 @@ describe('MetadataService', () => {
       const result = await svc.listAccessibleDashboards();
       if (result.status !== 'ok') return;
       expect(result.dashboards[0].isPersonal).toBe(true);
-      expect(result.dashboards[0].id).toBe(USER_DASH.userdashboardid);
+      expect(result.dashboards[0].id).toBe(USER_DASH.userformid);
     });
 
     it('returns empty list when no dashboards exist', async () => {
@@ -294,10 +322,10 @@ describe('MetadataService', () => {
     it('invalidate clears dashboard cache', async () => {
       const xrm = {
         webApiGet: vi.fn()
-          .mockResolvedValueOnce({ value: [SYS_DASH] })
-          .mockResolvedValueOnce({ value: [] })
-          .mockResolvedValueOnce({ value: [SYS_DASH] })
-          .mockResolvedValueOnce({ value: [] }),
+          .mockResolvedValueOnce([SYS_DASH])
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([SYS_DASH])
+          .mockResolvedValueOnce([]),
       };
       const svc = new MetadataService(xrm);
       await svc.listAccessibleDashboards();

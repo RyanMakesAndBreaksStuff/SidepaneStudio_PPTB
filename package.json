@@ -19,11 +19,15 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview",
     "test": "vitest run",
     "lint": "eslint .",
+    "preview": "vite preview",
+    "watch": "vite build --watch",
     "typecheck": "tsc --noEmit",
     "coverage": "vitest run --coverage"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   },
   "dependencies": {
     "react": "^18.3.1",
