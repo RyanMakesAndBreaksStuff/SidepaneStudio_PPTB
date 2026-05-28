@@ -11,6 +11,7 @@ import { Field } from './Field';
 import { Input } from './Input';
 import { Select } from './Select';
 import { TablePicker } from './TablePicker';
+import { DashboardPicker } from './DashboardPicker';
 import { Toggle } from './Toggle';
 import { ChoiceGroup } from './ChoiceGroup';
 import { Callout } from './Callout';
@@ -42,8 +43,8 @@ const PAGE_TYPE_OPTIONS = [
   { value: 'entityrecord', label: 'Table record',    desc: 'Open a specific or context-driven record' },
   { value: 'entitylist',   label: 'Table list',      desc: 'Show a view of table records' },
   { value: 'webresource',  label: 'Web resource',    desc: 'Embed an HTML/JS web resource' },
-  { value: 'dashboard',    label: 'Dashboard',       desc: 'System or personal dashboard', phase: 'Coming soon', disabled: true },
-  { value: 'search',       label: 'Search',          desc: 'Global search results', phase: 'Coming soon', disabled: true },
+  { value: 'dashboard',    label: 'Dashboard',       desc: 'System or personal dashboard' },
+  { value: 'search',       label: 'Search',          desc: 'Global search results' },
 ];
 
 const TRIGGER_OPTIONS = [
@@ -159,6 +160,41 @@ export function ConfigurePanel({
               Web resources inside a side pane do NOT have access to <code>Xrm</code> or <code>parent.Xrm</code>. Pass data via URL <code>data</code> parameter (URL-encoded JSON).
             </Callout>
           </>
+        )}
+
+        {target.pageType === 'dashboard' && (
+          <Field label="Dashboard" required hint="Select a system or personal dashboard" error={vErrors['target.dashboardId']}>
+            <DashboardPicker
+              value={target.pageType === 'dashboard' ? target.dashboardId : ''}
+              onChange={(id, name) =>
+                onChange(prev => {
+                  const t = prev.target;
+                  if (t.pageType !== 'dashboard') return prev;
+                  return { ...prev, target: { ...t, dashboardId: id, dashboardName: name } };
+                })
+              }
+              metadataService={metadataService}
+              error={!!vErrors['target.dashboardId']}
+              disabled={readOnly}
+            />
+          </Field>
+        )}
+
+        {target.pageType === 'search' && (
+          <Field label="Search text" hint="Pre-fill the global search box (optional)" error={vErrors['target.searchText']}>
+            <Input
+              value={target.pageType === 'search' ? target.searchText : ''}
+              onChange={v =>
+                onChange(prev => {
+                  const t = prev.target;
+                  if (t.pageType !== 'search') return prev;
+                  return { ...prev, target: { ...t, searchText: v } };
+                })
+              }
+              placeholder="e.g. Contoso"
+              error={!!vErrors['target.searchText']}
+            />
+          </Field>
         )}
       </Section>
 
