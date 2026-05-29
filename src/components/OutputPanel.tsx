@@ -39,6 +39,7 @@ export const OutputPanel = React.memo(function OutputPanel({ config, xrm, valida
   const [activeTab, setActiveTab] = useState('basic');
   const [showRaw, setShowRaw] = useState(false);
   const [runtimeExists, setRuntimeExists] = useState<boolean | null>(null);
+  const [runtimeCheckError, setRuntimeCheckError] = useState<string | null>(null);
 
   const basicCode   = useMemo(() => generateBasicScript(config), [config]);
   const libCode     = useMemo(() => generateLibraryScript(config), [config]);
@@ -48,9 +49,10 @@ export const OutputPanel = React.memo(function OutputPanel({ config, xrm, valida
   useEffect(() => {
     if (activeTab === 'library') {
       setRuntimeExists(null);
+      setRuntimeCheckError(null);
       xrm.checkWebResourceExists(RUNTIME_WEB_RESOURCE_NAME)
         .then(exists => setRuntimeExists(exists))
-        .catch(() => setRuntimeExists(false));
+        .catch((err) => setRuntimeCheckError(err instanceof Error ? err.message : String(err)));
     }
   }, [activeTab, xrm]);
 
@@ -107,17 +109,15 @@ export const OutputPanel = React.memo(function OutputPanel({ config, xrm, valida
         {/* Shared Library */}
         {activeTab === 'library' && (
           <>
-            {runtimeExists === false && (
-              <div style={{
-                display: 'flex', gap: 8, padding: '10px 12px',
-                background: T.warnBg, border: `1px solid ${T.warning}`,
-                borderRadius: T.rM, fontSize: 12, color: T.warning, alignItems: 'flex-start', lineHeight: 1.5,
-              }}>
-                <span style={{ fontSize: 14, flexShrink: 0 }}>⚠</span>
-                <span>
-                  <strong>Prerequisite not detected:</strong> The shared runtime library (<code>{RUNTIME_WEB_RESOURCE_NAME}</code>) is not deployed in this environment. Deploy it before using this output.
-                </span>
-              </div>
+            {runtimeCheckError && (
+              <Callout type="err" icon="✕">
+                <strong>Could not verify prerequisite:</strong> {runtimeCheckError}
+              </Callout>
+            )}
+            {runtimeExists === false && !runtimeCheckError && (
+              <Callout type="warn" icon="⚠">
+                <strong>Prerequisite not detected:</strong> The shared runtime library (<code>{RUNTIME_WEB_RESOURCE_NAME}</code>) is not deployed in this environment. Deploy it before using this output.
+              </Callout>
             )}
             {runtimeExists === true && (
               <Callout type="ok" icon="✓">Shared runtime library detected in this environment.</Callout>

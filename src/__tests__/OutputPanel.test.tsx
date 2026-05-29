@@ -30,6 +30,18 @@ afterEach(async () => {
   host = undefined;
 });
 
+function getLibraryTab() {
+  return host?.querySelector('[role="tab"]:nth-child(2)') as HTMLButtonElement | null;
+}
+
+async function clickLibraryTab() {
+  const tab = getLibraryTab();
+  if (!tab) throw new Error('Library tab not found');
+  await act(async () => {
+    tab.click();
+  });
+}
+
 describe('OutputPanel', () => {
   it('shows generated FormOnChange entitylist code with double-quoted pageType', async () => {
     const config = {
@@ -56,5 +68,45 @@ describe('OutputPanel', () => {
     const pre = host?.querySelector('pre');
     expect(pre?.textContent).toContain('await pane.navigate({ pageType: "entitylist", entityName: "contact" });');
     expect(pre?.textContent).not.toContain('&#39;');
+  });
+
+  it('shows prerequisite warning when shared runtime is confirmed missing', async () => {
+    const xrm = xrmStub();
+    xrm.checkWebResourceExists = vi.fn().mockResolvedValue(false);
+
+    await render(
+      <OutputPanel
+        config={DEFAULT_CONFIG}
+        xrm={xrm}
+        validation={{ isValid: true, errors: [], warnings: [] }}
+      />
+    );
+
+    await clickLibraryTab();
+    // wait for effect + promise
+    await act(async () => new Promise(r => setTimeout(r, 0)));
+
+    expect(host?.textContent).toContain('Prerequisite not detected');
+    expect(host?.textContent).not.toContain('Could not verify prerequisite');
+  });
+
+  it('surfaces lookup errors distinctly from missing-prerequisite state', async () => {
+    const xrm = xrmStub();
+    xrm.checkWebResourceExists = vi.fn().mockRejectedValue(new Error('Host API unreachable'));
+
+    await render(
+      <OutputPanel
+        config={DEFAULT_CONFIG}
+        xrm={xrm}
+        validation={{ isValid: true, errors: [], warnings: [] }}
+      />
+    );
+
+    await clickLibraryTab();
+    await act(async () => new Promise(r => setTimeout(r, 0)));
+
+    expect(host?.textContent).toContain('Could not verify prerequisite');
+    expect(host?.textContent).toContain('Host API unreachable');
+    expect(host?.textContent).not.toContain('Prerequisite not detected');
   });
 });
