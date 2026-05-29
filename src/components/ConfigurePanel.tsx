@@ -105,7 +105,7 @@ export function ConfigurePanel({
         </Field>
 
         {target.pageType === 'custom' && (
-          <Field label="Custom page name" required hint="Logical name from your solution (e.g. cpp_MyPage)" error={vErrors['target.name']}>
+          <Field label="Custom page name" required hint="Logical name from your solution (e.g. sps_MyPage)" error={vErrors['target.name']}>
             <Input
               value={target.pageType === 'custom' ? target.name : ''}
               onChange={v =>
@@ -115,7 +115,7 @@ export function ConfigurePanel({
                   return { ...prev, target: { ...t, name: v } };
                 })
               }
-              placeholder="cpp_SidePaneBuilderPage"
+              placeholder="sps_SidePaneBuilderPage"
               error={!!vErrors['target.name']}
             />
           </Field>
@@ -142,7 +142,7 @@ export function ConfigurePanel({
 
         {target.pageType === 'webresource' && (
           <>
-            <Field label="Web resource name" required hint="Logical name (e.g. cpp_/pages/helper.html)" error={vErrors['target.name']}>
+            <Field label="Web resource name" required hint="Logical name (e.g. sps_/pages/helper.html)" error={vErrors['target.name']}>
               <Input
                 value={target.pageType === 'webresource' ? target.name : ''}
                 onChange={v =>
@@ -152,7 +152,7 @@ export function ConfigurePanel({
                     return { ...prev, target: { ...t, name: v } };
                   })
                 }
-                placeholder="cpp_/pages/helper.html"
+                placeholder="sps_/pages/helper.html"
                 error={!!vErrors['target.name']}
               />
             </Field>
@@ -211,7 +211,7 @@ export function ConfigurePanel({
               borderRadius: T.rM, display: 'flex', alignItems: 'center', justifyContent: 'center',
               color: T.fg3, fontSize: 15, flexShrink: 0,
             }}>🖼</div>
-            <Input value={pane.imageSrc} onChange={v => patch('pane', 'imageSrc', v)} placeholder="cpp_/icons/myicon.svg" />
+            <Input value={pane.imageSrc} onChange={v => patch('pane', 'imageSrc', v)} placeholder="sps_/icons/myicon.svg" />
           </div>
           {pane.imageSrc && (
             <Callout type="warn" icon="⚠">Icon will render in the live app once the web resource is published. Showing placeholder in preview.</Callout>

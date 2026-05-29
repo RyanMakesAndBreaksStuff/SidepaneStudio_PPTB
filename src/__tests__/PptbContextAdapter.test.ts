@@ -145,9 +145,9 @@ describe('PptbContextAdapter', () => {
     api.queryData.mockResolvedValue({ value: [{ webresourceid: 'wr-1' }] });
     vi.stubGlobal('dataverseAPI', api);
     const adapter = new PptbContextAdapter();
-    expect(await adapter.checkWebResourceExists("cpp_/icons/o'brien.svg")).toBe(true);
+    expect(await adapter.checkWebResourceExists("sps_/icons/o'brien.svg")).toBe(true);
     expect(api.queryData).toHaveBeenCalledWith(
-      "webresourceset?$select=webresourceid&$filter=name eq 'cpp_/icons/o''brien.svg'&$top=1",
+      "webresourceset?$select=webresourceid&$filter=name eq 'sps_/icons/o''brien.svg'&$top=1",
       undefined
     );
   });

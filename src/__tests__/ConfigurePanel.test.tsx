@@ -191,7 +191,7 @@ describe('ConfigurePanel', () => {
     const onChange = vi.fn();
     await render(
       <ConfigurePanel
-        config={{ ...DEFAULT_CONFIG, target: { pageType: 'custom', name: 'cpp_MyPage' } }}
+        config={{ ...DEFAULT_CONFIG, target: { pageType: 'custom', name: 'sps_MyPage' } }}
         onChange={onChange}
         validation={{ isValid: true, errors: [], warnings: [] }}
         metadataService={makeMetadataService()}
@@ -206,7 +206,7 @@ describe('ConfigurePanel', () => {
 
     expect(onChange).toHaveBeenCalled();
     const updater = onChange.mock.calls[0][0];
-    const next = updater({ ...DEFAULT_CONFIG, target: { pageType: 'custom', name: 'cpp_MyPage' } });
+    const next = updater({ ...DEFAULT_CONFIG, target: { pageType: 'custom', name: 'sps_MyPage' } });
     expect(next.target).toEqual({ pageType: 'search', searchText: '' });
   });
 });

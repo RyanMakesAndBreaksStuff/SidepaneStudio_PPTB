@@ -70,8 +70,8 @@ export const DEFAULT_CONFIG: PaneDefinitionConfig = {
     isResizable: true,
     badgeValue: 0,
   },
-  target: { pageType: 'custom', name: 'cpp_SidePaneBuilderPage' },
-  trigger: { kind: 'FormButton', functionName: 'openRelatedRecordsPane', namespace: 'Contoso', fieldName: '' },
+  target: { pageType: 'custom', name: 'sps_SidePaneBuilderPage' },
+  trigger: { kind: 'FormButton', functionName: 'openRelatedRecordsPane', namespace: 'YourNamespace', fieldName: '' },
   context: { mode: 'CurrentRecord', entityName: '', staticRecordId: '', reuseExistingPane: true },
   behavior: { expandOnOpen: true, closeOthers: false },
 };

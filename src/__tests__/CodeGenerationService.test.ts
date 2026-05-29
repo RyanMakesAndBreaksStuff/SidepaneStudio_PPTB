@@ -435,7 +435,7 @@ describe('generateLibraryScript', () => {
   });
 
   it('includes paneId and pageType', () => {
-    const code = generateLibraryScript(cfg({ pane: { paneId: 'myPane' } as any, target: { pageType: 'custom', name: 'cpp_Page' } as any }));
+    const code = generateLibraryScript(cfg({ pane: { paneId: 'myPane' } as any, target: { pageType: 'custom', name: 'sps_Page' } as any }));
     expect(code).toContain('"myPane"');
     expect(code).toContain('"custom"');
   });
