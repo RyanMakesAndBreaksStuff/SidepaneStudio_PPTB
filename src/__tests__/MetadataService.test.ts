@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { MetadataService } from '../services/MetadataService';
 import type { IXrmContext } from '../adapters/PptbContextAdapter';
+import { DEFAULT_METADATA_FILTER_CONFIG } from '../types/MetadataFilterConfig';
 
 type MetaXrm = Pick<IXrmContext, 'webApiGet'>;
 
@@ -67,6 +68,15 @@ const ENTITY_ORG_OWNED_NO_PREFIX = {
   LogicalName: 'organization',
   SchemaName: 'Organization',
   OwnershipType: 'OrganizationOwned',
+};
+const ENTITY_STANDARD_LOCKED = {
+  ...ENTITY_ACCOUNT,
+  LogicalName: 'competitor',
+  SchemaName: 'Competitor',
+  DisplayName: { UserLocalizedLabel: { Label: 'Competitor' } },
+  EntitySetName: 'competitors',
+  IsCustomEntity: false,
+  IsCustomizable: { Value: false },
 };
 
 describe('MetadataService', () => {
@@ -236,6 +246,46 @@ describe('MetadataService', () => {
       const svc = new MetadataService(xrm);
       await svc.listAccessibleTables('primary');
       await svc.listAccessibleTables('secondary');
+      expect(xrm.webApiGet).toHaveBeenCalledTimes(2);
+    });
+
+    it('uses custom filter config for exact denies and allowed standard tables', async () => {
+      const xrm = makeXrm([ENTITY_ACCOUNT, ENTITY_STANDARD_LOCKED]);
+      const svc = new MetadataService(xrm, {
+        ...DEFAULT_METADATA_FILTER_CONFIG,
+        denyExact: [...DEFAULT_METADATA_FILTER_CONFIG.denyExact, 'account'],
+        allowedStandardTables: [...DEFAULT_METADATA_FILTER_CONFIG.allowedStandardTables, 'competitor'],
+      });
+
+      const result = await svc.listAccessibleTables();
+
+      expect(result.status).toBe('ok');
+      if (result.status !== 'ok') return;
+      expect(result.tables.map(t => t.logicalName)).toEqual(['competitor']);
+    });
+
+    it('setFilterConfig clears cached table results', async () => {
+      const xrm: MetaXrm = {
+        webApiGet: vi.fn()
+          .mockResolvedValueOnce([ENTITY_ACCOUNT])
+          .mockResolvedValueOnce([ENTITY_ACCOUNT]),
+      };
+      const svc = new MetadataService(xrm);
+
+      const first = await svc.listAccessibleTables();
+      expect(first.status).toBe('ok');
+      if (first.status !== 'ok') return;
+      expect(first.tables.map(t => t.logicalName)).toEqual(['account']);
+
+      svc.setFilterConfig({
+        ...DEFAULT_METADATA_FILTER_CONFIG,
+        denyExact: [...DEFAULT_METADATA_FILTER_CONFIG.denyExact, 'account'],
+      });
+
+      const second = await svc.listAccessibleTables();
+      expect(second.status).toBe('ok');
+      if (second.status !== 'ok') return;
+      expect(second.tables).toHaveLength(0);
       expect(xrm.webApiGet).toHaveBeenCalledTimes(2);
     });
   });

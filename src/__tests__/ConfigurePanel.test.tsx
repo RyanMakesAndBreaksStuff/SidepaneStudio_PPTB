@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ConfigurePanel } from '../components/ConfigurePanel';
 import { ThemeProvider } from '../contexts/ThemeContext';
 import { DEFAULT_CONFIG, PaneDefinitionConfig } from '../types/PaneDefinitionConfig';
+import { DEFAULT_METADATA_FILTER_CONFIG } from '../types/MetadataFilterConfig';
 import { validate } from '../services/ValidationService';
 import type { MetadataService } from '../services/MetadataService';
 
@@ -208,5 +209,47 @@ describe('ConfigurePanel', () => {
     const updater = onChange.mock.calls[0][0];
     const next = updater({ ...DEFAULT_CONFIG, target: { pageType: 'custom', name: 'sps_MyPage' } });
     expect(next.target).toEqual({ pageType: 'search', searchText: '' });
+  });
+
+  it('renders metadata filter editor in advanced options when handlers are provided', async () => {
+    await render(
+      <ConfigurePanel
+        config={DEFAULT_CONFIG}
+        onChange={() => {}}
+        validation={{ isValid: true, errors: [], warnings: [] }}
+        metadataService={makeMetadataService()}
+        metadataFilterConfig={DEFAULT_METADATA_FILTER_CONFIG}
+        defaultMetadataFilterConfig={DEFAULT_METADATA_FILTER_CONFIG}
+        metadataFilterPersistenceAvailable={true}
+        onSaveMetadataFilterConfig={() => {}}
+        onResetMetadataFilterConfig={() => {}}
+      />
+    );
+    await expandSection('Advanced options');
+
+    expect(host?.textContent).toContain('Metadata table filters');
+    expect(host?.textContent).toContain('Deny prefixes');
+    expect(host?.textContent).toContain('Allowed standard tables');
+  });
+
+  it('orders advanced pane settings before metadata filters', async () => {
+    await render(
+      <ConfigurePanel
+        config={DEFAULT_CONFIG}
+        onChange={() => {}}
+        validation={{ isValid: true, errors: [], warnings: [] }}
+        metadataService={makeMetadataService()}
+        metadataFilterConfig={DEFAULT_METADATA_FILTER_CONFIG}
+        defaultMetadataFilterConfig={DEFAULT_METADATA_FILTER_CONFIG}
+        metadataFilterPersistenceAvailable={true}
+        onSaveMetadataFilterConfig={() => {}}
+        onResetMetadataFilterConfig={() => {}}
+      />
+    );
+    await expandSection('Advanced options');
+
+    const text = host?.textContent ?? '';
+    expect(text.indexOf('Open in foreground (isSelected)')).toBeLessThan(text.indexOf('Keep loaded when inactive'));
+    expect(text.indexOf('Initial badge value')).toBeLessThan(text.indexOf('Metadata table filters'));
   });
 });

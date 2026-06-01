@@ -4,6 +4,7 @@ import { useCallback } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 import { theme } from '../theme/tokens';
 import { PaneDefinitionConfig, TargetConfig, PageType } from '../types/PaneDefinitionConfig';
+import { MetadataFilterConfig } from '../types/MetadataFilterConfig';
 import { ValidationResult } from '../services/ValidationService';
 import { MetadataService } from '../services/MetadataService';
 import { Section } from './Section';
@@ -17,6 +18,7 @@ import { ChoiceGroup } from './ChoiceGroup';
 import { Callout } from './Callout';
 import { WidthPicker } from './WidthPicker';
 import { MIN_CONFIG_WIDTH, MAX_CONFIG_WIDTH } from './previewHelpers';
+import { MetadataFilterConfigEditor } from './config/MetadataFilterConfigEditor';
 
 export interface ConfigurePanelProps {
   config: PaneDefinitionConfig;
@@ -25,6 +27,12 @@ export interface ConfigurePanelProps {
   readOnly?: boolean;
   metadataService: MetadataService;
   onAccessibleTablesChange?: (tables: Set<string> | undefined) => void;
+  metadataFilterConfig?: MetadataFilterConfig;
+  defaultMetadataFilterConfig?: MetadataFilterConfig;
+  metadataFilterPersistenceAvailable?: boolean;
+  metadataFilterError?: string | null;
+  onSaveMetadataFilterConfig?: (config: MetadataFilterConfig) => Promise<void> | void;
+  onResetMetadataFilterConfig?: () => Promise<void> | void;
 }
 
 function resetTarget(pageType: PageType): TargetConfig {
@@ -70,6 +78,12 @@ export function ConfigurePanel({
   readOnly,
   metadataService,
   onAccessibleTablesChange,
+  metadataFilterConfig,
+  defaultMetadataFilterConfig,
+  metadataFilterPersistenceAvailable = false,
+  metadataFilterError,
+  onSaveMetadataFilterConfig,
+  onResetMetadataFilterConfig,
 }: ConfigurePanelProps): React.ReactElement {
   const { isDark } = useTheme();
   const T = theme(isDark);
@@ -342,6 +356,19 @@ export function ConfigurePanel({
         <Field label="Initial badge value" hint="0 = no badge shown">
           <Input type="number" value={pane.badgeValue} onChange={v => patch('pane', 'badgeValue', +v)} />
         </Field>
+
+        {metadataFilterConfig && defaultMetadataFilterConfig && onSaveMetadataFilterConfig && onResetMetadataFilterConfig && (
+          <Field label="Metadata table filters">
+            <MetadataFilterConfigEditor
+              config={metadataFilterConfig}
+              defaultConfig={defaultMetadataFilterConfig}
+              persistenceAvailable={metadataFilterPersistenceAvailable}
+              error={metadataFilterError}
+              onSave={onSaveMetadataFilterConfig}
+              onReset={onResetMetadataFilterConfig}
+            />
+          </Field>
+        )}
       </Section>
     </div>
   );

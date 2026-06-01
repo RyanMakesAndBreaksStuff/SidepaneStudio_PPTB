@@ -3,25 +3,31 @@ import { act } from 'react';
 import { createRoot, Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_CONFIG, PaneDefinitionConfig } from '../types/PaneDefinitionConfig';
+import { DEFAULT_METADATA_FILTER_CONFIG } from '../types/MetadataFilterConfig';
+
+const workbenchShellState = vi.hoisted(() => ({
+  props: undefined as Record<string, unknown> | undefined,
+}));
 
 vi.mock('../components/WorkbenchShell', () => ({
-  WorkbenchShell: ({
-    config,
-    onChange,
-  }: {
+  WorkbenchShell: (props: {
     config: PaneDefinitionConfig;
     onChange: (updater: (prev: PaneDefinitionConfig) => PaneDefinitionConfig) => void;
-  }) => (
-    <div>
-      <span data-testid="title">{config.pane.title}</span>
-      <button
-        type="button"
-        onClick={() => onChange(prev => ({ ...prev, pane: { ...prev.pane, title: 'Edited Title' } }))}
-      >
-        Edit title
-      </button>
-    </div>
-  ),
+    [key: string]: unknown;
+  }) => {
+    workbenchShellState.props = props;
+    return (
+      <div>
+        <span data-testid="title">{props.config.pane.title}</span>
+        <button
+          type="button"
+          onClick={() => props.onChange(prev => ({ ...prev, pane: { ...prev.pane, title: 'Edited Title' } }))}
+        >
+          Edit title
+        </button>
+      </div>
+    );
+  },
 }));
 
 import { SidePaneBuilderWorkbench } from '../SidePaneBuilderWorkbench';
@@ -59,6 +65,7 @@ afterEach(async () => {
   host?.remove();
   root = undefined;
   host = undefined;
+  workbenchShellState.props = undefined;
 });
 
 describe('SidePaneBuilderWorkbench', () => {
@@ -117,5 +124,74 @@ describe('SidePaneBuilderWorkbench', () => {
       'lastConfig',
       expect.stringContaining('"title":"Edited Title"')
     );
+  });
+
+  it('hydrates metadata filter settings and exposes save/reset handlers', async () => {
+    const getAll = vi.fn()
+      .mockResolvedValueOnce({
+        lastConfig: '{"pane":{}}',
+        'metadataFilters.denyPrefixes': ['new_'],
+        'metadataFilters.denyExact': ['account'],
+        'metadataFilters.allowedStandardTables': ['contact'],
+      })
+      .mockResolvedValue({ lastConfig: '{"pane":{}}' });
+    const setAll = vi.fn().mockResolvedValue(undefined);
+
+    vi.stubGlobal('toolboxAPI', {
+      connections: {
+        getActiveConnection: vi.fn().mockResolvedValue({ id: 'conn-1' }),
+      },
+      events: {
+        on: vi.fn(),
+        off: vi.fn(),
+      },
+      settings: {
+        get: vi.fn().mockResolvedValue(null),
+        set: vi.fn().mockResolvedValue(undefined),
+        getAll,
+        setAll,
+      },
+    });
+
+    await render(<SidePaneBuilderWorkbench />);
+    await act(async () => { await Promise.resolve(); });
+    await act(async () => { await Promise.resolve(); });
+
+    expect(workbenchShellState.props?.metadataFilterConfig).toEqual({
+      denyPrefixes: ['new_'],
+      denyExact: ['account'],
+      allowedStandardTables: ['contact'],
+    });
+    expect(workbenchShellState.props?.metadataFilterPersistenceAvailable).toBe(true);
+
+    await act(async () => {
+      const save = workbenchShellState.props?.onSaveMetadataFilterConfig as (
+        config: typeof DEFAULT_METADATA_FILTER_CONFIG
+      ) => Promise<void>;
+      await save({
+        denyPrefixes: ['abc_'],
+        denyExact: ['webresource'],
+        allowedStandardTables: ['account'],
+      });
+    });
+
+    expect(setAll).toHaveBeenCalledWith({
+      lastConfig: '{"pane":{}}',
+      'metadataFilters.denyPrefixes': ['abc_'],
+      'metadataFilters.denyExact': ['webresource'],
+      'metadataFilters.allowedStandardTables': ['account'],
+    });
+    expect(workbenchShellState.props?.metadataFilterConfig).toEqual({
+      denyPrefixes: ['abc_'],
+      denyExact: ['webresource'],
+      allowedStandardTables: ['account'],
+    });
+
+    await act(async () => {
+      const reset = workbenchShellState.props?.onResetMetadataFilterConfig as () => Promise<void>;
+      await reset();
+    });
+
+    expect(workbenchShellState.props?.metadataFilterConfig).toEqual(DEFAULT_METADATA_FILTER_CONFIG);
   });
 });

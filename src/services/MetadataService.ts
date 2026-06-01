@@ -1,6 +1,11 @@
 // src/services/MetadataService.ts
 import type { IXrmContext } from '../adapters/PptbContextAdapter';
 import {
+  DEFAULT_METADATA_FILTER_CONFIG,
+  MetadataFilterConfig,
+  normalizeMetadataFilterConfig,
+} from '../types/MetadataFilterConfig';
+import {
   buildEntityDefinitionsPath,
   buildSystemDashboardsPath,
   buildUserDashboardsPath,
@@ -52,23 +57,12 @@ interface RawUserDashboard {
   userformid: string;
 }
 
-const DENY_PREFIXES = [
-  'adx_', 'cdm_', 'msdyn_', 'mspp_', 'workflow', 'process',
-  'sdkmessage', 'solution', 'appmodule', 'ribbon', 'dependency',
-  'component', 'duplicaterule',
-];
-const DENY_EXACT = new Set([
-  'systemuser', 'team', 'businessunit', 'role', 'privilege', 'organization',
-  'publisher', 'solution', 'savedquery', 'userquery', 'systemform', 'appmodule',
-  'sitemap', 'webresource', 'pluginassembly', 'plugintype', 'sdkmessageprocessingstep',
-  'environmentvariabledefinition', 'environmentvariablevalue',
-]);
-const ALLOWED_STANDARD_TABLES = new Set([
-  'account', 'contact', 'lead', 'opportunity', 'incident', 'quote',
-  'salesorder', 'invoice', 'task', 'phonecall', 'appointment', 'email',
-]);
-
-function keepEntity(e: RawEntityMetadata): boolean {
+function keepEntity(
+  e: RawEntityMetadata,
+  config: MetadataFilterConfig,
+  denyExact: Set<string>,
+  allowedStandardTables: Set<string>
+): boolean {
   const logicalName = e.LogicalName ?? '';
   const schemaName = e.SchemaName ?? '';
   if (!e.EntitySetName) return false;
@@ -76,13 +70,13 @@ function keepEntity(e: RawEntityMetadata): boolean {
   if (e.IsPrivate === true) return false;
   if (e.IsActivity === true) return false;
   if (e.OwnershipType === 'OrganizationOwned' && !schemaName.includes('_')) return false;
-  if (DENY_EXACT.has(logicalName)) return false;
-  if (DENY_PREFIXES.some(p => logicalName.startsWith(p))) return false;
+  if (denyExact.has(logicalName)) return false;
+  if (config.denyPrefixes.some(p => logicalName.startsWith(p))) return false;
   if (e.CanCreateForms?.Value === false) return false;
   if (e.CanModifyAdditionalSettings?.Value === false) return false;
   if (e.IsCustomEntity === true) return true;
   if (e.IsCustomizable?.Value === true) return true;
-  if (ALLOWED_STANDARD_TABLES.has(logicalName)) return true;
+  if (allowedStandardTables.has(logicalName)) return true;
   return false;
 }
 
@@ -91,10 +85,25 @@ const CACHE_TTL_MS = 5 * 60 * 1000;
 export class MetadataService {
   private _tableCache = new Map<string, { tables: TableInfo[]; expiresAt: number }>();
   private _dashboardCache = new Map<string, { dashboards: DashboardInfo[]; expiresAt: number }>();
+  private _filterConfig: MetadataFilterConfig;
+  private _denyExact: Set<string>;
+  private _allowedStandardTables: Set<string>;
 
   constructor(
-    private readonly xrm: Pick<IXrmContext, 'webApiGet'>
-  ) {}
+    private readonly xrm: Pick<IXrmContext, 'webApiGet'>,
+    filterConfig: MetadataFilterConfig = DEFAULT_METADATA_FILTER_CONFIG
+  ) {
+    this._filterConfig = normalizeMetadataFilterConfig(filterConfig);
+    this._denyExact = new Set(this._filterConfig.denyExact);
+    this._allowedStandardTables = new Set(this._filterConfig.allowedStandardTables);
+  }
+
+  setFilterConfig(filterConfig: MetadataFilterConfig): void {
+    this._filterConfig = normalizeMetadataFilterConfig(filterConfig);
+    this._denyExact = new Set(this._filterConfig.denyExact);
+    this._allowedStandardTables = new Set(this._filterConfig.allowedStandardTables);
+    this._tableCache.clear();
+  }
 
   async listAccessibleTables(
     connectionTarget?: 'primary' | 'secondary'
@@ -110,7 +119,7 @@ export class MetadataService {
         connectionTarget
       );
       const tables: TableInfo[] = response
-        .filter(keepEntity)
+        .filter(e => keepEntity(e, this._filterConfig, this._denyExact, this._allowedStandardTables))
         .map(e => ({
           logicalName: e.LogicalName,
           displayName: e.DisplayName?.UserLocalizedLabel?.Label ?? e.LogicalName,

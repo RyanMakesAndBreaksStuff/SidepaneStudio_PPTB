@@ -4,6 +4,11 @@ import { PaneDefinitionConfig, DEFAULT_CONFIG } from './types/PaneDefinitionConf
 import { WorkbenchShell } from './components/WorkbenchShell';
 import { PptbContextAdapter } from './adapters/PptbContextAdapter';
 import { MetadataService } from './services/MetadataService';
+import { MetadataFilterSettingsService } from './services/MetadataFilterSettingsService';
+import {
+  DEFAULT_METADATA_FILTER_CONFIG,
+  MetadataFilterConfig,
+} from './types/MetadataFilterConfig';
 
 type ConnectionState =
   | { status: 'loading' }
@@ -17,6 +22,11 @@ export function SidePaneBuilderWorkbench(): React.ReactElement {
   );
   const [connectionState, setConnectionState] = useState<ConnectionState>({ status: 'loading' });
   const [settingsHydrated, setSettingsHydrated] = useState(false);
+  const [metadataFilterConfig, setMetadataFilterConfig] = useState<MetadataFilterConfig>(
+    DEFAULT_METADATA_FILTER_CONFIG
+  );
+  const [metadataFilterPersistenceAvailable, setMetadataFilterPersistenceAvailable] = useState(false);
+  const [metadataFilterError, setMetadataFilterError] = useState<string | null>(null);
   const configDirtyRef = useRef(false);
 
   const adapterRef = useRef<PptbContextAdapter | null>(null);
@@ -24,6 +34,11 @@ export function SidePaneBuilderWorkbench(): React.ReactElement {
 
   const metaRef = useRef<MetadataService | null>(null);
   if (!metaRef.current) metaRef.current = new MetadataService(adapterRef.current);
+
+  const metadataFilterSettingsRef = useRef<MetadataFilterSettingsService | null>(null);
+  if (!metadataFilterSettingsRef.current) {
+    metadataFilterSettingsRef.current = new MetadataFilterSettingsService(window.toolboxAPI?.settings);
+  }
 
   // Verify active connection before allowing API calls
   useEffect(() => {
@@ -41,6 +56,26 @@ export function SidePaneBuilderWorkbench(): React.ReactElement {
       const message = err instanceof Error ? err.message : 'Failed to check connection.';
       setConnectionState({ status: 'error', message });
     });
+  }, []);
+
+  // Hydrate metadata table filters independently from pane definition config.
+  useEffect(() => {
+    let active = true;
+    metadataFilterSettingsRef.current?.load().then(result => {
+      if (!active) return;
+      metaRef.current?.setFilterConfig(result.config);
+      setMetadataFilterConfig(result.config);
+      setMetadataFilterPersistenceAvailable(result.persistenceAvailable);
+      setMetadataFilterError(null);
+    }).catch((err: unknown) => {
+      if (!active) return;
+      const message = err instanceof Error ? err.message : 'Failed to load metadata filter settings.';
+      setMetadataFilterError(message);
+      metaRef.current?.setFilterConfig(DEFAULT_METADATA_FILTER_CONFIG);
+      setMetadataFilterConfig(DEFAULT_METADATA_FILTER_CONFIG);
+      setMetadataFilterPersistenceAvailable(false);
+    });
+    return () => { active = false; };
   }, []);
 
   // Subscribe to connection lifecycle events — invalidate caches on change
@@ -119,6 +154,24 @@ export function SidePaneBuilderWorkbench(): React.ReactElement {
     toolbox?.settings?.set('lastConfig', null);
   }, []);
 
+  const handleSaveMetadataFilterConfig = useCallback(async (nextConfig: MetadataFilterConfig) => {
+    const result = await metadataFilterSettingsRef.current?.save(nextConfig);
+    if (!result) return;
+    metaRef.current?.setFilterConfig(result.config);
+    setMetadataFilterConfig(result.config);
+    setMetadataFilterPersistenceAvailable(result.persistenceAvailable);
+    setMetadataFilterError(null);
+  }, []);
+
+  const handleResetMetadataFilterConfig = useCallback(async () => {
+    const result = await metadataFilterSettingsRef.current?.reset();
+    if (!result) return;
+    metaRef.current?.setFilterConfig(result.config);
+    setMetadataFilterConfig(result.config);
+    setMetadataFilterPersistenceAvailable(result.persistenceAvailable);
+    setMetadataFilterError(null);
+  }, []);
+
   if (connectionState.status === 'loading') {
     return (
       <div style={{
@@ -156,6 +209,12 @@ export function SidePaneBuilderWorkbench(): React.ReactElement {
       xrm={adapterRef.current}
       layoutMode={layoutMode}
       metadataService={metaRef.current}
+      metadataFilterConfig={metadataFilterConfig}
+      defaultMetadataFilterConfig={DEFAULT_METADATA_FILTER_CONFIG}
+      metadataFilterPersistenceAvailable={metadataFilterPersistenceAvailable}
+      metadataFilterError={metadataFilterError}
+      onSaveMetadataFilterConfig={handleSaveMetadataFilterConfig}
+      onResetMetadataFilterConfig={handleResetMetadataFilterConfig}
     />
   );
 }

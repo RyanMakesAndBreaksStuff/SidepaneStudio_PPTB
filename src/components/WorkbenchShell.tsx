@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 import { theme } from '../theme/tokens';
 import { PaneDefinitionConfig } from '../types/PaneDefinitionConfig';
+import { MetadataFilterConfig } from '../types/MetadataFilterConfig';
 import { IXrmContext } from '../adapters/PptbContextAdapter';
 import { MetadataService } from '../services/MetadataService';
 import { validate } from '../services/ValidationService';
@@ -18,9 +19,21 @@ export interface WorkbenchShellProps {
   xrm: IXrmContext;
   layoutMode: 'wide' | 'narrow';
   metadataService: MetadataService;
+  metadataFilterConfig: MetadataFilterConfig;
+  defaultMetadataFilterConfig: MetadataFilterConfig;
+  metadataFilterPersistenceAvailable: boolean;
+  metadataFilterError?: string | null;
+  onSaveMetadataFilterConfig: (config: MetadataFilterConfig) => Promise<void> | void;
+  onResetMetadataFilterConfig: () => Promise<void> | void;
 }
 
 type NarrowTab = 'configure' | 'preview' | 'output';
+
+const CONFIG_PANEL_WIDTH = 308;
+const CONFIG_PANEL_MIN_WIDTH = 268;
+const CODE_PANEL_WIDTH = 420;
+const CODE_PANEL_MIN_WIDTH = 360;
+const COLLAPSED_RAIL_WIDTH = 44;
 
 const NARROW_TABS: { id: NarrowTab; label: string }[] = [
   { id: 'configure', label: 'Configure' },
@@ -35,11 +48,19 @@ export function WorkbenchShell({
   xrm,
   layoutMode,
   metadataService,
+  metadataFilterConfig,
+  defaultMetadataFilterConfig,
+  metadataFilterPersistenceAvailable,
+  metadataFilterError,
+  onSaveMetadataFilterConfig,
+  onResetMetadataFilterConfig,
 }: WorkbenchShellProps): React.ReactElement {
   const { isDark } = useTheme();
   const T = theme(isDark);
   const [narrowTab, setNarrowTab] = useState<NarrowTab>('configure');
   const [accessibleTables, setAccessibleTables] = useState<Set<string> | undefined>(undefined);
+  const [configPanelOpen, setConfigPanelOpen] = useState(true);
+  const [codePanelOpen, setCodePanelOpen] = useState(true);
 
   const validation = useMemo(() => validate(config, accessibleTables), [config, accessibleTables]);
 
@@ -49,6 +70,12 @@ export function WorkbenchShell({
     validation,
     metadataService,
     onAccessibleTablesChange: setAccessibleTables,
+    metadataFilterConfig,
+    defaultMetadataFilterConfig,
+    metadataFilterPersistenceAvailable,
+    metadataFilterError,
+    onSaveMetadataFilterConfig,
+    onResetMetadataFilterConfig,
   };
   const previewPanelProps = { config, validation, metadataService };
   const outputPanelProps = { config, xrm, validation };
@@ -59,14 +86,57 @@ export function WorkbenchShell({
 
       {layoutMode === 'wide' && (
         <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-          <aside style={{ width: 308, minWidth: 268, borderRight: `1px solid ${T.stroke1}`, overflow: 'auto', flexShrink: 0 }}>
-            <ConfigurePanel {...configurePanelProps} />
+          <aside
+            aria-label={configPanelOpen ? 'Config panel' : 'Config rail'}
+            style={{
+              width: configPanelOpen ? CONFIG_PANEL_WIDTH : COLLAPSED_RAIL_WIDTH,
+              minWidth: configPanelOpen ? CONFIG_PANEL_MIN_WIDTH : COLLAPSED_RAIL_WIDTH,
+              borderRight: `1px solid ${T.stroke1}`,
+              overflow: configPanelOpen ? 'auto' : 'hidden',
+              flexShrink: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              background: T.pageBg,
+            }}
+          >
+            <RailToggle
+              label={configPanelOpen ? 'Collapse config panel' : 'Expand config panel'}
+              expanded={configPanelOpen}
+              edge="left"
+              onClick={() => setConfigPanelOpen(open => !open)}
+            />
+            {configPanelOpen ? (
+              <ConfigurePanel {...configurePanelProps} />
+            ) : (
+              <RailLabel label="Config" />
+            )}
           </aside>
           <section style={{ flex: 1, borderRight: `1px solid ${T.stroke1}`, minWidth: 300, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
             <PreviewPanel {...previewPanelProps} />
           </section>
-          <section style={{ width: 420, minWidth: 360, overflow: 'auto', flexShrink: 0 }}>
-            <OutputPanel {...outputPanelProps} />
+          <section
+            aria-label={codePanelOpen ? 'Code panel' : 'Code rail'}
+            style={{
+              width: codePanelOpen ? CODE_PANEL_WIDTH : COLLAPSED_RAIL_WIDTH,
+              minWidth: codePanelOpen ? CODE_PANEL_MIN_WIDTH : COLLAPSED_RAIL_WIDTH,
+              overflow: codePanelOpen ? 'auto' : 'hidden',
+              flexShrink: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              background: T.pageBg,
+            }}
+          >
+            <RailToggle
+              label={codePanelOpen ? 'Collapse code panel' : 'Expand code panel'}
+              expanded={codePanelOpen}
+              edge="right"
+              onClick={() => setCodePanelOpen(open => !open)}
+            />
+            {codePanelOpen ? (
+              <OutputPanel {...outputPanelProps} />
+            ) : (
+              <RailLabel label="Code" />
+            )}
           </section>
         </div>
       )}
@@ -112,6 +182,74 @@ export function WorkbenchShell({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function RailToggle({
+  label,
+  expanded,
+  edge,
+  onClick,
+}: {
+  label: string;
+  expanded: boolean;
+  edge: 'left' | 'right';
+  onClick: () => void;
+}): React.ReactElement {
+  const { isDark } = useTheme();
+  const T = theme(isDark);
+  const openGlyph = edge === 'left' ? '‹' : '›';
+  const closedGlyph = edge === 'left' ? '›' : '‹';
+
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      aria-expanded={expanded}
+      title={label}
+      onClick={onClick}
+      style={{
+        width: COLLAPSED_RAIL_WIDTH,
+        height: COLLAPSED_RAIL_WIDTH,
+        border: 'none',
+        borderBottom: `1px solid ${T.stroke1}`,
+        background: T.surface2,
+        color: T.fg1,
+        cursor: 'pointer',
+        fontFamily: T.font,
+        fontSize: 22,
+        lineHeight: 1,
+        flexShrink: 0,
+      }}
+    >
+      {expanded ? openGlyph : closedGlyph}
+    </button>
+  );
+}
+
+function RailLabel({ label }: { label: string }): React.ReactElement {
+  const { isDark } = useTheme();
+  const T = theme(isDark);
+
+  return (
+    <div
+      aria-hidden="true"
+      style={{
+        flex: 1,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        color: T.fg2,
+        fontFamily: T.font,
+        fontSize: 12,
+        fontWeight: 600,
+        letterSpacing: 0,
+        writingMode: 'vertical-rl',
+        textTransform: 'uppercase',
+      }}
+    >
+      {label}
     </div>
   );
 }
