@@ -1,13 +1,25 @@
 {
-  "name": "@spstudio/side-pane-studio",
-  "version": "0.1.0",
+  "name": "@ryanmakes/side-pane-studio",
+  "version": "1.0.0",
+  "publishConfig": {
+    "access": "public"
+  },
   "displayName": "Side Pane Studio",
   "description": "Do you also think Side Panes are the bees knees but sorely under utilzied due to complicated implementation? With Side Pane Studio you can Build, Preview and Generate Code. Now you can give those Model Driven Forms some rizz",
   "icon": "icon/icon.svg",
   "main": "index.html",
   "author": "Ryan Rettinger",
+  "keywords": [
+    "dataverse",
+    "power-platform",
+    "side-pane",
+    "side-panes",
+    "model-driven-apps",
+    "power-platform-toolbox"
+  ],
   "configurations": {
     "repository": "https://github.com/RyanMakesAndBreaksStuff/SidepaneStudio_PPTB",
+    "website": "https://github.com/RyanMakesAndBreaksStuff/SidepaneStudio_PPTB/blob/main/documentation/usage.md",
     "readmeUrl": "https://raw.githubusercontent.com/RyanMakesAndBreaksStuff/SidepaneStudio_PPTB/main/README.md"
   },
   "contributors": [
