@@ -23,7 +23,7 @@ expansion, and closing other panes.
 
 ## Usage Guide
 
-Start with the [basic usage guide](documentation/usage.md) for the end-to-end
+Start with the [basic usage guide](https://raw.githubusercontent.com/RyanMakesAndBreaksStuff/SidepaneStudio_PPTB/refs/heads/main/documentation/usage.md) for the end-to-end
 workflow: connect PPTB, configure a target, preview the pane, generate code,
 and deploy the result into a model-driven app.
 
