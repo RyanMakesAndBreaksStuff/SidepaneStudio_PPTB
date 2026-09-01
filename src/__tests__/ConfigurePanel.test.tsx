@@ -48,6 +48,35 @@ function getChoiceButton(label: string): HTMLButtonElement | undefined {
   ) as HTMLButtonElement | undefined;
 }
 
+function findToggleByLabel(label: string): HTMLElement | undefined {
+  return Array.from(host?.querySelectorAll('[role="switch"]') ?? []).find(
+    el => el.getAttribute('aria-label') === label
+  ) as HTMLElement | undefined;
+}
+
+function findInputByPlaceholder(placeholder: string): HTMLInputElement | undefined {
+  return (host?.querySelector(`input[placeholder="${placeholder}"]`) ?? undefined) as HTMLInputElement | undefined;
+}
+
+async function renderPanel({
+  config,
+  onChange,
+}: {
+  config: PaneDefinitionConfig;
+  onChange: (updater: (prev: PaneDefinitionConfig) => PaneDefinitionConfig) => void;
+}) {
+  await render(
+    <ConfigurePanel
+      config={config}
+      onChange={onChange}
+      validation={validate(config)}
+      metadataService={makeMetadataService()}
+    />
+  );
+  await expandSection('Record context');
+  await expandSection('Advanced options');
+}
+
 function StatefulConfigurePanel({
   initialConfig,
   metadataService,
@@ -251,5 +280,34 @@ describe('ConfigurePanel', () => {
     const text = host?.textContent ?? '';
     expect(text.indexOf('Open in foreground (isSelected)')).toBeLessThan(text.indexOf('Keep loaded when inactive'));
     expect(text.indexOf('Initial badge value')).toBeLessThan(text.indexOf('Metadata table filters'));
+  });
+});
+
+describe('ConfigurePanel behavior controls', () => {
+  it('renders a control for every behavior field the generator consumes', async () => {
+    const onChange = vi.fn();
+    await renderPanel({ config: DEFAULT_CONFIG, onChange });
+
+    const expand = findToggleByLabel('Expand pane on open');
+    const closeOthers = findToggleByLabel('Close other side panes');
+    expect(expand).toBeTruthy();
+    expect(closeOthers).toBeTruthy();
+
+    await act(async () => { closeOthers!.click(); });
+    expect(onChange).toHaveBeenCalled();
+    const next = onChange.mock.calls[0][0](DEFAULT_CONFIG);
+    expect(next.behavior.closeOthers).toBe(true);
+  });
+
+  it('exposes the static record ID field for ManualJS + entityrecord', async () => {
+    const config: PaneDefinitionConfig = {
+      ...DEFAULT_CONFIG,
+      target: { pageType: 'entityrecord', entityName: 'account', entityId: '' },
+      trigger: { ...DEFAULT_CONFIG.trigger, kind: 'ManualJS' },
+      context: { ...DEFAULT_CONFIG.context, mode: 'CurrentRecord' },
+    };
+    await renderPanel({ config, onChange: vi.fn() });
+
+    expect(findInputByPlaceholder('00000000-0000-0000-0000-000000000000')).toBeTruthy();
   });
 });

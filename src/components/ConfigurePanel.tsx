@@ -99,7 +99,7 @@ export function ConfigurePanel({
     }));
   }, [onChange]);
 
-  const { pane, target, trigger, context } = config;
+  const { pane, target, trigger, context, behavior } = config;
   const vErrors: Record<string, string> = Object.fromEntries(
     validation.errors.map(e => [e.field, e.message])
   );
@@ -298,7 +298,8 @@ export function ConfigurePanel({
           />
         </Field>
 
-        {context.mode === 'Static' && (
+        {(context.mode === 'Static' ||
+          (trigger.kind === 'ManualJS' && target.pageType === 'entityrecord')) && (
           <>
             <Field label="Table name" hint="Logical name of the record's table" error={vErrors['context.entityName']}>
               <Input value={context.entityName} onChange={v => patch('context', 'entityName', v)} placeholder="account" error={!!vErrors['context.entityName']} />
@@ -351,6 +352,20 @@ export function ConfigurePanel({
           desc="Badge count persists when user opens the pane"
           checked={pane.keepBadgeOnSelect}
           onChange={v => patch('pane', 'keepBadgeOnSelect', v)}
+        />
+
+        <Toggle
+          label="Expand pane on open"
+          desc="Command-bar triggers expand the side pane rail after creating the pane"
+          checked={behavior.expandOnOpen}
+          onChange={v => patch('behavior', 'expandOnOpen', v)}
+        />
+
+        <Toggle
+          label="Close other side panes"
+          desc="Closes every other open pane after this one opens"
+          checked={behavior.closeOthers}
+          onChange={v => patch('behavior', 'closeOthers', v)}
         />
 
         <Field label="Initial badge value" hint="0 = no badge shown">
