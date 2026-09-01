@@ -2,6 +2,7 @@ import * as React from 'react';
 import { createRoot } from 'react-dom/client';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { SidePaneBuilderWorkbench } from './SidePaneBuilderWorkbench';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 function ConnectionGuard(): React.ReactElement {
   const hasDataverseAPI = typeof window.dataverseAPI !== 'undefined';
@@ -38,8 +39,10 @@ if (!rootEl) throw new Error('Root element #root not found.');
 
 createRoot(rootEl).render(
   <React.StrictMode>
-    <ThemeProvider>
-      <ConnectionGuard />
-    </ThemeProvider>
+    <ErrorBoundary>
+      <ThemeProvider>
+        <ConnectionGuard />
+      </ThemeProvider>
+    </ErrorBoundary>
   </React.StrictMode>
 );

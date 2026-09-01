@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { PaneDefinitionConfig, DEFAULT_CONFIG } from './types/PaneDefinitionConfig';
+import { parseStoredConfig } from './services/configGuards';
 import { WorkbenchShell } from './components/WorkbenchShell';
 import { PptbContextAdapter } from './adapters/PptbContextAdapter';
 import { MetadataService } from './services/MetadataService';
@@ -116,12 +117,13 @@ export function SidePaneBuilderWorkbench(): React.ReactElement {
       return;
     }
     let active = true;
-    toolbox.settings.get('lastConfig').then((raw: string | null) => {
-      if (!active || !raw || configDirtyRef.current) return;
-      try {
-        setConfig(JSON.parse(raw) as PaneDefinitionConfig);
-      } catch {
-        console.warn('SidePaneBuilderWorkbench: corrupted stored config, resetting to default');
+    toolbox.settings.get('lastConfig').then((raw: unknown) => {
+      if (!active || configDirtyRef.current) return;
+      const stored = parseStoredConfig(raw);
+      if (stored) {
+        setConfig(stored);
+      } else if (raw) {
+        console.warn('SidePaneBuilderWorkbench: unusable stored config, using defaults');
       }
     }).finally(() => {
       if (active) setSettingsHydrated(true);
