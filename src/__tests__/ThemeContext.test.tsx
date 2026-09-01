@@ -107,4 +107,26 @@ describe('ThemeProvider', () => {
     expect(host?.textContent).toBe('dark');
     expect(getCurrentTheme).toHaveBeenCalledTimes(2);
   });
+
+  it('exposes no in-tool theme setter', async () => {
+    let captured: unknown;
+    function Probe(): React.ReactElement {
+      captured = useTheme();
+      return <div />;
+    }
+
+    vi.stubGlobal('toolboxAPI', {
+      utils: { getCurrentTheme: vi.fn().mockResolvedValue('dark') },
+      events: { on: vi.fn(), off: vi.fn() },
+    });
+
+    await render(
+      <ThemeProvider>
+        <Probe />
+      </ThemeProvider>
+    );
+    await flushTheme();
+
+    expect(Object.keys(captured as object)).toEqual(['isDark']);
+  });
 });

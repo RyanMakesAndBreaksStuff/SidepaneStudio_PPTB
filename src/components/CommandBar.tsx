@@ -8,9 +8,8 @@ export interface CommandBarProps {
 }
 
 export function CommandBar({ onReset }: CommandBarProps): React.ReactElement {
-  const { isDark, setIsDark } = useTheme();
+  const { isDark } = useTheme();
   const T = theme(isDark);
-  const [hoverToggle, setHoverToggle] = useState(false);
   const [hoverReset, setHoverReset] = useState(false);
 
   const handleReset = () => {
@@ -75,27 +74,6 @@ export function CommandBar({ onReset }: CommandBarProps): React.ReactElement {
           }}
         >
           ↺ Reset
-        </button>
-
-        {/* Theme toggle */}
-        <button
-          type="button"
-          onClick={() => setIsDark(!isDark)}
-          onMouseEnter={() => setHoverToggle(true)}
-          onMouseLeave={() => setHoverToggle(false)}
-          style={{
-            padding: '4px 10px',
-            border: `1px solid ${T.stroke1}`,
-            borderRadius: T.rS,
-            background: hoverToggle ? T.surface1 : 'transparent',
-            color: T.fg2,
-            fontFamily: T.font,
-            fontSize: 12,
-            cursor: 'pointer',
-            transition: 'background 80ms',
-          }}
-        >
-          {isDark ? '☀ Light' : '🌙 Dark'}
         </button>
       </div>
     </header>

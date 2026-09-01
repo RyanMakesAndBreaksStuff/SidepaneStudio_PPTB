@@ -1,18 +1,14 @@
 import * as React from 'react';
 import { createContext, useContext, useState, useEffect } from 'react';
 
-type ToolboxThemeEventPayload = {
-  event?: string;
-};
-
 interface ThemeContextValue {
   isDark: boolean;
-  setIsDark: (v: boolean) => void;
 }
 
-const ThemeContext = createContext<ThemeContextValue>({ isDark: true, setIsDark: () => {} });
+const ThemeContext = createContext<ThemeContextValue>({ isDark: true });
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
+  // The PPTB host owns the theme. This tool mirrors it and never sets it.
   const [isDark, setIsDarkState] = useState<boolean>(true); // dark default until host responds
 
   useEffect(() => {
@@ -29,10 +25,13 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         });
     };
 
-    const handleToolboxEvent = (event: string, payload?: ToolboxThemeEventPayload) => {
-      const eventName = payload?.event ?? event;
-      if (eventName === 'settings:updated' || eventName === 'theme:changed') {
-        refreshTheme();
+    // ToolBoxEvent has no dedicated theme event (see @pptb/types toolboxAPI.d.ts);
+    // a host theme change surfaces as settings:updated.
+    const handleToolboxEvent = (_event: unknown, payload?: ToolBoxAPI.ToolBoxEventPayload) => {
+      try {
+        if (payload?.event === 'settings:updated') refreshTheme();
+      } catch (error) {
+        console.error('ThemeProvider: failed to handle toolbox event', error);
       }
     };
 
@@ -54,7 +53,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <ThemeContext.Provider value={{ isDark, setIsDark: setIsDarkState }}>
+    <ThemeContext.Provider value={{ isDark }}>
       {children}
     </ThemeContext.Provider>
   );

@@ -151,4 +151,11 @@ describe('WorkbenchShell', () => {
     expect(button('Collapse config panel')).toBeUndefined();
     expect(button('Collapse code panel')).toBeUndefined();
   });
+
+  it('renders no in-tool theme toggle', async () => {
+    await render(shell());
+
+    const labels = Array.from(host?.querySelectorAll('button') ?? []).map(b => b.textContent ?? '');
+    expect(labels.some(l => l.includes('Light') || l.includes('Dark'))).toBe(false);
+  });
 });
