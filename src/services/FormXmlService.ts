@@ -4,6 +4,7 @@ import {
   buildSystemFormsForEntityPath,
   isValidLogicalName,
 } from './odataGuards';
+import type { IXrmContext } from '../adapters/PptbContextAdapter';
 
 export interface FormMeta {
   id: string;
@@ -88,6 +89,8 @@ function firstLabel(el: Element | null): string {
 }
 
 export class FormXmlService {
+  constructor(private readonly xrm: IXrmContext) {}
+
   async getFormsForEntityResult(entityLogicalName: string): Promise<FormsForEntityResult> {
     if (!isValidLogicalName(entityLogicalName)) {
       return {
@@ -100,13 +103,12 @@ export class FormXmlService {
     }
 
     try {
-      const result = await window.dataverseAPI.queryData(
+      const rows = await this.xrm.webApiGet<Array<Record<string, unknown>>>(
         buildSystemFormsForEntityPath(entityLogicalName)
       );
-      const rows = (result.value ?? []) as Array<Record<string, unknown>>;
       return {
         ok: true,
-        forms: rows.map((form) => ({ id: String(form.formid ?? ''), name: String(form.name ?? '') })),
+        forms: (rows ?? []).map((form) => ({ id: String(form.formid ?? ''), name: String(form.name ?? '') })),
       };
     } catch (cause) {
       return {
@@ -133,7 +135,7 @@ export class FormXmlService {
     }
 
     try {
-      const result = await window.dataverseAPI.queryData(path) as unknown as Record<string, unknown>;
+      const result = await this.xrm.webApiGetEntity<Record<string, unknown>>(path);
       if (typeof result.formxml !== 'string') {
         return {
           ok: false,

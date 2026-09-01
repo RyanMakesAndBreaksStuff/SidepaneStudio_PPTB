@@ -3,6 +3,7 @@ import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 import { theme } from '../theme/tokens';
 import { PaneDefinitionConfig } from '../types/PaneDefinitionConfig';
+import { IXrmContext } from '../adapters/PptbContextAdapter';
 import { ValidationResult } from '../services/ValidationService';
 import { FormXmlService, FormModel } from '../services/FormXmlService';
 import { MetadataService } from '../services/MetadataService';
@@ -20,6 +21,7 @@ export interface PreviewPanelProps {
    * uses, so the preview entity dropdown reuses the already-fetched table list.
    */
   metadataService: MetadataService;
+  xrm: IXrmContext;
 }
 
 type PreviewMode = 'mock' | 'form';
@@ -34,6 +36,7 @@ export const PreviewPanel = React.memo(function PreviewPanel({
   config,
   validation,
   metadataService,
+  xrm,
 }: PreviewPanelProps): React.ReactElement {
   const { isDark } = useTheme();
   const T = theme(isDark);
@@ -71,7 +74,7 @@ export const PreviewPanel = React.memo(function PreviewPanel({
   }, []);
 
   const formXmlSvcRef = useRef<FormXmlService | null>(null);
-  if (!formXmlSvcRef.current) formXmlSvcRef.current = new FormXmlService();
+  if (!formXmlSvcRef.current) formXmlSvcRef.current = new FormXmlService(xrm);
 
   useEffect(() => {
     return () => {

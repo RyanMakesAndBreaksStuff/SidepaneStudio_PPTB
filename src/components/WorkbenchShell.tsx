@@ -77,7 +77,7 @@ export function WorkbenchShell({
     onSaveMetadataFilterConfig,
     onResetMetadataFilterConfig,
   };
-  const previewPanelProps = { config, validation, metadataService };
+  const previewPanelProps = { config, validation, metadataService, xrm };
   const outputPanelProps = { config, xrm, validation };
 
   return (

@@ -32,6 +32,7 @@ export function xrmStub(): IXrmContext {
     getCurrentAppId: vi.fn(() => null),
     getCurrentUserId: vi.fn().mockResolvedValue('user-1'),
     webApiGet: vi.fn(),
+    webApiGetEntity: vi.fn(),
     dataverseExecute: vi.fn(),
     getAllEntitiesMetadata: vi.fn().mockResolvedValue([]),
   };

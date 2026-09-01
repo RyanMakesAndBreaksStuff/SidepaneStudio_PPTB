@@ -40,6 +40,7 @@ export interface IXrmContext {
   getCurrentAppId(): string | null;
   getCurrentUserId(): Promise<string>;
   webApiGet<T = unknown>(path: string, connectionTarget?: 'primary' | 'secondary'): Promise<T>;
+  webApiGetEntity<T = unknown>(path: string, connectionTarget?: 'primary' | 'secondary'): Promise<T>;
   dataverseExecute<T = unknown>(request: DataverseExecuteRequest, connectionTarget?: 'primary' | 'secondary'): Promise<T>;
   getAllEntitiesMetadata(properties: string[], connectionTarget?: 'primary' | 'secondary'): Promise<any[]>;
 }
@@ -100,6 +101,17 @@ export class PptbContextAdapter implements IXrmContext {
     const cleanPath = odataPath.replace(/^\/api\/data\/v\d+\.\d+\//, '');
     const result = await window.dataverseAPI.queryData(cleanPath, connectionTarget);
     return result.value as unknown as T;
+  }
+
+  /**
+   * Single-entity GET. dataverseAPI.queryData is typed as a collection response
+   * ({ value: [...] }) but returns the entity itself for a keyed path, so the cast
+   * is unavoidable — it is confined here rather than leaking into services.
+   */
+  async webApiGetEntity<T = unknown>(odataPath: string, connectionTarget?: 'primary' | 'secondary'): Promise<T> {
+    const cleanPath = odataPath.replace(/^\/api\/data\/v\d+\.\d+\//, '');
+    const result = await window.dataverseAPI.queryData(cleanPath, connectionTarget);
+    return result as unknown as T;
   }
 
   async dataverseExecute<T = unknown>(request: DataverseExecuteRequest, connectionTarget?: 'primary' | 'secondary'): Promise<T> {

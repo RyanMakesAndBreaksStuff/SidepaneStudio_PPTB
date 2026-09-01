@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { FormXmlService } from '../services/FormXmlService';
 import { escapeODataStringLiteral } from '../services/odataGuards';
+import type { IXrmContext } from '../adapters/PptbContextAdapter';
+import { xrmStub } from './testHelpers';
 
 const MINIMAL_FORM_XML = `
 <form>
@@ -32,38 +34,11 @@ const MINIMAL_FORM_XML = `
   </tabs>
 </form>`.trim();
 
-function makeApi(forms: object[] = [], formXml = MINIMAL_FORM_XML) {
+function makeXrm(forms: object[] = [], formXml = MINIMAL_FORM_XML): IXrmContext {
   return {
-    queryData: vi.fn().mockImplementation((path: string) => {
-      if (path === 'systemforms(aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee)?$select=formxml') {
-        return Promise.resolve({ formxml: formXml });
-      }
-      if (
-        path ===
-        "systemforms?$filter=objecttypecode eq 'account' and type eq 2&$select=name,formid&$orderby=name asc"
-      ) {
-        return Promise.resolve({ value: forms });
-      }
-      if (
-        path ===
-        "systemforms?$filter=objecttypecode eq 'noentity' and type eq 2&$select=name,formid&$orderby=name asc"
-      ) {
-        return Promise.resolve({ value: forms });
-      }
-      if (
-        path ===
-        "systemforms?$filter=objecttypecode eq 'account''s' and type eq 2&$select=name,formid&$orderby=name asc"
-      ) {
-        return Promise.resolve({ value: forms });
-      }
-      if (path === 'systemforms(form-id-1)?$select=formxml' || path === 'systemforms(bad-id)?$select=formxml') {
-        return Promise.resolve({ formxml: formXml });
-      }
-      if (path === 'systemforms(x)?$select=formxml') {
-        return Promise.resolve({ formxml: formXml });
-      }
-      throw new Error(`Unexpected Dataverse path: ${path}`);
-    }),
+    ...xrmStub(),
+    webApiGet: vi.fn().mockResolvedValue(forms),
+    webApiGetEntity: vi.fn().mockResolvedValue({ formxml: formXml }),
   };
 }
 
@@ -71,8 +46,8 @@ describe('FormXmlService', () => {
   beforeEach(() => vi.unstubAllGlobals());
 
   it('getFormsForEntityResult returns ok with form metadata', async () => {
-    vi.stubGlobal('dataverseAPI', makeApi([{ formid: 'f1', name: 'Main Form' }]));
-    const svc = new FormXmlService();
+    const xrm = makeXrm([{ formid: 'f1', name: 'Main Form' }]);
+    const svc = new FormXmlService(xrm);
     const result = await svc.getFormsForEntityResult('account');
     expect(result.ok).toBe(true);
     if (result.ok) {
@@ -83,14 +58,13 @@ describe('FormXmlService', () => {
   });
 
   it('getFormsForEntityResult rejects invalid logical names before querying Dataverse', async () => {
-    const api = makeApi();
-    vi.stubGlobal('dataverseAPI', api);
-    const svc = new FormXmlService();
+    const xrm = makeXrm();
+    const svc = new FormXmlService(xrm);
 
     const result = await svc.getFormsForEntityResult("account' or type eq 1");
 
     expect(result.ok).toBe(false);
-    expect(api.queryData).not.toHaveBeenCalled();
+    expect(xrm.webApiGet).not.toHaveBeenCalled();
   });
 
   it('escapes single quotes in OData string literals', () => {
@@ -98,8 +72,8 @@ describe('FormXmlService', () => {
   });
 
   it('getFormsForEntityResult returns empty forms array when ok', async () => {
-    vi.stubGlobal('dataverseAPI', makeApi([]));
-    const svc = new FormXmlService();
+    const xrm = makeXrm([]);
+    const svc = new FormXmlService(xrm);
     const result = await svc.getFormsForEntityResult('noentity');
     expect(result.ok).toBe(true);
     if (result.ok) {
@@ -108,8 +82,8 @@ describe('FormXmlService', () => {
   });
 
   it('getFormModelResult returns ok with parsed model', async () => {
-    vi.stubGlobal('dataverseAPI', makeApi([], MINIMAL_FORM_XML));
-    const svc = new FormXmlService();
+    const xrm = makeXrm([], MINIMAL_FORM_XML);
+    const svc = new FormXmlService(xrm);
     const result = await svc.getFormModelResult('aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee');
     expect(result.ok).toBe(true);
     if (result.ok) {
@@ -125,32 +99,28 @@ describe('FormXmlService', () => {
   });
 
   it('getFormModelResult normalizes valid form IDs before querying Dataverse', async () => {
-    const api = makeApi([], MINIMAL_FORM_XML);
-    vi.stubGlobal('dataverseAPI', api);
-    const svc = new FormXmlService();
+    const xrm = makeXrm([], MINIMAL_FORM_XML);
+    const svc = new FormXmlService(xrm);
 
     const result = await svc.getFormModelResult('{AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE}');
 
     expect(result.ok).toBe(true);
-    expect(api.queryData).toHaveBeenCalledWith('systemforms(aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee)?$select=formxml');
+    expect(xrm.webApiGetEntity).toHaveBeenCalledWith('systemforms(aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee)?$select=formxml');
   });
 
   it('getFormModelResult rejects invalid form IDs before querying Dataverse', async () => {
-    const api = makeApi();
-    vi.stubGlobal('dataverseAPI', api);
-    const svc = new FormXmlService();
+    const xrm = makeXrm();
+    const svc = new FormXmlService(xrm);
 
     const result = await svc.getFormModelResult('not-a-guid');
 
     expect(result.ok).toBe(false);
-    expect(api.queryData).not.toHaveBeenCalled();
+    expect(xrm.webApiGetEntity).not.toHaveBeenCalled();
   });
 
   it('getFormModelResult returns error when XML is malformed', async () => {
-    vi.stubGlobal('dataverseAPI', {
-      queryData: vi.fn().mockResolvedValue({ formxml: 'NOT_XML<<<' }),
-    });
-    const svc = new FormXmlService();
+    const xrm = makeXrm([], 'NOT_XML<<<');
+    const svc = new FormXmlService(xrm);
     const result = await svc.getFormModelResult('aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee');
     expect(result.ok).toBe(false);
     if (!result.ok) {
@@ -158,15 +128,38 @@ describe('FormXmlService', () => {
     }
   });
 
-  it('getFormModelResult returns error when queryData throws', async () => {
-    vi.stubGlobal('dataverseAPI', {
-      queryData: vi.fn().mockRejectedValue(new Error('Network error')),
-    });
-    const svc = new FormXmlService();
+  it('getFormModelResult returns error when webApiGetEntity throws', async () => {
+    const xrm: IXrmContext = {
+      ...xrmStub(),
+      webApiGetEntity: vi.fn().mockRejectedValue(new Error('Network error')),
+    };
+    const svc = new FormXmlService(xrm);
     const result = await svc.getFormModelResult('aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee');
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.error.code).toBe('query-failed');
     }
+  });
+
+  it('queries through the injected context, not window.dataverseAPI', async () => {
+    const queryData = vi.fn();
+    vi.stubGlobal('dataverseAPI', { queryData });
+
+    const xrm = {
+      webApiGet: vi.fn().mockResolvedValue([{ formid: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee', name: 'Main' }]),
+      webApiGetEntity: vi.fn().mockResolvedValue({ formxml: MINIMAL_FORM_XML }),
+    } as unknown as IXrmContext;
+
+    const svc = new FormXmlService(xrm);
+
+    const forms = await svc.getFormsForEntityResult('account');
+    expect(forms.ok).toBe(true);
+
+    const model = await svc.getFormModelResult('aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee');
+    expect(model.ok).toBe(true);
+
+    expect(xrm.webApiGet).toHaveBeenCalledTimes(1);
+    expect(xrm.webApiGetEntity).toHaveBeenCalledTimes(1);
+    expect(queryData).not.toHaveBeenCalled();
   });
 });

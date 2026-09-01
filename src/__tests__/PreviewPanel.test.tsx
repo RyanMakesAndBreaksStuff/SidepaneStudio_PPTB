@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { PreviewPanel } from '../components/PreviewPanel';
 import { DEFAULT_CONFIG } from '../types/PaneDefinitionConfig';
 import { MetadataService } from '../services/MetadataService';
+import { xrmStub } from './testHelpers';
 
 let root: Root | undefined;
 let host: HTMLDivElement | undefined;
@@ -42,6 +43,7 @@ describe('PreviewPanel', () => {
         config={DEFAULT_CONFIG}
         validation={{ isValid: true, errors: [], warnings: [] }}
         metadataService={mockMetadataService}
+        xrm={xrmStub()}
       />
     );
 
@@ -57,6 +59,7 @@ describe('PreviewPanel', () => {
         config={DEFAULT_CONFIG}
         validation={{ isValid: true, errors: [], warnings: [] }}
         metadataService={mockMetadataService}
+        xrm={xrmStub()}
       />
     );
 
