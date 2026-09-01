@@ -118,3 +118,38 @@ describe('ValidationService warnings', () => {
     expect(r.warnings.some(w => w.field === 'target.entityName')).toBe(true);
   });
 });
+
+describe('static record ID validation', () => {
+  const entityRecordManual = (staticRecordId: string, mode: 'Static' | 'CurrentRecord') =>
+    cfg({
+      target: { pageType: 'entityrecord', entityName: 'account', entityId: '' },
+      trigger: { kind: 'ManualJS' } as any,
+      context: { mode, staticRecordId } as any,
+    });
+
+  it('blocks an entityrecord + ManualJS config with no record ID', () => {
+    const result = validate(entityRecordManual('', 'CurrentRecord'));
+    expect(result.isValid).toBe(false);
+    expect(result.errors.map(e => e.field)).toContain('context.staticRecordId');
+  });
+
+  it('blocks an entityrecord + Static config with a malformed record ID', () => {
+    const result = validate(entityRecordManual('not-a-guid', 'Static'));
+    expect(result.isValid).toBe(false);
+    expect(result.errors.map(e => e.field)).toContain('context.staticRecordId');
+  });
+
+  it('accepts a well-formed record ID', () => {
+    const result = validate(entityRecordManual('aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee', 'Static'));
+    expect(result.errors.map(e => e.field)).not.toContain('context.staticRecordId');
+  });
+
+  it('does not fire when the trigger supplies the record at runtime', () => {
+    const config = cfg({
+      target: { pageType: 'entityrecord', entityName: 'account', entityId: '' },
+      trigger: { kind: 'FormOnLoad' } as any,
+      context: { mode: 'CurrentRecord', staticRecordId: '' } as any,
+    });
+    expect(validate(config).errors.map(e => e.field)).not.toContain('context.staticRecordId');
+  });
+});

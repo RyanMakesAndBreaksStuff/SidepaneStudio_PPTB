@@ -1,4 +1,5 @@
 import { PaneDefinitionConfig } from '../types/PaneDefinitionConfig';
+import { normalizeGuid } from './odataGuards';
 
 export interface ValidationError {
   field: string;
@@ -124,7 +125,23 @@ export function validate(config: PaneDefinitionConfig, accessibleTables?: Set<st
     });
   }
 
-  
+  // Error: entityrecord navigation that resolves its ID from configuration rather than
+  // from the trigger. Mirrors buildConfiguredRecordIdExpression in CodeGenerationService —
+  // without a normalizable GUID the generated script's only effect is to throw.
+  if (
+    config.target.pageType === 'entityrecord' &&
+    (config.context.mode === 'Static' || config.trigger.kind === 'ManualJS')
+  ) {
+    const configuredId = config.context.staticRecordId || config.target.entityId;
+    if (!normalizeGuid(configuredId)) {
+      errors.push({
+        field: 'context.staticRecordId',
+        message: 'A valid record ID (GUID) is required — this trigger and context supply no record at runtime.',
+      });
+    }
+  }
+
+
   if (config.trigger.kind === 'FormOnChange' && !config.trigger.fieldName?.trim()) {
     errors.push({
       field: 'trigger.fieldName',
