@@ -194,4 +194,46 @@ describe('SidePaneBuilderWorkbench', () => {
 
     expect(workbenchShellState.props?.metadataFilterConfig).toEqual(DEFAULT_METADATA_FILTER_CONFIG);
   });
+
+  it('surfaces a failed settings write instead of dropping it', async () => {
+    const showNotification = vi.fn().mockResolvedValue(undefined);
+    const settingsSet = vi.fn().mockRejectedValue(new Error('settings backend offline'));
+
+    vi.stubGlobal('toolboxAPI', {
+      connections: {
+        getActiveConnection: vi.fn().mockResolvedValue({ id: 'conn-1' }),
+      },
+      events: {
+        on: vi.fn(),
+        off: vi.fn(),
+      },
+      settings: {
+        get: vi.fn().mockResolvedValue(null),
+        set: settingsSet,
+      },
+      utils: {
+        showNotification,
+      },
+    });
+
+    await render(<SidePaneBuilderWorkbench />);
+    await act(async () => { await Promise.resolve(); });
+
+    await act(async () => {
+      host?.querySelector('button')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(600);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(settingsSet).toHaveBeenCalledWith(
+      'lastConfig',
+      expect.stringContaining('"title":"Edited Title"')
+    );
+    expect(showNotification).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'error' })
+    );
+  });
 });

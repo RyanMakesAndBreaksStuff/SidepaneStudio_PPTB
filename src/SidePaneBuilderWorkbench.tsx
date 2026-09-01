@@ -16,6 +16,19 @@ type ConnectionState =
   | { status: 'ready' }
   | { status: 'error'; message: string };
 
+/** Settings failures are silent by default — the user must learn the write did not land. */
+function reportSettingsFailure(action: string, err: unknown): void {
+  const message = err instanceof Error ? err.message : String(err);
+  console.error(`SidePaneBuilderWorkbench: ${action} failed`, err);
+  Promise.resolve(
+    window.toolboxAPI?.utils?.showNotification({
+      title: 'Preferences not saved',
+      body: `${action} failed: ${message}`,
+      type: 'error',
+    })
+  ).catch(() => { /* notification is best-effort; never mask the original failure */ });
+}
+
 export function SidePaneBuilderWorkbench(): React.ReactElement {
   const [config, setConfig] = useState<PaneDefinitionConfig>(DEFAULT_CONFIG);
   const [layoutMode, setLayoutMode] = useState<'wide' | 'narrow'>(
@@ -125,6 +138,8 @@ export function SidePaneBuilderWorkbench(): React.ReactElement {
       } else if (raw) {
         console.warn('SidePaneBuilderWorkbench: unusable stored config, using defaults');
       }
+    }).catch((err: unknown) => {
+      console.warn('SidePaneBuilderWorkbench: could not read stored config', err);
     }).finally(() => {
       if (active) setSettingsHydrated(true);
     });
@@ -136,7 +151,8 @@ export function SidePaneBuilderWorkbench(): React.ReactElement {
     const toolbox = window.toolboxAPI;
     if (!toolbox || !settingsHydrated || !configDirtyRef.current) return;
     const id = setTimeout(() => {
-      toolbox.settings.set('lastConfig', JSON.stringify(config));
+      toolbox.settings.set('lastConfig', JSON.stringify(config))
+        .catch((err: unknown) => reportSettingsFailure('Saving your configuration', err));
     }, 500);
     return () => clearTimeout(id);
   }, [config, settingsHydrated]);
@@ -153,7 +169,8 @@ export function SidePaneBuilderWorkbench(): React.ReactElement {
     configDirtyRef.current = false;
     setConfig(DEFAULT_CONFIG);
     const toolbox = window.toolboxAPI;
-    toolbox?.settings?.set('lastConfig', null);
+    Promise.resolve(toolbox?.settings?.set('lastConfig', null))
+      .catch((err: unknown) => reportSettingsFailure('Clearing your saved configuration', err));
   }, []);
 
   const handleSaveMetadataFilterConfig = useCallback(async (nextConfig: MetadataFilterConfig) => {
