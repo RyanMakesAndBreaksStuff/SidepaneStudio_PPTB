@@ -92,20 +92,33 @@ export function SidePaneBuilderWorkbench(): React.ReactElement {
     return () => { active = false; };
   }, []);
 
-  // Subscribe to connection lifecycle events — invalidate caches on change
+  // Subscribe to connection lifecycle events — invalidate caches on change.
+  // The event name is on payload.event; the first argument is the transport
+  // event object (see @pptb/types EventsAPI).
   useEffect(() => {
     const toolbox = window.toolboxAPI;
     if (!toolbox) return;
 
-    const handler = (event: string) => {
-      if (event === 'connection:updated' || event === 'connection:created') {
-        adapterRef.current?.resetUserId();
-        metaRef.current?.invalidate();
-        setConnectionState({ status: 'ready' });
-      } else if (event === 'connection:deleted') {
-        adapterRef.current?.resetUserId();
-        metaRef.current?.invalidate();
-        setConnectionState({ status: 'error', message: 'Connection removed. Reconnect in PPTB.' });
+    const handler = (_event: unknown, payload?: ToolBoxAPI.ToolBoxEventPayload) => {
+      try {
+        switch (payload?.event) {
+          case 'connection:created':
+          case 'connection:updated':
+            adapterRef.current?.resetUserId();
+            metaRef.current?.invalidate();
+            setConnectionState({ status: 'ready' });
+            break;
+          case 'connection:deleted':
+            adapterRef.current?.resetUserId();
+            metaRef.current?.invalidate();
+            setConnectionState({ status: 'error', message: 'Connection removed. Reconnect in PPTB.' });
+            break;
+          default:
+            break;
+        }
+      } catch (error) {
+        // A throwing handler can break delivery of every subsequent event.
+        console.error('SidePaneBuilderWorkbench: failed to handle toolbox event', error);
       }
     };
 

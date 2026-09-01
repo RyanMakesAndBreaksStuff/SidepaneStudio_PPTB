@@ -236,4 +236,53 @@ describe('SidePaneBuilderWorkbench', () => {
       expect.objectContaining({ type: 'error' })
     );
   });
+
+  it('invalidates caches when the host reports a connection change', async () => {
+    let handler: ((event: unknown, payload: ToolBoxAPI.ToolBoxEventPayload) => void) | undefined;
+
+    vi.stubGlobal('toolboxAPI', {
+      connections: { getActiveConnection: vi.fn().mockResolvedValue({ id: 'conn-1' }) },
+      events: {
+        on: vi.fn((cb) => { handler = cb; }),
+        off: vi.fn(),
+      },
+      settings: { get: vi.fn().mockResolvedValue(null), set: vi.fn().mockResolvedValue(undefined) },
+    });
+
+    await render(<SidePaneBuilderWorkbench />);
+    await act(async () => { await Promise.resolve(); });
+
+    expect(handler).toBeDefined();
+
+    await act(async () => {
+      handler!({ senderId: 'ipc' }, {
+        event: 'connection:deleted',
+        data: null,
+        timestamp: new Date().toISOString(),
+      });
+      await Promise.resolve();
+    });
+
+    // Reaching the error state proves the handler read payload.event rather than arg 0.
+    expect(host?.textContent).toContain('Connection removed');
+  });
+
+  it('does not throw when the host emits an unrelated event', async () => {
+    let handler: ((event: unknown, payload: ToolBoxAPI.ToolBoxEventPayload) => void) | undefined;
+
+    vi.stubGlobal('toolboxAPI', {
+      connections: { getActiveConnection: vi.fn().mockResolvedValue({ id: 'conn-1' }) },
+      events: { on: vi.fn((cb) => { handler = cb; }), off: vi.fn() },
+      settings: { get: vi.fn().mockResolvedValue(null), set: vi.fn().mockResolvedValue(undefined) },
+    });
+
+    await render(<SidePaneBuilderWorkbench />);
+    await act(async () => { await Promise.resolve(); });
+
+    expect(() => handler!(undefined, {
+      event: 'terminal:output',
+      data: null,
+      timestamp: new Date().toISOString(),
+    })).not.toThrow();
+  });
 });
