@@ -121,7 +121,7 @@ export function validate(config: PaneDefinitionConfig, accessibleTables?: Set<st
     warnings.push({
       field: 'target.pageType',
       message:
-        'MainGridButton has no single-record context. The generated entityId will be empty — supply the record ID at runtime or switch to entitylist page type.',
+        'MainGridButton opens the first selected row. The generated script exits without opening a pane when no row is selected, and ignores rows beyond the first.',
     });
   }
 

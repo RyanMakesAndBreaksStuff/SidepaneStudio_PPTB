@@ -98,7 +98,7 @@ describe('ValidationService warnings', () => {
     }));
     expect(r.isValid).toBe(true); // warn-without-blocking
     expect(r.warnings.some(w => w.field === 'target.pageType')).toBe(true);
-    expect(r.warnings.some(w => w.message.includes('entityId'))).toBe(true);
+    expect(r.warnings.some(w => w.message.includes('first selected row'))).toBe(true);
   });
 
   it('does not warn when selected table is accessible', () => {
@@ -116,6 +116,17 @@ describe('ValidationService warnings', () => {
     );
     expect(r.isValid).toBe(true);
     expect(r.warnings.some(w => w.field === 'target.entityName')).toBe(true);
+  });
+
+  it('describes MainGridButton record resolution accurately', () => {
+    const r = validate(cfg({
+      target: { pageType: 'entityrecord', entityName: 'account', entityId: '' },
+      trigger: { kind: 'MainGridButton' } as any,
+    }));
+    const warning = r.warnings.find(w => w.field === 'target.pageType');
+    expect(warning).toBeDefined();
+    expect(warning!.message).not.toContain('will be empty');
+    expect(warning!.message).toContain('first selected row');
   });
 });
 
