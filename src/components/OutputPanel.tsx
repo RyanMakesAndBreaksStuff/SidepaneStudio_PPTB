@@ -70,8 +70,8 @@ export const OutputPanel = React.memo(function OutputPanel({ config, xrm, valida
               display: 'flex', alignItems: 'center', gap: 5,
               padding: '9px 12px 8px', border: 'none', background: 'transparent',
               fontFamily: T.font, fontSize: 12, fontWeight: 500,
-              color: activeTab === tab.id ? T.accentTeal : T.fg3,
-              borderBottom: `2px solid ${activeTab === tab.id ? T.accentTeal : 'transparent'}`,
+              color: activeTab === tab.id ? T.accent : T.fg3,
+              borderBottom: `2px solid ${activeTab === tab.id ? T.accent : 'transparent'}`,
               cursor: 'pointer', whiteSpace: 'nowrap',
               transition: 'color 80ms, border-color 80ms',
             }}

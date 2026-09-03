@@ -29,8 +29,8 @@ export function Input({ value, onChange, placeholder, type = 'text', disabled, e
       onBlur={() => setFocused(false)}
       style={{
         height: 30, padding: '0 9px',
-        border: `1px solid ${error ? T.error : focused ? T.accentTeal : T.strokeAcc}`,
-        boxShadow: focused ? `0 0 0 1px ${error ? T.error : T.accentTeal}` : 'none',
+        border: `1px solid ${error ? T.error : focused ? T.accent : T.strokeAcc}`,
+        boxShadow: focused ? `0 0 0 1px ${error ? T.error : T.accent}` : 'none',
         borderRadius: T.rM,
         fontFamily: T.font, fontSize: 13, color: T.fg1,
         background: disabled ? T.surface3 : T.pageBg,

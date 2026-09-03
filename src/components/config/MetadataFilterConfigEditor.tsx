@@ -184,7 +184,7 @@ export function MetadataFilterConfigEditor({
             style={{
               border: 'none',
               borderRadius: T.rM,
-              background: persistenceAvailable ? T.accentTeal : T.surface3,
+              background: persistenceAvailable ? T.accent : T.surface3,
               color: persistenceAvailable ? '#001818' : T.fg3,
               cursor: persistenceAvailable ? 'pointer' : 'not-allowed',
               fontFamily: T.font,

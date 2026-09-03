@@ -115,7 +115,7 @@ export function TableComboBox({
     gap: 6,
     width: '100%',
     padding: '4px 8px',
-    border: `1px solid ${error ? T.error : (open ? T.accentTeal : T.stroke1)}`,
+    border: `1px solid ${error ? T.error : (open ? T.accent : T.stroke1)}`,
     borderRadius: T.rS,
     background: T.surface1,
     fontFamily: T.font,

@@ -40,7 +40,7 @@ export function WidthPicker({
           step={step}
           value={value}
           onChange={e => onChange(+e.target.value)}
-          style={{ flex: 1, height: 4, accentColor: T.accentTeal, cursor: 'pointer' }}
+          style={{ flex: 1, height: 4, accentColor: T.accent, cursor: 'pointer' }}
         />
         <input
           type="number"
@@ -77,10 +77,10 @@ export function WidthPicker({
               onClick={() => onChange(preset)}
               style={{
                 padding: '3px 10px',
-                border: `1px solid ${active ? T.accentTeal : T.stroke1}`,
+                border: `1px solid ${active ? T.accent : T.stroke1}`,
                 borderRadius: 999,
-                background: active ? T.accentTealBg : 'transparent',
-                color: active ? T.accentTeal : T.fg2,
+                background: active ? T.accentBg : 'transparent',
+                color: active ? T.accent : T.fg2,
                 fontFamily: T.mono,
                 fontSize: 11,
                 fontWeight: active ? 600 : 500,

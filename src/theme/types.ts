@@ -6,9 +6,9 @@ export interface TokenSet {
   surface2: string;
   surface3: string;
   // Accents
-  accentTeal: string;
-  accentOrange: string;
-  accentTealBg: string;
+  accent: string;
+  accentAlt: string;
+  accentBg: string;
   // Foreground
   fg1: string;
   fg2: string;

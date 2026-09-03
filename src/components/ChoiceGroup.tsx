@@ -52,10 +52,10 @@ export function ChoiceGroup({ name, options, value, onChange }: ChoiceGroupProps
                 alignItems: 'center',
                 gap: 6,
                 padding: '5px 12px',
-                border: `1px solid ${sel ? T.accentTeal : T.stroke1}`,
+                border: `1px solid ${sel ? T.accent : T.stroke1}`,
                 borderRadius: T.rFull,
-                background: sel ? T.accentTealBg : 'transparent',
-                color: sel ? T.accentTeal : (dis ? T.fg3 : T.fg1),
+                background: sel ? T.accentBg : 'transparent',
+                color: sel ? T.accent : (dis ? T.fg3 : T.fg1),
                 fontFamily: T.font,
                 fontSize: 12,
                 fontWeight: sel ? 600 : 500,
@@ -72,7 +72,7 @@ export function ChoiceGroup({ name, options, value, onChange }: ChoiceGroupProps
                     width: 6,
                     height: 6,
                     borderRadius: '50%',
-                    background: T.accentTeal,
+                    background: T.accent,
                     flexShrink: 0,
                   }}
                 />

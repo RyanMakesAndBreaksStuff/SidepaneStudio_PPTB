@@ -97,16 +97,16 @@ export function TableComboDropdown({
                 gap: 2,
                 padding: '6px 10px',
                 border: 'none',
-                background: isHighlighted ? T.accentTealBg : 'transparent',
+                background: isHighlighted ? T.accentBg : 'transparent',
                 color: T.fg1,
                 fontFamily: T.font,
                 fontSize: 13,
                 textAlign: 'left',
                 cursor: 'pointer',
-                borderLeft: `2px solid ${isSelected ? T.accentTeal : 'transparent'}`,
+                borderLeft: `2px solid ${isSelected ? T.accent : 'transparent'}`,
               }}
             >
-              <span style={{ fontWeight: isSelected ? 600 : 500, color: isSelected ? T.accentTeal : T.fg1 }}>
+              <span style={{ fontWeight: isSelected ? 600 : 500, color: isSelected ? T.accent : T.fg1 }}>
                 {entry.table.displayName}
               </span>
               <span style={{ fontFamily: T.mono, fontSize: 11, color: T.fg3 }}>

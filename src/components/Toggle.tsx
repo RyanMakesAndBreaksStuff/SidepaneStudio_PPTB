@@ -36,7 +36,7 @@ export function Toggle({ label, desc, checked, onChange }: ToggleProps): React.R
         <div
           style={{
             width: 36, height: 18, borderRadius: 9,
-            background: checked ? T.accentTeal : T.strokeAcc,
+            background: checked ? T.accent : T.strokeAcc,
             position: 'relative', transition: 'background 200ms', cursor: 'pointer',
           }}
         >

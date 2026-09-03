@@ -37,7 +37,7 @@ export function CommandBar({ onReset }: CommandBarProps): React.ReactElement {
           width: 28,
           height: 28,
           borderRadius: T.rM,
-          background: `linear-gradient(135deg, ${T.accentOrange} 0%, ${T.accentTeal} 100%)`,
+          background: `linear-gradient(135deg, ${T.accentAlt} 0%, ${T.accent} 100%)`,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',

@@ -219,7 +219,7 @@ export function FormSelector({
                 background: 'transparent',
                 padding: 0,
                 margin: 0,
-                color: T.accentTeal,
+                color: T.accent,
                 fontFamily: T.font,
                 fontSize: 11,
                 fontWeight: 500,

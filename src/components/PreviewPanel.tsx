@@ -105,9 +105,9 @@ export const PreviewPanel = React.memo(function PreviewPanel({
   const tabStyle = (active: boolean): React.CSSProperties => ({
     padding: '6px 14px',
     border: 'none',
-    borderBottom: active ? `2px solid ${T.accentTeal}` : '2px solid transparent',
+    borderBottom: active ? `2px solid ${T.accent}` : '2px solid transparent',
     background: 'transparent',
-    color: active ? T.accentTeal : T.fg3,
+    color: active ? T.accent : T.fg3,
     fontFamily: T.font,
     fontSize: 12,
     fontWeight: active ? 600 : 400,
