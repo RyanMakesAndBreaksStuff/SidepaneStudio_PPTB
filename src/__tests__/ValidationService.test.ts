@@ -196,3 +196,22 @@ describe('validate — web resource name (WR-003)', () => {
     expect(result.errors.map(e => e.field)).not.toContain('target.name');
   });
 });
+
+describe('validate — search page type (WR-001)', () => {
+  it('warns that search is not a documented navigateTo pageType', () => {
+    const result = validate(cfg({ target: { pageType: 'search', searchText: 'Contoso' } }));
+    const w = result.warnings.find(x => x.field === 'target.pageType');
+    expect(w).toBeDefined();
+    expect(w!.message).toContain('not a documented');
+  });
+
+  it('keeps search advisory, not blocking', () => {
+    const result = validate(cfg({ target: { pageType: 'search', searchText: 'Contoso' } }));
+    expect(result.isValid).toBe(true);
+  });
+
+  it('emits no search warning for a custom page', () => {
+    const result = validate(cfg({ target: { pageType: 'custom', name: 'sps_Page' } }));
+    expect(result.warnings.map(w => w.field)).not.toContain('target.pageType');
+  });
+});
