@@ -14,6 +14,13 @@ function safeIdentifier(value: string, fallback: string): string {
   return IDENTIFIER_PATTERN.test(trimmed) ? trimmed : fallback;
 }
 
+/** WR-002 / contract C3 — official imageSrc samples use the WebResources/ relative form. */
+function normalizeImageSrc(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+  return trimmed.startsWith('WebResources/') ? trimmed : `WebResources/${trimmed}`;
+}
+
 function getSafeTriggerNames(config: PaneDefinitionConfig): { ns: string; fn: string } {
   return {
     ns: safeIdentifier(config.trigger.namespace || '', 'MyNamespace'),
@@ -51,19 +58,13 @@ function buildPaneOptions(config: PaneDefinitionConfig): string {
   const effectiveCanClose = pane.hideHeader ? false : pane.canClose;
   opts.push(`    canClose: ${effectiveCanClose ? 'true' : 'false'}`);
 
-  if (!pane.isResizable) {
-    opts.push(`    isResizable: false`);
-  } else {
-    opts.push(`    // isResizable: omitted — defaults to true`);
-  }
-
   // P1-D-C: emit isSelected only when false (API default is true; omitting true is harmless)
   if (pane.isSelected === false) opts.push(`    isSelected: false`);
   if (pane.hideHeader) opts.push(`    hideHeader: true`);
   if (pane.alwaysRender) opts.push(`    alwaysRender: true`);
   if (pane.keepBadgeOnSelect) opts.push(`    keepBadgeOnSelect: true`);
-  if (pane.imageSrc) opts.push(`    imageSrc: ${JSON.stringify(pane.imageSrc)}`);
-  if (pane.badgeValue) opts.push(`    badge: ${JSON.stringify(pane.badgeValue)}`);
+  const imageSrc = normalizeImageSrc(pane.imageSrc);
+  if (imageSrc) opts.push(`    imageSrc: ${JSON.stringify(imageSrc)}`);
   return `{\n${opts.join(',\n')}\n  }`;
 }
 
@@ -170,11 +171,15 @@ function buildGetOrCreateBody(config: PaneDefinitionConfig, indent = '  '): stri
     ? `${indent}var existing = Xrm.App.sidePanes.getPane(${paneIdJson});\n${indent}if (existing) { existing.select(); await existing.navigate(${navInput}); return; }\n`
     : `${indent}var existing = Xrm.App.sidePanes.getPane(${paneIdJson});\n${indent}if (existing) { existing.close(); await Promise.resolve(); }\n`;
 
+  const badgeAssign = pane.badgeValue
+    ? `${indent}pane.badge = ${JSON.stringify(pane.badgeValue)};\n`
+    : '';
+
   const closeOthersBlock = config.behavior.closeOthers
     ? `${indent}var allPanes = Xrm.App.sidePanes.getAllPanes();\n${indent}allPanes.forEach(function(p) { if (p.paneId !== ${paneIdJson}) p.close(); });\n`
     : '';
 
-  return `${reuseCheck}${stateAssign}${indent}var pane = await Xrm.App.sidePanes.createPane(${paneOpts});\n${indent}await pane.navigate(${navInput});\n${closeOthersBlock}`;
+  return `${reuseCheck}${stateAssign}${indent}var pane = await Xrm.App.sidePanes.createPane(${paneOpts});\n${indent}await pane.navigate(${navInput});\n${badgeAssign}${closeOthersBlock}`;
 }
 
 function generateFormOnLoad(config: PaneDefinitionConfig): string {
