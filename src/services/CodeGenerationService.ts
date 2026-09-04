@@ -324,6 +324,7 @@ export function generateLibraryScript(config: PaneDefinitionConfig): string {
   const { pane, trigger, target, context, behavior } = config;
   const ns = safeIdentifier(trigger.namespace || '', 'MyOrg');
   const fn = safeIdentifier(trigger.functionName || '', 'openPane');
+  const rc = buildRecordContext(config);
 
   const optLines: string[] = [
     `    paneId: ${JSON.stringify(pane.paneId)}`,
@@ -331,31 +332,54 @@ export function generateLibraryScript(config: PaneDefinitionConfig): string {
     `    pageType: ${JSON.stringify(target.pageType)}`,
   ];
 
-  if (target.pageType === 'custom' || target.pageType === 'webresource') {
+  // Guard formContext expressions inside a library wrapper that receives executionContext.
+  const libIdExpr = rc.idExpr?.replace(/^formContext\./, 'executionContext.getFormContext().') ?? null;
+
+  // Target keys — contract C4. name and webresourceName are mutually exclusive (WR-007).
+  if (target.pageType === 'custom') {
     optLines.push(`    name: ${JSON.stringify(target.name)}`);
-  } else if (target.pageType === 'entityrecord' || target.pageType === 'entitylist') {
-    optLines.push(`    entityName: ${JSON.stringify(target.entityName)}`);
+    if (libIdExpr && rc.entityName) {
+      optLines.push(`    entityName: ${JSON.stringify(rc.entityName)}`);
+      optLines.push(`    recordId: ${libIdExpr}`);
+    }
+  } else if (target.pageType === 'webresource') {
+    optLines.push(`    webresourceName: ${JSON.stringify(target.name)}`);
+    if (libIdExpr && rc.entityName) {
+      optLines.push(
+        `    data: encodeURIComponent(JSON.stringify({ entityName: ${JSON.stringify(rc.entityName)}, recordId: ${libIdExpr} }))`
+      );
+    }
+  } else if (target.pageType === 'entityrecord') {
+    optLines.push(`    entityName: ${JSON.stringify(rc.entityName)}`);
+    if (libIdExpr) optLines.push(`    entityId: ${libIdExpr}`);
+  } else if (target.pageType === 'entitylist') {
+    optLines.push(`    entityName: ${JSON.stringify(rc.entityName)}`);
   } else if (target.pageType === 'dashboard') {
     optLines.push(`    dashboardId: ${JSON.stringify(target.dashboardId)}`);
   } else if (target.pageType === 'search' && target.searchText) {
     optLines.push(`    searchText: ${JSON.stringify(target.searchText)}`);
   }
 
+  // Appearance + behavior keys — contract C4. isResizable is deliberately absent.
   if (pane.width !== 480) optLines.push(`    width: ${pane.width}`);
   if (!pane.canClose) optLines.push(`    canClose: false`);
-  if (!pane.isResizable) optLines.push(`    isResizable: false`);
   if (pane.hideHeader) optLines.push(`    hideHeader: true`);
+  if (pane.isSelected === false) optLines.push(`    isSelected: false`);
   if (pane.alwaysRender) optLines.push(`    alwaysRender: true`);
+  if (pane.keepBadgeOnSelect) optLines.push(`    keepBadgeOnSelect: true`);
+  const imageSrc = normalizeImageSrc(pane.imageSrc);
+  if (imageSrc) optLines.push(`    imageSrc: ${JSON.stringify(imageSrc)}`);
+  if (pane.badgeValue) optLines.push(`    badge: ${JSON.stringify(pane.badgeValue)}`);
   if (!context.reuseExistingPane) optLines.push(`    reuseExistingPane: false`);
   if (!behavior.expandOnOpen) optLines.push(`    expandOnOpen: false`);
   if (behavior.closeOthers) optLines.push(`    closeOthers: true`);
-  if (pane.keepBadgeOnSelect) optLines.push(`    keepBadgeOnSelect: true`);
-  if (pane.imageSrc) optLines.push(`    imageSrc: ${JSON.stringify(pane.imageSrc)}`);
-  if (pane.badgeValue) optLines.push(`    badge: ${JSON.stringify(pane.badgeValue)}`);
 
-  const param = (trigger.kind === 'FormOnLoad' || trigger.kind === 'FormOnChange') ? 'executionContext'
-    : trigger.kind === 'ManualJS' ? ''
-    : 'primaryControl';
+  const param =
+    trigger.kind === 'FormOnLoad' || trigger.kind === 'FormOnChange'
+      ? 'executionContext'
+      : trigger.kind === 'ManualJS'
+        ? ''
+        : 'primaryControl';
 
   return `var ${ns} = ${ns} || {};
 ${ns}.${fn} = function(${param}) {
