@@ -164,3 +164,21 @@ describe('static record ID validation', () => {
     expect(validate(config).errors.map(e => e.field)).not.toContain('context.staticRecordId');
   });
 });
+
+describe('validate — web resource name (WR-003)', () => {
+  it('blocks an empty web resource name the same way it blocks an empty custom page name', () => {
+    const result = validate(cfg({ target: { pageType: 'webresource', name: '' } }));
+    expect(result.isValid).toBe(false);
+    expect(result.errors.map(e => e.field)).toContain('target.name');
+  });
+
+  it('blocks a whitespace-only web resource name', () => {
+    const result = validate(cfg({ target: { pageType: 'webresource', name: '   ' } }));
+    expect(result.isValid).toBe(false);
+  });
+
+  it('accepts a populated web resource name', () => {
+    const result = validate(cfg({ target: { pageType: 'webresource', name: 'new_mypage.html' } }));
+    expect(result.errors.map(e => e.field)).not.toContain('target.name');
+  });
+});
