@@ -62,17 +62,28 @@ async function renderPanel({
   config,
   onChange,
 }: {
-  config: PaneDefinitionConfig;
-  onChange: (updater: (prev: PaneDefinitionConfig) => PaneDefinitionConfig) => void;
-}) {
-  await render(
-    <ConfigurePanel
-      config={config}
-      onChange={onChange}
-      validation={validate(config)}
-      metadataService={makeMetadataService()}
-    />
-  );
+  config?: PaneDefinitionConfig;
+  onChange?: (updater: (prev: PaneDefinitionConfig) => PaneDefinitionConfig) => void;
+} = {}) {
+  const useStateful = config === undefined && onChange === undefined;
+
+  if (useStateful) {
+    await render(
+      <StatefulConfigurePanel
+        initialConfig={DEFAULT_CONFIG}
+        metadataService={makeMetadataService()}
+      />
+    );
+  } else {
+    await render(
+      <ConfigurePanel
+        config={config ?? DEFAULT_CONFIG}
+        onChange={onChange ?? vi.fn()}
+        validation={validate(config ?? DEFAULT_CONFIG)}
+        metadataService={makeMetadataService()}
+      />
+    );
+  }
   await expandSection('Record context');
   await expandSection('Advanced options');
 }
@@ -286,7 +297,7 @@ describe('ConfigurePanel', () => {
 describe('ConfigurePanel behavior controls', () => {
   it('renders a control for every behavior field the generator consumes', async () => {
     const onChange = vi.fn();
-    await renderPanel({ config: DEFAULT_CONFIG, onChange });
+    await renderPanel({ config: DEFAULT_CONFIG, onChange: onChange });
 
     const expand = findToggleByLabel('Expand pane on open');
     const closeOthers = findToggleByLabel('Close other side panes');
@@ -343,5 +354,45 @@ describe('ConfigurePanel — pane appearance (WR-002)', () => {
     await expandSection('Pane Appearance');
 
     expect(host?.textContent ?? '').toMatch(/hides the close button/i);
+  });
+});
+
+describe('ConfigurePanel — search target (WR-001)', () => {
+  it('shows the search warning callout when the search page type is selected', async () => {
+    const config = { ...DEFAULT_CONFIG, target: { pageType: 'search' as const, searchText: '' } };
+    const validation = {
+      errors: [] as Array<{ field: string; message: string }>,
+      warnings: [{ field: 'target.pageType', message: 'Search is not a documented navigateTo pageType.' }],
+      isValid: true,
+    };
+    await render(
+      <ConfigurePanel
+        config={config}
+        onChange={vi.fn()}
+        validation={validation}
+        metadataService={makeMetadataService()}
+      />
+    );
+    await expandSection('What opens in the pane');
+
+    expect(host?.textContent ?? '').toMatch(/not a documented navigateTo pageType/i);
+  });
+
+  it('labels the search option as unsupported in the content type list', async () => {
+    await renderPanel();
+    await expandSection('What opens in the pane');
+
+    const searchBtn = getChoiceButton('Search');
+    await act(async () => {
+      searchBtn?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(host?.textContent ?? '').toMatch(/not documented by navigateTo/i);
+  });
+
+  it('shows no search warning for a custom page target', async () => {
+    await renderPanel();
+    await expandSection('What opens in the pane');
+    expect(host?.textContent ?? '').not.toMatch(/not a documented navigateTo pageType/i);
   });
 });
