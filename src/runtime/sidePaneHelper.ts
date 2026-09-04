@@ -43,10 +43,9 @@ export interface SidePaneHelperOptions {
   closeOthers?: boolean;
 }
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
 type XrmLike = any;
 
-let xrmRef: XrmLike | undefined;
+let xrmRef: XrmLike;
 
 /** Test seam. Production resolves `Xrm` from the host window. */
 export function __setXrm(xrm: XrmLike): void {
@@ -105,7 +104,7 @@ function buildNavigateInput(o: SidePaneHelperOptions): Record<string, unknown> {
 export async function open(options: SidePaneHelperOptions): Promise<void> {
   const xrm = getXrm();
   try {
-    if (!options || !options.paneId) {
+    if (!options?.paneId) {
       throw new Error('SidePaneHelper.open requires a paneId.');
     }
 
