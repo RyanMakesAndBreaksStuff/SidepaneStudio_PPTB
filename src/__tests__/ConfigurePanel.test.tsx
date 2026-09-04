@@ -396,3 +396,53 @@ describe('ConfigurePanel — search target (WR-001)', () => {
     expect(host?.textContent ?? '').not.toMatch(/not a documented navigateTo pageType/i);
   });
 });
+
+describe('ConfigurePanel — record context table name (CR-001)', () => {
+  const withMode = (mode: string, extra: Record<string, unknown> = {}) => ({
+    config: {
+      ...DEFAULT_CONFIG,
+      context: { mode, entityName: '', staticRecordId: '', reuseExistingPane: true },
+      ...extra,
+    },
+  });
+
+  it('offers a table name input on the shipped default (custom + CurrentRecord)', async () => {
+    await renderPanel(withMode('CurrentRecord') as any);
+    expect(findInputByPlaceholder('account')).toBeTruthy();
+  });
+
+  it('offers a table name input for SelectedRow', async () => {
+    await renderPanel(withMode('SelectedRow') as any);
+    expect(findInputByPlaceholder('account')).toBeTruthy();
+  });
+
+  it('offers a table name input for Static', async () => {
+    await renderPanel(withMode('Static') as any);
+    expect(findInputByPlaceholder('account')).toBeTruthy();
+  });
+
+  it('hides the table name input for None, which emits no record fields', async () => {
+    await renderPanel(withMode('None') as any);
+    expect(findInputByPlaceholder('account')).toBeUndefined();
+  });
+
+  it('shows the Record ID input only for Static', async () => {
+    await renderPanel(withMode('Static') as any);
+    expect(findInputByPlaceholder('00000000-0000-0000-0000-000000000000')).toBeTruthy();
+  });
+
+  it('hides the Record ID input for CurrentRecord, which resolves the id at runtime', async () => {
+    await renderPanel(withMode('CurrentRecord') as any);
+    expect(findInputByPlaceholder('00000000-0000-0000-0000-000000000000')).toBeUndefined();
+  });
+
+  it('still shows the Record ID input for ManualJS + entityrecord', async () => {
+    await renderPanel(
+      withMode('None', {
+        trigger: { kind: 'ManualJS', functionName: 'openPane', namespace: 'Ns', fieldName: '' },
+        target: { pageType: 'entityrecord', entityName: 'account', entityId: '' },
+      }) as any
+    );
+    expect(findInputByPlaceholder('00000000-0000-0000-0000-000000000000')).toBeTruthy();
+  });
+});
