@@ -21,6 +21,14 @@ function getSafeTriggerNames(config: PaneDefinitionConfig): { ns: string; fn: st
   };
 }
 
+/** WR-005 — every generated catch both logs and tells the user. */
+function buildCatchBody(label: string, indent: string): string {
+  return (
+    `${indent}console.error(${JSON.stringify(label)}, e);\n` +
+    `${indent}Xrm.Navigation.openErrorDialog({ message: e.message });`
+  );
+}
+
 function buildConfiguredRecordIdExpression(config: PaneDefinitionConfig): string {
   const configuredId =
     config.context.staticRecordId ||
@@ -184,7 +192,7 @@ ${body
     // Staleness guard after await
     if (executionContext.getFormContext() !== formContext) return;
   } catch(e) {
-    console.error(${JSON.stringify(`${ns}.${fn}`)}, e);
+    ${buildCatchBody(`${ns}.${fn}`, '    ')}
   }
 };`;
 }
@@ -207,7 +215,7 @@ ${body
   .map(l => '    ' + l)
   .join('\n')}
     } catch(e) {
-      console.error(${JSON.stringify(`${ns}.${fn}`)}, e);
+      ${buildCatchBody(`${ns}.${fn}`, '      ')}
     } finally {
       delete ${PENDING_VAR}[${paneIdJson}];
     }
@@ -235,7 +243,7 @@ ${body
   .map(l => '    ' + l)
   .join('\n')}
     } catch(e) {
-      console.error(${JSON.stringify(`${ns}.${fn}`)}, e);
+      ${buildCatchBody(`${ns}.${fn}`, '      ')}
     } finally {
       delete ${PENDING_VAR}[${paneIdJson}];
     }
@@ -262,7 +270,7 @@ ${body
   .map(l => '  ' + l)
   .join('\n')}
   } catch(e) {
-    console.error(${JSON.stringify(fn)}, e);
+    ${buildCatchBody(fn, '    ')}
   }
 }
 ${fn}().catch(console.error);`;
@@ -290,7 +298,7 @@ ${body
       // Staleness guard after await
       if (executionContext.getFormContext() !== formContext) return;
     } catch(e) {
-      console.error(${JSON.stringify(`${ns}.${fn}`)}, e);
+      ${buildCatchBody(`${ns}.${fn}`, '      ')}
     }
   }, 150);
 };`;
