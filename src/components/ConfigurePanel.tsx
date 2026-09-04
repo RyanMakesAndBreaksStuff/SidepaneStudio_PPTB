@@ -52,7 +52,7 @@ const PAGE_TYPE_OPTIONS = [
   { value: 'entitylist',   label: 'Table list',      desc: 'Show a view of table records' },
   { value: 'webresource',  label: 'Web resource',    desc: 'Embed an HTML/JS web resource' },
   { value: 'dashboard',    label: 'Dashboard',       desc: 'System or personal dashboard' },
-  { value: 'search',       label: 'Search',          desc: 'Global search results' },
+  { value: 'search',       label: 'Search',          desc: 'Global search results — not documented by navigateTo' },
 ];
 
 const TRIGGER_OPTIONS = [
@@ -198,20 +198,25 @@ export function ConfigurePanel({
         )}
 
         {target.pageType === 'search' && (
-          <Field label="Search text" hint="Pre-fill the global search box (optional)" error={vErrors['target.searchText']}>
-            <Input
-              value={target.pageType === 'search' ? target.searchText : ''}
-              onChange={v =>
-                onChange(prev => {
-                  const t = prev.target;
-                  if (t.pageType !== 'search') return prev;
-                  return { ...prev, target: { ...t, searchText: v } };
-                })
-              }
-              placeholder="e.g. Contoso"
-              error={!!vErrors['target.searchText']}
-            />
-          </Field>
+          <>
+            <Field label="Search text" hint="Pre-fill the global search box (optional)" error={vErrors['target.searchText']}>
+              <Input
+                value={target.pageType === 'search' ? target.searchText : ''}
+                onChange={v =>
+                  onChange(prev => {
+                    const t = prev.target;
+                    if (t.pageType !== 'search') return prev;
+                    return { ...prev, target: { ...t, searchText: v } };
+                  })
+                }
+                placeholder="e.g. Contoso"
+                error={!!vErrors['target.searchText']}
+              />
+            </Field>
+            {vWarnings['target.pageType'] && (
+              <Callout type="warn" icon="⚠">{vWarnings['target.pageType']}</Callout>
+            )}
+          </>
         )}
       </Section>
 
