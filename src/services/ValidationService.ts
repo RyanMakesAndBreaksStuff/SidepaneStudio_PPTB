@@ -100,6 +100,15 @@ export function validate(config: PaneDefinitionConfig, accessibleTables?: Set<st
     });
   }
 
+  // Warning: search pageType is not in the documented navigateTo pageInput list (WR-001)
+  if (config.target.pageType === 'search') {
+    warnings.push({
+      field: 'target.pageType',
+      message:
+        'Search is not a documented navigateTo pageType. Documented values are entitylist, entityrecord, dashboard, webresource, custom, and generative. Generated code may fail at runtime.',
+    });
+  }
+
   // Warning: Static context mode
   if (config.context.mode === 'Static') {
     warnings.push({
