@@ -1,6 +1,6 @@
 {
   "name": "@ryanmakes/side-pane-studio",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "publishConfig": {
     "access": "public"
   },
@@ -31,6 +31,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "build:runtime": "vite build --config vite.runtime.config.ts",
     "test": "vitest run",
     "lint": "eslint .",
     "preview": "vite preview",
@@ -48,7 +49,7 @@
   "devDependencies": {
     "@eslint/js": "9.39.4",
     "@microsoft/eslint-plugin-power-apps": "0.5.1",
-    "@pptb/types": "1.2.1",
+    "@pptb/types": "1.2.5",
     "@types/react": "^18.0.0",
     "@types/react-dom": "^18.0.0",
     "@vitejs/plugin-react": "^5.0.0",
