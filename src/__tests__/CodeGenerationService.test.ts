@@ -101,20 +101,36 @@ describe('generateBasicScript — safe generated identifiers', () => {
 });
 
 describe('generateBasicScript — reuseExistingPane', () => {
-  it('reuseExistingPane: true emits select(); return;', () => {
-    const code = generateBasicScript(cfg({ context: { reuseExistingPane: true } as any }));
-    expect(code).toContain('.select()');
+  it('reuseExistingPane: true selects AND navigates the existing pane before returning', () => {
+    const code = generateBasicScript(
+      cfg({ trigger: { kind: 'FormButton' } as any, context: { reuseExistingPane: true } as any })
+    );
+    expect(isValidJS(code)).toBe(true);
+    expect(code).toContain('existing.select();');
+    expect(code).toContain('await existing.navigate(');
+    // the bare focus-only early return must be gone
+    expect(code).not.toMatch(/existing\.select\(\);\s*return;/);
   });
 
-  it('reuseExistingPane: false proceeds to createPane (no early return on existing)', () => {
+  it('reuseExistingPane: true navigates the existing pane with the same input as createPane', () => {
     const code = generateBasicScript(
       cfg({
         trigger: { kind: 'FormButton' } as any,
-        context: { reuseExistingPane: false } as any,
+        target: { pageType: 'entitylist', entityName: 'account' },
+        context: { mode: 'None', entityName: '', staticRecordId: '', reuseExistingPane: true },
       })
     );
+    const occurrences = code.match(/pageType: "entitylist", entityName: "account"/g) || [];
+    expect(occurrences.length).toBe(2);
+  });
+
+  it('reuseExistingPane: false closes the existing pane and proceeds to createPane', () => {
+    const code = generateBasicScript(
+      cfg({ trigger: { kind: 'FormButton' } as any, context: { reuseExistingPane: false } as any })
+    );
+    expect(code).toContain('existing.close()');
     expect(code).toContain('createPane');
-    expect(code).not.toMatch(/getPane\([^)]*\)[\s\S]{0,60}\.select\(\)[\s\S]{0,10}return/);
+    expect(code).not.toContain('existing.select()');
   });
 });
 
