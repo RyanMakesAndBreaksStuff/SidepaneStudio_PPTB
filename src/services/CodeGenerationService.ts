@@ -256,14 +256,6 @@ ${body
 };`;
 }
 
-function generateMainGridButton(config: PaneDefinitionConfig): string {
-  return generateGridButtonScript(config);
-}
-
-function generateSubgridButton(config: PaneDefinitionConfig): string {
-  return generateGridButtonScript(config);
-}
-
 function generateManualJS(config: PaneDefinitionConfig): string {
   const { fn } = getSafeTriggerNames(config);
   const body = buildGetOrCreateBody(config, '  ');
@@ -316,9 +308,9 @@ export function generateBasicScript(config: PaneDefinitionConfig): string {
     case 'FormButton':
       return generateFormButton(config);
     case 'MainGridButton':
-      return generateMainGridButton(config);
+      return generateGridButtonScript(config);
     case 'SubgridButton':
-      return generateSubgridButton(config);
+      return generateGridButtonScript(config);
     case 'ManualJS':
       return generateManualJS(config);
     case 'FormOnChange':
