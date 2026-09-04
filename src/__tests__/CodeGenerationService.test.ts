@@ -514,6 +514,62 @@ describe('generateLibraryScript', () => {
     expect(isValidJS(code)).toBe(true);
     expect(code).not.toContain('badge');
   });
+
+  it('webresource targets emit webresourceName, never name (WR-007)', () => {
+    const code = generateLibraryScript(
+      cfg({ target: { pageType: 'webresource', name: 'new_mypage.html' } })
+    );
+    expect(code).toContain('webresourceName: "new_mypage.html"');
+    expect(code).not.toContain('name: "new_mypage.html"');
+  });
+
+  it('custom targets still emit name, never webresourceName', () => {
+    const code = generateLibraryScript(
+      cfg({ target: { pageType: 'custom', name: 'sps_Page' } })
+    );
+    expect(code).toContain('name: "sps_Page"');
+    expect(code).not.toContain('webresourceName');
+  });
+
+  it('never emits isResizable (contract C3)', () => {
+    const code = generateLibraryScript(cfg({ pane: { isResizable: false } as any }));
+    expect(code).not.toContain('isResizable');
+  });
+
+  it('entityrecord emits entityId resolved from the record-context matrix', () => {
+    const code = generateLibraryScript(
+      cfg({
+        target: { pageType: 'entityrecord', entityName: 'account', entityId: '' },
+        context: {
+          mode: 'Static',
+          entityName: 'account',
+          staticRecordId: '{AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE}',
+          reuseExistingPane: true,
+        },
+      })
+    );
+    expect(code).toContain('entityName: "account"');
+    expect(code).toContain('entityId: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"');
+  });
+
+  it('custom page emits recordId when a static record resolves', () => {
+    const code = generateLibraryScript(
+      cfg({
+        context: {
+          mode: 'Static',
+          entityName: 'account',
+          staticRecordId: '{AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE}',
+          reuseExistingPane: true,
+        },
+      })
+    );
+    expect(code).toContain('recordId: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"');
+  });
+
+  it('imageSrc is WebResources/-prefixed like the basic script', () => {
+    const code = generateLibraryScript(cfg({ pane: { imageSrc: 'sps_/icons/myicon.svg' } as any }));
+    expect(code).toContain('imageSrc: "WebResources/sps_/icons/myicon.svg"');
+  });
 });
 
 describe('buildNavigateInput — record context (CR-001)', () => {
