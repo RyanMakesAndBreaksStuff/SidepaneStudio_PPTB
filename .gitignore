@@ -23,3 +23,4 @@
 *.pem
 secrets/
 /remainingreviewitems.md
+/.codegraph

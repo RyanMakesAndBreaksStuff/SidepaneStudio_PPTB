@@ -31,6 +31,11 @@ export function validate(config: PaneDefinitionConfig, accessibleTables?: Set<st
     errors.push({ field: 'target.name', message: 'Custom page name is required.' });
   }
 
+  // Error: webresource pageType with empty name (WR-003)
+  if (config.target.pageType === 'webresource' && !config.target.name.trim()) {
+    errors.push({ field: 'target.name', message: 'Web resource name is required.' });
+  }
+
   // Error: entityrecord/entitylist with empty entityName
   if (
     (config.target.pageType === 'entityrecord' || config.target.pageType === 'entitylist') &&
