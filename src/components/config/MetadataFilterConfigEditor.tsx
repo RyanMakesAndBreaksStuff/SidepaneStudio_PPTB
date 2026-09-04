@@ -121,6 +121,12 @@ export function MetadataFilterConfigEditor({
     setSaving(true);
     try {
       await onSave(parsed.config);
+    } catch (err) {
+      // The failure is reported to the user via the `error` prop, which the
+      // caller (onSave) is responsible for setting. Catch here only to
+      // prevent an unhandled promise rejection from this fire-and-forget
+      // click handler — never swallow silently without a caller-visible path.
+      console.error('MetadataFilterConfigEditor: save failed', err);
     } finally {
       setSaving(false);
     }
@@ -132,6 +138,11 @@ export function MetadataFilterConfigEditor({
     setResetting(true);
     try {
       await onReset();
+    } catch (err) {
+      // See save(): the caller (onReset) is responsible for surfacing the
+      // failure via the `error` prop; this catch only prevents an unhandled
+      // promise rejection.
+      console.error('MetadataFilterConfigEditor: reset failed', err);
     } finally {
       setResetting(false);
     }

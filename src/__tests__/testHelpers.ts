@@ -22,18 +22,8 @@ export function cfg(
 
 export function xrmStub(): IXrmContext {
   return {
-    isAvailable: true,
-    sidePanesAvailable: true,
-    createPane: vi.fn(),
-    getPane: vi.fn(),
-    getHostKind: () => 'Unknown',
     checkWebResourceExists: vi.fn().mockResolvedValue(true),
-    readEnvVar: vi.fn().mockResolvedValue(null),
-    getCurrentAppId: vi.fn(() => null),
-    getCurrentUserId: vi.fn().mockResolvedValue('user-1'),
     webApiGet: vi.fn(),
     webApiGetEntity: vi.fn(),
-    dataverseExecute: vi.fn(),
-    getAllEntitiesMetadata: vi.fn().mockResolvedValue([]),
   };
 }

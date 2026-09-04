@@ -237,6 +237,156 @@ describe('SidePaneBuilderWorkbench', () => {
     );
   });
 
+  it('does not report reset success when clearing the saved configuration fails', async () => {
+    const showNotification = vi.fn().mockResolvedValue(undefined);
+    const settingsSet = vi.fn().mockRejectedValue(new Error('settings backend offline'));
+
+    vi.stubGlobal('toolboxAPI', {
+      connections: {
+        getActiveConnection: vi.fn().mockResolvedValue({ id: 'conn-1' }),
+      },
+      events: {
+        on: vi.fn(),
+        off: vi.fn(),
+      },
+      settings: {
+        get: vi.fn().mockResolvedValue(null),
+        set: settingsSet,
+      },
+      utils: {
+        showNotification,
+      },
+    });
+
+    await render(<SidePaneBuilderWorkbench />);
+    await act(async () => { await Promise.resolve(); });
+
+    await act(async () => {
+      const onReset = workbenchShellState.props?.onReset as () => Promise<void>;
+      await onReset();
+    });
+
+    expect(settingsSet).toHaveBeenCalledWith('lastConfig', null);
+    expect(showNotification).toHaveBeenCalledTimes(1);
+    expect(showNotification).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'error' })
+    );
+    expect(showNotification).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'success' })
+    );
+  });
+
+  it('reports reset success only after the settings write resolves', async () => {
+    const showNotification = vi.fn().mockResolvedValue(undefined);
+    const settingsSet = vi.fn().mockResolvedValue(undefined);
+
+    vi.stubGlobal('toolboxAPI', {
+      connections: {
+        getActiveConnection: vi.fn().mockResolvedValue({ id: 'conn-1' }),
+      },
+      events: {
+        on: vi.fn(),
+        off: vi.fn(),
+      },
+      settings: {
+        get: vi.fn().mockResolvedValue(null),
+        set: settingsSet,
+      },
+      utils: {
+        showNotification,
+      },
+    });
+
+    await render(<SidePaneBuilderWorkbench />);
+    await act(async () => { await Promise.resolve(); });
+
+    await act(async () => {
+      const onReset = workbenchShellState.props?.onReset as () => Promise<void>;
+      await onReset();
+    });
+
+    expect(settingsSet).toHaveBeenCalledWith('lastConfig', null);
+    expect(showNotification).toHaveBeenCalledTimes(1);
+    expect(showNotification).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'success' })
+    );
+  });
+
+  it('surfaces a metadata filter save failure as an error instead of clearing it', async () => {
+    const getAll = vi.fn().mockResolvedValue({ lastConfig: '{"pane":{}}' });
+    const setAll = vi.fn().mockRejectedValue(new Error('metadata settings backend offline'));
+
+    vi.stubGlobal('toolboxAPI', {
+      connections: {
+        getActiveConnection: vi.fn().mockResolvedValue({ id: 'conn-1' }),
+      },
+      events: {
+        on: vi.fn(),
+        off: vi.fn(),
+      },
+      settings: {
+        get: vi.fn().mockResolvedValue(null),
+        set: vi.fn().mockResolvedValue(undefined),
+        getAll,
+        setAll,
+      },
+    });
+
+    await render(<SidePaneBuilderWorkbench />);
+    await act(async () => { await Promise.resolve(); });
+    await act(async () => { await Promise.resolve(); });
+
+    await act(async () => {
+      const save = workbenchShellState.props?.onSaveMetadataFilterConfig as (
+        config: typeof DEFAULT_METADATA_FILTER_CONFIG
+      ) => Promise<void>;
+      await save({
+        denyPrefixes: ['abc_'],
+        denyExact: ['webresource'],
+        allowedStandardTables: ['account'],
+      });
+    });
+
+    expect(setAll).toHaveBeenCalled();
+    expect(workbenchShellState.props?.metadataFilterError).toBe('metadata settings backend offline');
+    // The failed write must not have been applied to displayed state.
+    expect(workbenchShellState.props?.metadataFilterConfig).toEqual(DEFAULT_METADATA_FILTER_CONFIG);
+  });
+
+  it('surfaces a metadata filter reset failure as an error instead of clearing it', async () => {
+    const getAll = vi.fn().mockResolvedValue({ lastConfig: '{"pane":{}}' });
+    const setAll = vi.fn().mockRejectedValue(new Error('metadata settings backend offline'));
+
+    vi.stubGlobal('toolboxAPI', {
+      connections: {
+        getActiveConnection: vi.fn().mockResolvedValue({ id: 'conn-1' }),
+      },
+      events: {
+        on: vi.fn(),
+        off: vi.fn(),
+      },
+      settings: {
+        get: vi.fn().mockResolvedValue(null),
+        set: vi.fn().mockResolvedValue(undefined),
+        getAll,
+        setAll,
+      },
+    });
+
+    await render(<SidePaneBuilderWorkbench />);
+    await act(async () => { await Promise.resolve(); });
+    await act(async () => { await Promise.resolve(); });
+
+    await act(async () => {
+      const reset = workbenchShellState.props?.onResetMetadataFilterConfig as () => Promise<void>;
+      await reset();
+    });
+
+    expect(setAll).toHaveBeenCalled();
+    expect(workbenchShellState.props?.metadataFilterError).toBe('metadata settings backend offline');
+    expect(workbenchShellState.props?.metadataFilterConfig).toEqual(DEFAULT_METADATA_FILTER_CONFIG);
+  });
+
   it('invalidates caches when the host reports a connection change', async () => {
     let handler: ((event: unknown, payload: ToolBoxAPI.ToolBoxEventPayload) => void) | undefined;
 

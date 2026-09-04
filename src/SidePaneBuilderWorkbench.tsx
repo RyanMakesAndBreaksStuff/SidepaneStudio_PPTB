@@ -178,30 +178,48 @@ export function SidePaneBuilderWorkbench(): React.ReactElement {
     []
   );
 
-  const handleReset = useCallback(() => {
+  const handleReset = useCallback(async () => {
     configDirtyRef.current = false;
     setConfig(DEFAULT_CONFIG);
     const toolbox = window.toolboxAPI;
-    Promise.resolve(toolbox?.settings?.set('lastConfig', null))
-      .catch((err: unknown) => reportSettingsFailure('Clearing your saved configuration', err));
+    try {
+      await toolbox?.settings?.set('lastConfig', null);
+      window.toolboxAPI?.utils?.showNotification({
+        title: 'Configuration reset',
+        body: '',
+        type: 'success',
+      });
+    } catch (err) {
+      reportSettingsFailure('Clearing your saved configuration', err);
+    }
   }, []);
 
   const handleSaveMetadataFilterConfig = useCallback(async (nextConfig: MetadataFilterConfig) => {
-    const result = await metadataFilterSettingsRef.current?.save(nextConfig);
-    if (!result) return;
-    metaRef.current?.setFilterConfig(result.config);
-    setMetadataFilterConfig(result.config);
-    setMetadataFilterPersistenceAvailable(result.persistenceAvailable);
-    setMetadataFilterError(null);
+    try {
+      const result = await metadataFilterSettingsRef.current?.save(nextConfig);
+      if (!result) return;
+      metaRef.current?.setFilterConfig(result.config);
+      setMetadataFilterConfig(result.config);
+      setMetadataFilterPersistenceAvailable(result.persistenceAvailable);
+      setMetadataFilterError(null);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to save metadata filter settings.';
+      setMetadataFilterError(message);
+    }
   }, []);
 
   const handleResetMetadataFilterConfig = useCallback(async () => {
-    const result = await metadataFilterSettingsRef.current?.reset();
-    if (!result) return;
-    metaRef.current?.setFilterConfig(result.config);
-    setMetadataFilterConfig(result.config);
-    setMetadataFilterPersistenceAvailable(result.persistenceAvailable);
-    setMetadataFilterError(null);
+    try {
+      const result = await metadataFilterSettingsRef.current?.reset();
+      if (!result) return;
+      metaRef.current?.setFilterConfig(result.config);
+      setMetadataFilterConfig(result.config);
+      setMetadataFilterPersistenceAvailable(result.persistenceAvailable);
+      setMetadataFilterError(null);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to reset metadata filter settings.';
+      setMetadataFilterError(message);
+    }
   }, []);
 
   if (connectionState.status === 'loading') {

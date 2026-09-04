@@ -29,23 +29,44 @@ export interface DataverseExecuteRequest {
   parameters?: Record<string, unknown>;
 }
 
+/**
+ * Contract actually consumed through the `IXrmContext` type by production code:
+ * `checkWebResourceExists` (src/components/OutputPanel.tsx), and `webApiGet` /
+ * `webApiGetEntity` (src/services/FormXmlService.ts, src/services/MetadataService.ts).
+ * Verified by grepping all of `src` for each prior member name outside
+ * adapters/tests (PR-002, 2026-09-03) — none of the other original 12 members
+ * had a production caller reached through this interface.
+ */
 export interface IXrmContext {
+  checkWebResourceExists(name: string): Promise<boolean>;
+  webApiGet<T = unknown>(path: string, connectionTarget?: 'primary' | 'secondary'): Promise<T>;
+  webApiGetEntity<T = unknown>(path: string, connectionTarget?: 'primary' | 'secondary'): Promise<T>;
+}
+
+/**
+ * Members that were previously part of `IXrmContext` but have no production
+ * caller reaching them through that interface type. They remain implemented
+ * on the concrete `PptbContextAdapter` (some are used internally — e.g.
+ * `dataverseExecute` backs `getCurrentUserId`'s WhoAmI caching — and all are
+ * covered directly against the concrete class in PptbContextAdapter.test.ts).
+ * Kept here as a documented extension point, rather than deleted outright, so
+ * a future `IXrmContext` implementation isn't left guessing why this surface
+ * exists on the adapter but not the interface.
+ */
+export interface IXrmHostExtensions {
   isAvailable: boolean;
   sidePanesAvailable: boolean;
   createPane(options: PaneCreateOptions): Promise<AppSidePane>;
   getPane(paneId: string): AppSidePane | undefined;
   getHostKind(): 'SingleSession' | 'MultiSession' | 'Unknown';
-  checkWebResourceExists(name: string): Promise<boolean>;
   readEnvVar(name: string): Promise<string | null>;
   getCurrentAppId(): string | null;
   getCurrentUserId(): Promise<string>;
-  webApiGet<T = unknown>(path: string, connectionTarget?: 'primary' | 'secondary'): Promise<T>;
-  webApiGetEntity<T = unknown>(path: string, connectionTarget?: 'primary' | 'secondary'): Promise<T>;
   dataverseExecute<T = unknown>(request: DataverseExecuteRequest, connectionTarget?: 'primary' | 'secondary'): Promise<T>;
   getAllEntitiesMetadata(properties: string[], connectionTarget?: 'primary' | 'secondary'): Promise<any[]>;
 }
 
-export class PptbContextAdapter implements IXrmContext {
+export class PptbContextAdapter implements IXrmContext, IXrmHostExtensions {
   readonly isAvailable = false;
   readonly sidePanesAvailable = false;
 

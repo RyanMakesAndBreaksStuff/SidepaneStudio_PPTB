@@ -102,7 +102,7 @@ export const OutputPanel = React.memo(function OutputPanel({ config, xrm, valida
                 <strong>closeOthers is active:</strong> The generated script closes all other side panes after opening this one.
               </Callout>
             )}
-            <CodeBlock code={basicCode} lang="js" />
+            {validation.errors.length === 0 && <CodeBlock code={basicCode} lang="js" />}
           </>
         )}
 
@@ -126,7 +126,12 @@ export const OutputPanel = React.memo(function OutputPanel({ config, xrm, valida
               title="📚 Shared library version"
               body={`Shorter snippet that calls the pre-deployed <strong>SidePaneHelper</strong> runtime. Your organization must deploy the shared library web resource first.`}
             />
-            <CodeBlock code={libCode} lang="js" />
+            {validation.errors.length > 0 && (
+              <Callout type="err" icon="✕">
+                Fix {validation.errors.length} validation error{validation.errors.length > 1 ? 's' : ''} before using this code: {validation.errors[0].message}
+              </Callout>
+            )}
+            {validation.errors.length === 0 && <CodeBlock code={libCode} lang="js" />}
           </>
         )}
 
@@ -135,7 +140,10 @@ export const OutputPanel = React.memo(function OutputPanel({ config, xrm, valida
           <CommandStepsTab config={config} />
         )}
 
-        {/* Advanced expander — Raw Config */}
+        {/* Advanced expander — Raw Config.
+            Gated on validation.errors.length === 0, same as the basic/library tabs, for
+            consistency: the Copy/CodeBlock affordance is withheld whenever there are
+            blocking validation errors, regardless of warnings. */}
         <div>
           <button
             onClick={() => setShowRaw(r => !r)}
@@ -158,7 +166,7 @@ export const OutputPanel = React.memo(function OutputPanel({ config, xrm, valida
               <Callout type="info" icon="ℹ">
                 Resolved <code>PaneDefinitionConfig</code> — for debugging and diagnostics only.
               </Callout>
-              <CodeBlock code={rawCode} lang="json" />
+              {validation.errors.length === 0 && <CodeBlock code={rawCode} lang="json" />}
             </div>
           )}
         </div>

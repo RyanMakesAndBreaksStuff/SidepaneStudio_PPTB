@@ -78,6 +78,31 @@ describe('CommandBar', () => {
     expect(onReset).toHaveBeenCalledTimes(1);
   });
 
+  it('does not itself report a success notification on reset — it cannot know the persistence outcome', async () => {
+    const showNotification = vi.fn();
+    vi.stubGlobal('toolboxAPI', {
+      utils: { getCurrentTheme: vi.fn().mockResolvedValue('dark'), showNotification },
+      events: { on: vi.fn(), off: vi.fn() },
+    });
+    vi.stubGlobal('confirm', vi.fn().mockReturnValue(true));
+    const onReset = vi.fn();
+
+    await render(
+      <ThemeProvider>
+        <CommandBar onReset={onReset} />
+      </ThemeProvider>
+    );
+
+    const resetButton = buttons().find(b => (b.textContent ?? '').includes('Reset'));
+
+    await act(async () => {
+      resetButton!.click();
+    });
+
+    expect(onReset).toHaveBeenCalledTimes(1);
+    expect(showNotification).not.toHaveBeenCalled();
+  });
+
   it('does not reset when the confirm dialog is declined', async () => {
     vi.stubGlobal('toolboxAPI', {
       utils: { getCurrentTheme: vi.fn().mockResolvedValue('dark'), showNotification: vi.fn() },

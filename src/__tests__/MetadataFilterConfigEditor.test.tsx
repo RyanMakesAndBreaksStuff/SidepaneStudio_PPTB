@@ -120,6 +120,60 @@ describe('MetadataFilterConfigEditor', () => {
     expect(host?.textContent).toContain('Enter a valid JSON array of strings');
   });
 
+  it('leaves the busy state and does not throw unhandled when save rejects', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const onSave = vi.fn().mockRejectedValue(new Error('save failed'));
+    await render(
+      <MetadataFilterConfigEditor
+        config={customConfig}
+        defaultConfig={DEFAULT_METADATA_FILTER_CONFIG}
+        persistenceAvailable={true}
+        onSave={onSave}
+        onReset={() => {}}
+      />
+    );
+
+    await setTextareaValue(textarea('Allowed standard tables'), '["contact"]');
+    await act(async () => {
+      button('Save')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(onSave).toHaveBeenCalledTimes(1);
+    // The busy label must clear even though the save rejected.
+    expect(button('Save')?.textContent).toBe('Save');
+    expect(button('Save')?.disabled).toBe(false);
+    expect(consoleError).toHaveBeenCalledTimes(1);
+    consoleError.mockRestore();
+  });
+
+  it('leaves the busy state and does not throw unhandled when reset rejects', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const onReset = vi.fn().mockRejectedValue(new Error('reset failed'));
+    await render(
+      <MetadataFilterConfigEditor
+        config={customConfig}
+        defaultConfig={DEFAULT_METADATA_FILTER_CONFIG}
+        persistenceAvailable={true}
+        onSave={() => {}}
+        onReset={onReset}
+      />
+    );
+
+    await act(async () => {
+      button('Reset to defaults')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(onReset).toHaveBeenCalledTimes(1);
+    expect(button('Reset to defaults')?.textContent).toBe('Reset to defaults');
+    expect(button('Reset to defaults')?.disabled).toBe(false);
+    expect(consoleError).toHaveBeenCalledTimes(1);
+    consoleError.mockRestore();
+  });
+
   it('disables dirty save when persistence is unavailable but allows reset', async () => {
     const onReset = vi.fn();
     await render(

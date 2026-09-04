@@ -109,4 +109,127 @@ describe('OutputPanel', () => {
     expect(host?.textContent).toContain('Host API unreachable');
     expect(host?.textContent).not.toContain('Prerequisite not detected');
   });
+
+  it('withholds the basic-tab code block Copy affordance when validation has blocking errors', async () => {
+    await render(
+      <OutputPanel
+        config={DEFAULT_CONFIG}
+        xrm={xrmStub()}
+        validation={{
+          isValid: false,
+          errors: [{ field: 'pane.paneId', message: 'Pane ID is required.' }],
+          warnings: [],
+        }}
+      />
+    );
+
+    expect(host?.textContent).toContain('Fix 1 validation error before using this code: Pane ID is required.');
+    expect(host?.textContent).not.toContain('📋 Copy');
+    expect(host?.querySelector('pre')).toBeNull();
+  });
+
+  it('withholds the library-tab code block Copy affordance when validation has blocking errors', async () => {
+    const xrm = xrmStub();
+    xrm.checkWebResourceExists = vi.fn().mockResolvedValue(true);
+
+    await render(
+      <OutputPanel
+        config={DEFAULT_CONFIG}
+        xrm={xrm}
+        validation={{
+          isValid: false,
+          errors: [{ field: 'pane.paneId', message: 'Pane ID is required.' }],
+          warnings: [],
+        }}
+      />
+    );
+
+    await clickLibraryTab();
+    await act(async () => new Promise(r => setTimeout(r, 0)));
+
+    expect(host?.textContent).toContain('Fix 1 validation error before using this code: Pane ID is required.');
+    expect(host?.textContent).not.toContain('📋 Copy');
+    expect(host?.querySelector('pre')).toBeNull();
+  });
+
+  it('keeps Copy available on the basic tab when validation is clean (no errors)', async () => {
+    await render(
+      <OutputPanel
+        config={DEFAULT_CONFIG}
+        xrm={xrmStub()}
+        validation={{ isValid: true, errors: [], warnings: [] }}
+      />
+    );
+
+    expect(host?.textContent).toContain('📋 Copy');
+    expect(host?.querySelector('pre')).not.toBeNull();
+  });
+
+  it('does not gate Copy on warnings alone (warnings are advisory, not blocking)', async () => {
+    await render(
+      <OutputPanel
+        config={DEFAULT_CONFIG}
+        xrm={xrmStub()}
+        validation={{
+          isValid: true,
+          errors: [],
+          warnings: [{ field: 'pane.alwaysRender', message: 'alwaysRender keeps the pane loaded even when inactive.' }],
+        }}
+      />
+    );
+
+    expect(host?.textContent).not.toContain('Fix');
+    expect(host?.textContent).toContain('📋 Copy');
+    expect(host?.querySelector('pre')).not.toBeNull();
+  });
+
+  it('withholds the raw-config expander code block when validation has blocking errors', async () => {
+    await render(
+      <OutputPanel
+        config={DEFAULT_CONFIG}
+        xrm={xrmStub()}
+        validation={{
+          isValid: false,
+          errors: [{ field: 'pane.paneId', message: 'Pane ID is required.' }],
+          warnings: [],
+        }}
+      />
+    );
+
+    const expanderButton = Array.from(host?.querySelectorAll('button') ?? []).find(b =>
+      b.textContent?.includes('Advanced — Raw Config')
+    ) as HTMLButtonElement | undefined;
+    expect(expanderButton).toBeTruthy();
+
+    await act(async () => {
+      expanderButton?.click();
+    });
+
+    // Same gate as the basic/library tabs: blocking validation errors withhold the
+    // CodeBlock (and its Copy affordance) for consistency across the panel.
+    expect(host?.querySelectorAll('pre').length).toBe(0);
+  });
+
+  it('keeps the raw-config expander code block available when validation is clean', async () => {
+    await render(
+      <OutputPanel
+        config={DEFAULT_CONFIG}
+        xrm={xrmStub()}
+        validation={{ isValid: true, errors: [], warnings: [] }}
+      />
+    );
+
+    const expanderButton = Array.from(host?.querySelectorAll('button') ?? []).find(b =>
+      b.textContent?.includes('Advanced — Raw Config')
+    ) as HTMLButtonElement | undefined;
+    expect(expanderButton).toBeTruthy();
+
+    await act(async () => {
+      expanderButton?.click();
+    });
+
+    // Basic tab's own CodeBlock also renders a <pre> when validation is clean, so expect
+    // both it and the raw-config expander's <pre>.
+    expect(host?.querySelectorAll('pre').length).toBe(2);
+  });
 });

@@ -15,7 +15,6 @@ export function CommandBar({ onReset }: CommandBarProps): React.ReactElement {
   const handleReset = () => {
     if (!window.confirm('Reset all configuration? This cannot be undone.')) return;
     onReset();
-    window.toolboxAPI?.utils?.showNotification({ title: 'Configuration reset', body: '', type: 'success' });
   };
 
   return (
