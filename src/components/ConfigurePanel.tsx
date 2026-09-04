@@ -103,6 +103,9 @@ export function ConfigurePanel({
   const vErrors: Record<string, string> = Object.fromEntries(
     validation.errors.map(e => [e.field, e.message])
   );
+  const vWarnings: Record<string, string> = Object.fromEntries(
+    validation.warnings.map(w => [w.field, w.message])
+  );
 
   return (
     <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', opacity: readOnly ? 0.7 : 1, pointerEvents: readOnly ? 'none' : 'auto' }}>
@@ -218,14 +221,14 @@ export function ConfigurePanel({
           <Input value={pane.title} onChange={v => patch('pane', 'title', v)} placeholder="My Side Pane" />
         </Field>
 
-        <Field label="Tab icon" hint="Web resource path — must be published before it renders">
+        <Field label="Tab icon" hint="Web resource path — must be published and prefixed with WebResources/ to render">
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <div style={{
               width: 34, height: 34, background: T.surface3, border: `2px dashed ${T.stroke1}`,
               borderRadius: T.rM, display: 'flex', alignItems: 'center', justifyContent: 'center',
               color: T.fg3, fontSize: 15, flexShrink: 0,
             }}>🖼</div>
-            <Input value={pane.imageSrc} onChange={v => patch('pane', 'imageSrc', v)} placeholder="sps_/icons/myicon.svg" />
+            <Input value={pane.imageSrc} onChange={v => patch('pane', 'imageSrc', v)} placeholder="WebResources/sps_/icons/myicon.svg" />
           </div>
           {pane.imageSrc && (
             <Callout type="warn" icon="⚠">Icon will render in the live app once the web resource is published. Showing placeholder in preview.</Callout>
@@ -243,11 +246,9 @@ export function ConfigurePanel({
         <Toggle label="Show close button" desc="Users can dismiss the pane with ×" checked={pane.canClose} onChange={v => patch('pane', 'canClose', v)} />
         <Toggle label="Hide header bar" desc="Removes title and close button area" checked={pane.hideHeader} onChange={v => patch('pane', 'hideHeader', v)} />
 
-        {vErrors['pane.hideHeader'] && (
-          <Callout type="err" icon="✕">{vErrors['pane.hideHeader']}</Callout>
+        {vWarnings['pane.hideHeader'] && (
+          <Callout type="warn" icon="⚠">{vWarnings['pane.hideHeader']}</Callout>
         )}
-
-        <Toggle label="Resizable by user" desc="User can drag the edge to resize" checked={pane.isResizable} onChange={v => patch('pane', 'isResizable', v)} />
       </Section>
 
       {/* 3 · How makers launch this pane */}

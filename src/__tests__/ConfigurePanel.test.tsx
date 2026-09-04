@@ -311,3 +311,37 @@ describe('ConfigurePanel behavior controls', () => {
     expect(findInputByPlaceholder('00000000-0000-0000-0000-000000000000')).toBeTruthy();
   });
 });
+
+describe('ConfigurePanel — pane appearance (WR-002)', () => {
+  it('offers no Resizable toggle, because isResizable is not a documented paneOption', async () => {
+    await renderPanel({ config: DEFAULT_CONFIG, onChange: vi.fn() });
+    await expandSection('Pane Appearance');
+    expect(host?.textContent ?? '').not.toMatch(/resizable/i);
+  });
+
+  it('tells makers the tab icon needs the WebResources/ prefix', async () => {
+    await renderPanel({ config: DEFAULT_CONFIG, onChange: vi.fn() });
+    await expandSection('Pane Appearance');
+    expect(findInputByPlaceholder('WebResources/sps_/icons/myicon.svg')).toBeTruthy();
+  });
+
+  it('surfaces the hideHeader warning as a warn callout, not an error', async () => {
+    const config = DEFAULT_CONFIG;
+    const validation = {
+      errors: [] as Array<{ field: string; message: string }>,
+      warnings: [{ field: 'pane.hideHeader', message: 'Hiding the header also hides the close button.' }],
+      isValid: true,
+    };
+    await render(
+      <ConfigurePanel
+        config={config}
+        onChange={vi.fn()}
+        validation={validation}
+        metadataService={makeMetadataService()}
+      />
+    );
+    await expandSection('Pane Appearance');
+
+    expect(host?.textContent ?? '').toMatch(/hides the close button/i);
+  });
+});
