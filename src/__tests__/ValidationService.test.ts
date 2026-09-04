@@ -27,11 +27,25 @@ describe('ValidationService errors', () => {
     expect(r.isValid).toBe(false);
     expect(r.errors.some(e => e.field === 'target.entityName')).toBe(true);
   });
+});
 
-  it('errors on hideHeader + canClose', () => {
-    const r = validate(cfg({ pane: { hideHeader: true, canClose: true } as any }));
-    expect(r.isValid).toBe(false);
-    expect(r.errors.some(e => e.field === 'pane.hideHeader')).toBe(true);
+describe('validate — hideHeader + canClose (WR-009)', () => {
+  it('does not block the official hideHeader + canClose combination', () => {
+    const result = validate(cfg({ pane: { hideHeader: true, canClose: true } as any }));
+    expect(result.isValid).toBe(true);
+    expect(result.errors.map(e => e.field)).not.toContain('pane.hideHeader');
+  });
+
+  it('warns that the close button will be unreachable', () => {
+    const result = validate(cfg({ pane: { hideHeader: true, canClose: true } as any }));
+    const w = result.warnings.find(x => x.field === 'pane.hideHeader');
+    expect(w).toBeDefined();
+    expect(w!.message).toContain('close');
+  });
+
+  it('emits no hideHeader warning when the header is visible', () => {
+    const result = validate(cfg({ pane: { hideHeader: false, canClose: true } as any }));
+    expect(result.warnings.map(w => w.field)).not.toContain('pane.hideHeader');
   });
 });
 

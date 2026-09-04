@@ -59,12 +59,12 @@ export function validate(config: PaneDefinitionConfig, accessibleTables?: Set<st
     });
   }
 
-  // Error: hideHeader + canClose
+  // Warning: hideHeader + canClose — Microsoft publishes this combination (WR-009)
   if (config.pane.hideHeader && config.pane.canClose) {
-    errors.push({
+    warnings.push({
       field: 'pane.hideHeader',
       message:
-        'When the header is hidden, users cannot close the pane. Set canClose to false or show the header.',
+        'Hiding the header also hides the close button, so users cannot dismiss the pane. The generated script emits canClose: false to match.',
     });
   }
 
