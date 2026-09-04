@@ -59,36 +59,84 @@ function buildPaneOptions(config: PaneDefinitionConfig): string {
   return `{\n${opts.join(',\n')}\n  }`;
 }
 
-function buildNavigateInput(config: PaneDefinitionConfig): string {
-  const { target, trigger, context } = config;
-  switch (target.pageType) {
-    case 'custom':
-      return `{ pageType: ${JSON.stringify(target.pageType)}, name: ${JSON.stringify(target.name)} }`;
-    case 'entityrecord': {
-      let entityIdExpr: string;
-      if (context.mode === 'Static' || trigger.kind === 'ManualJS') {
-        entityIdExpr = buildConfiguredRecordIdExpression(config);
-      } else if (trigger.kind === 'FormOnLoad' || trigger.kind === 'FormOnChange') {
-        entityIdExpr = 'formContext.data.entity.getId()';
+interface RecordContext {
+  idExpr: string | null;
+  entityName: string;
+}
+
+/** CR-001 / plan contract C1 — the single owner of record-context resolution. */
+function buildRecordContext(config: PaneDefinitionConfig): RecordContext {
+  const { context, trigger, target } = config;
+  const targetEntityName =
+    target.pageType === 'entityrecord' || target.pageType === 'entitylist' ? target.entityName : '';
+  const entityName = context.entityName || targetEntityName || '';
+
+  let idExpr: string | null = null;
+  switch (context.mode) {
+    case 'CurrentRecord':
+      if (trigger.kind === 'FormOnLoad' || trigger.kind === 'FormOnChange') {
+        idExpr = 'formContext.data.entity.getId()';
       } else if (trigger.kind === 'FormButton') {
-        entityIdExpr = 'primaryControl.data.entity.getId()';
+        idExpr = 'primaryControl.data.entity.getId()';
       } else if (trigger.kind === 'MainGridButton' || trigger.kind === 'SubgridButton') {
-        entityIdExpr = 'selectedRecordId';
-      } else {
-        entityIdExpr = buildConfiguredRecordIdExpression(config);
+        idExpr = 'selectedRecordId';
       }
-      const effectiveEntityName = context.entityName || target.entityName;
-      return `{ pageType: ${JSON.stringify(target.pageType)}, entityName: ${JSON.stringify(effectiveEntityName)}, entityId: ${entityIdExpr} }`;
+      break;
+    case 'SelectedRow':
+      if (trigger.kind === 'MainGridButton' || trigger.kind === 'SubgridButton') {
+        idExpr = 'selectedRecordId';
+      }
+      break;
+    case 'Static': {
+      const normalized = normalizeGuid(
+        context.staticRecordId || (target.pageType === 'entityrecord' ? target.entityId : '')
+      );
+      idExpr = normalized ? JSON.stringify(normalized) : null;
+      break;
     }
-    case 'entitylist': {
-      const effectiveEntityName = context.entityName || target.entityName;
-      return `{ pageType: ${JSON.stringify(target.pageType)}, entityName: ${JSON.stringify(effectiveEntityName)} }`;
+    case 'None':
+      break;
+  }
+
+  return { idExpr, entityName };
+}
+
+function buildNavigateInput(config: PaneDefinitionConfig): string {
+  const { target } = config;
+  const rc = buildRecordContext(config);
+
+  switch (target.pageType) {
+    case 'custom': {
+      const parts = [
+        `pageType: ${JSON.stringify(target.pageType)}`,
+        `name: ${JSON.stringify(target.name)}`,
+      ];
+      if (rc.idExpr && rc.entityName) {
+        parts.push(`entityName: ${JSON.stringify(rc.entityName)}`);
+        parts.push(`recordId: ${rc.idExpr}`);
+      }
+      return `{ ${parts.join(', ')} }`;
     }
-    case 'webresource':
-      return `{ pageType: ${JSON.stringify(target.pageType)}, webresourceName: ${JSON.stringify(target.name)} }`;
+    case 'entityrecord': {
+      const entityIdExpr = rc.idExpr ?? buildConfiguredRecordIdExpression(config);
+      return `{ pageType: ${JSON.stringify(target.pageType)}, entityName: ${JSON.stringify(rc.entityName)}, entityId: ${entityIdExpr} }`;
+    }
+    case 'entitylist':
+      return `{ pageType: ${JSON.stringify(target.pageType)}, entityName: ${JSON.stringify(rc.entityName)} }`;
+    case 'webresource': {
+      const parts = [
+        `pageType: ${JSON.stringify(target.pageType)}`,
+        `webresourceName: ${JSON.stringify(target.name)}`,
+      ];
+      if (rc.idExpr && rc.entityName) {
+        parts.push(
+          `data: encodeURIComponent(JSON.stringify({ entityName: ${JSON.stringify(rc.entityName)}, recordId: ${rc.idExpr} }))`
+        );
+      }
+      return `{ ${parts.join(', ')} }`;
+    }
     case 'dashboard':
       return `{ pageType: ${JSON.stringify(target.pageType)}, dashboardId: ${JSON.stringify(target.dashboardId)} }`;
-
     case 'search':
       return target.searchText
         ? `{ pageType: ${JSON.stringify(target.pageType)}, searchText: ${JSON.stringify(target.searchText)} }`
