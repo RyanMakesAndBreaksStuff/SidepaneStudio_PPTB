@@ -215,3 +215,62 @@ describe('validate — search page type (WR-001)', () => {
     expect(result.warnings.map(w => w.field)).not.toContain('target.pageType');
   });
 });
+
+describe('validate — record context (CR-001 companion)', () => {
+  it('blocks SelectedRow on a trigger that has no grid', () => {
+    const result = validate(
+      cfg({
+        trigger: { kind: 'FormButton', functionName: 'openPane', namespace: 'Ns', fieldName: '' },
+        context: { mode: 'SelectedRow', entityName: 'account', staticRecordId: '', reuseExistingPane: true },
+      })
+    );
+    expect(result.isValid).toBe(false);
+    expect(result.errors.map(e => e.field)).toContain('context.mode');
+  });
+
+  it('allows SelectedRow on a SubgridButton trigger', () => {
+    const result = validate(
+      cfg({
+        trigger: { kind: 'SubgridButton', functionName: 'openPane', namespace: 'Ns', fieldName: '' },
+        context: { mode: 'SelectedRow', entityName: 'account', staticRecordId: '', reuseExistingPane: true },
+      })
+    );
+    expect(result.errors.map(e => e.field)).not.toContain('context.mode');
+  });
+
+  it('blocks CurrentRecord on ManualJS, which has no ambient record', () => {
+    const result = validate(
+      cfg({
+        trigger: { kind: 'ManualJS', functionName: 'openPane', namespace: 'Ns', fieldName: '' },
+        context: { mode: 'CurrentRecord', entityName: 'account', staticRecordId: '', reuseExistingPane: true },
+      })
+    );
+    expect(result.isValid).toBe(false);
+    expect(result.errors.map(e => e.field)).toContain('context.mode');
+  });
+
+  it('allows None on ManualJS', () => {
+    const result = validate(
+      cfg({
+        trigger: { kind: 'ManualJS', functionName: 'openPane', namespace: 'Ns', fieldName: '' },
+        context: { mode: 'None', entityName: '', staticRecordId: '', reuseExistingPane: true },
+      })
+    );
+    expect(result.errors.map(e => e.field)).not.toContain('context.mode');
+  });
+});
+
+describe('validate — subgrid row-guard warning (IN-001)', () => {
+  it('describes the actual runtime behavior instead of demanding a guard', () => {
+    const result = validate(
+      cfg({
+        trigger: { kind: 'SubgridButton', functionName: 'openPane', namespace: 'Ns', fieldName: '' },
+        context: { mode: 'SelectedRow', entityName: 'account', staticRecordId: '', reuseExistingPane: true },
+      })
+    );
+    const w = result.warnings.find(x => x.field === 'context.mode');
+    expect(w).toBeDefined();
+    expect(w!.message).not.toContain('requires a runtime row-guard');
+    expect(w!.message).toContain('first selected row');
+  });
+});

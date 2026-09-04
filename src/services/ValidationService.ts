@@ -118,12 +118,29 @@ export function validate(config: PaneDefinitionConfig, accessibleTables?: Set<st
     });
   }
 
-  // Warning: SubgridButton + SelectedRow context
+  // Error: the selected context mode resolves to no record for this trigger (CR-001 / contract C1)
+  const GRID_TRIGGERS = ['MainGridButton', 'SubgridButton'];
+  if (config.context.mode === 'SelectedRow' && !GRID_TRIGGERS.includes(config.trigger.kind)) {
+    errors.push({
+      field: 'context.mode',
+      message:
+        'Selected row context is only available from a main grid or subgrid command. Choose a different context mode or trigger.',
+    });
+  }
+  if (config.context.mode === 'CurrentRecord' && config.trigger.kind === 'ManualJS') {
+    errors.push({
+      field: 'context.mode',
+      message:
+        'Console / Manual scripts run outside a form or grid, so there is no current record. Use Static record ID or None.',
+    });
+  }
+
+  // Warning: SubgridButton + SelectedRow context (IN-001 — describe behavior, not a to-do)
   if (config.trigger.kind === 'SubgridButton' && config.context.mode === 'SelectedRow') {
     warnings.push({
       field: 'context.mode',
       message:
-        'SubgridButton with SelectedRow context requires a runtime row-guard in the generated code.',
+        'The generated script uses the first selected row. It exits without opening a pane when no row is selected, and ignores rows beyond the first.',
     });
   }
 

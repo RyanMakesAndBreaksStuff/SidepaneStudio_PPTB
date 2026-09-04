@@ -304,14 +304,39 @@ export function ConfigurePanel({
           />
         </Field>
 
+        {context.mode !== 'None' && (
+          <Field
+            label="Table name"
+            hint="Logical name of the record's table — required before a custom page or web resource receives record context"
+            error={vErrors['context.entityName']}
+          >
+            <Input
+              value={context.entityName}
+              onChange={v => patch('context', 'entityName', v)}
+              placeholder="account"
+              error={!!vErrors['context.entityName']}
+            />
+          </Field>
+        )}
+
+        {context.mode !== 'None' &&
+          !context.entityName.trim() &&
+          (target.pageType === 'custom' || target.pageType === 'webresource') && (
+            <Callout type="info" icon="ℹ">
+              Without a table name the generated script omits record context entirely — the pane opens with no record.
+            </Callout>
+          )}
+
         {(context.mode === 'Static' ||
           (trigger.kind === 'ManualJS' && target.pageType === 'entityrecord')) && (
           <>
-            <Field label="Table name" hint="Logical name of the record's table" error={vErrors['context.entityName']}>
-              <Input value={context.entityName} onChange={v => patch('context', 'entityName', v)} placeholder="account" error={!!vErrors['context.entityName']} />
-            </Field>
             <Field label="Record ID" hint="GUID of the specific record" error={vErrors['context.staticRecordId']}>
-              <Input value={context.staticRecordId} onChange={v => patch('context', 'staticRecordId', v)} placeholder="00000000-0000-0000-0000-000000000000" error={!!vErrors['context.staticRecordId']} />
+              <Input
+                value={context.staticRecordId}
+                onChange={v => patch('context', 'staticRecordId', v)}
+                placeholder="00000000-0000-0000-0000-000000000000"
+                error={!!vErrors['context.staticRecordId']}
+              />
             </Field>
             <Callout type="warn" icon="⚠">
               This record ID is environment-specific and will not transfer automatically to other environments. You must update it after importing this definition.
