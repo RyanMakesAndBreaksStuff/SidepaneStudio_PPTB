@@ -159,7 +159,7 @@ function buildGetOrCreateBody(config: PaneDefinitionConfig, indent = '  '): stri
   const stateAssign = buildStateAssignment(config);
   const paneIdJson = JSON.stringify(pane.paneId);
   const reuseCheck = context.reuseExistingPane
-    ? `${indent}var existing = Xrm.App.sidePanes.getPane(${paneIdJson});\n${indent}if (existing) { existing.select(); return; }\n`
+    ? `${indent}var existing = Xrm.App.sidePanes.getPane(${paneIdJson});\n${indent}if (existing) { existing.select(); await existing.navigate(${navInput}); return; }\n`
     : `${indent}var existing = Xrm.App.sidePanes.getPane(${paneIdJson});\n${indent}if (existing) { existing.close(); await Promise.resolve(); }\n`;
 
   const closeOthersBlock = config.behavior.closeOthers
