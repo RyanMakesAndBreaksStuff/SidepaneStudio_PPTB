@@ -75,3 +75,10 @@ describe('SidePaneHelper.open — createPane options (contract C4/C3)', () => {
     expect(f.xrm.Navigation.openErrorDialog).toHaveBeenCalled();
   });
 });
+
+describe('SidePaneHelper — global attachment', () => {
+  it('publishes SidePaneHelper.open on the window', async () => {
+    await import('../runtime/index');
+    expect(typeof (globalThis as any).SidePaneHelper?.open).toBe('function');
+  });
+});
