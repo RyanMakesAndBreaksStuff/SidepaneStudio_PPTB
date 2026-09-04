@@ -154,6 +154,7 @@ describe('buildNavigateInput — pageType branches', () => {
       cfg({
         trigger: { kind: 'FormOnLoad' } as any,
         target: { pageType: 'entityrecord', entityName: 'account', entityId: '' },
+        context: { mode: 'CurrentRecord', entityName: 'account', staticRecordId: '', reuseExistingPane: true },
       })
     );
     expect(code).toContain('pageType: "entityrecord"');
@@ -166,6 +167,7 @@ describe('buildNavigateInput — pageType branches', () => {
       cfg({
         trigger: { kind: 'FormButton' } as any,
         target: { pageType: 'entityrecord', entityName: 'account', entityId: '' },
+        context: { mode: 'CurrentRecord', entityName: 'account', staticRecordId: '', reuseExistingPane: true },
       })
     );
     expect(code).toContain('primaryControl.data.entity.getId()');
@@ -177,6 +179,7 @@ describe('buildNavigateInput — pageType branches', () => {
       cfg({
         trigger: { kind: 'MainGridButton' } as any,
         target: { pageType: 'entityrecord', entityName: 'account', entityId: '' },
+        context: { mode: 'CurrentRecord', entityName: 'account', staticRecordId: '', reuseExistingPane: true },
       })
     );
     expect(code).toContain('selectedRows.getLength() === 0');
@@ -190,6 +193,7 @@ describe('buildNavigateInput — pageType branches', () => {
       cfg({
         trigger: { kind: 'SubgridButton' } as any,
         target: { pageType: 'entityrecord', entityName: 'account', entityId: '' },
+        context: { mode: 'CurrentRecord', entityName: 'account', staticRecordId: '', reuseExistingPane: true },
       })
     );
     expect(code).toContain('var selectedRecordId = selectedRows.get(0).getData().getEntity().getId();');
@@ -472,5 +476,89 @@ describe('generateLibraryScript', () => {
     const code = generateLibraryScript(cfg({ pane: { badgeValue: 0 } as any }));
     expect(isValidJS(code)).toBe(true);
     expect(code).not.toContain('badge');
+  });
+});
+
+describe('buildNavigateInput — record context (CR-001)', () => {
+  it('default config (custom page + CurrentRecord + FormButton) emits recordId and entityName', () => {
+    const code = generateBasicScript(
+      cfg({ context: { mode: 'CurrentRecord', entityName: 'account', staticRecordId: '', reuseExistingPane: true } })
+    );
+    expect(code).toContain('pageType: "custom"');
+    expect(code).toContain('entityName: "account"');
+    expect(code).toContain('recordId: primaryControl.data.entity.getId()');
+  });
+
+  it('custom page omits both record fields when context.mode is None', () => {
+    const code = generateBasicScript(
+      cfg({ context: { mode: 'None', entityName: 'account', staticRecordId: '', reuseExistingPane: true } })
+    );
+    expect(code).toContain('pageType: "custom"');
+    expect(code).not.toContain('recordId');
+    expect(code).not.toContain('entityName');
+  });
+
+  it('custom page omits both record fields when entityName is unknown', () => {
+    const code = generateBasicScript(
+      cfg({ context: { mode: 'CurrentRecord', entityName: '', staticRecordId: '', reuseExistingPane: true } })
+    );
+    expect(code).not.toContain('recordId');
+  });
+
+  it('custom page + FormOnLoad uses formContext', () => {
+    const code = generateBasicScript(
+      cfg({
+        trigger: { kind: 'FormOnLoad', functionName: 'openPane', namespace: 'Contoso', fieldName: '' },
+        context: { mode: 'CurrentRecord', entityName: 'contact', staticRecordId: '', reuseExistingPane: true },
+      })
+    );
+    expect(code).toContain('recordId: formContext.data.entity.getId()');
+  });
+
+  it('custom page + SelectedRow + SubgridButton uses selectedRecordId', () => {
+    const code = generateBasicScript(
+      cfg({
+        trigger: { kind: 'SubgridButton', functionName: 'openPane', namespace: 'Contoso', fieldName: '' },
+        context: { mode: 'SelectedRow', entityName: 'contact', staticRecordId: '', reuseExistingPane: true },
+      })
+    );
+    expect(code).toContain('recordId: selectedRecordId');
+  });
+
+  it('custom page + Static emits the normalized GUID literal', () => {
+    const code = generateBasicScript(
+      cfg({
+        context: {
+          mode: 'Static',
+          entityName: 'account',
+          staticRecordId: '{AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE}',
+          reuseExistingPane: true,
+        },
+      })
+    );
+    expect(code).toContain('recordId: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"');
+  });
+
+  it('webresource emits URL-encoded JSON data when a record resolves', () => {
+    const code = generateBasicScript(
+      cfg({
+        target: { pageType: 'webresource', name: 'new_mypage.html' },
+        context: { mode: 'CurrentRecord', entityName: 'account', staticRecordId: '', reuseExistingPane: true },
+      })
+    );
+    expect(code).toContain('webresourceName: "new_mypage.html"');
+    expect(code).toContain(
+      'data: encodeURIComponent(JSON.stringify({ entityName: "account", recordId: primaryControl.data.entity.getId() }))'
+    );
+  });
+
+  it('webresource omits data when context.mode is None', () => {
+    const code = generateBasicScript(
+      cfg({
+        target: { pageType: 'webresource', name: 'new_mypage.html' },
+        context: { mode: 'None', entityName: 'account', staticRecordId: '', reuseExistingPane: true },
+      })
+    );
+    expect(code).not.toContain('data:');
   });
 });
