@@ -436,14 +436,35 @@ describe('buildPaneOptions — isSelected and canClose', () => {
     expect(code).not.toContain('canClose: omitted');
   });
 
-  it('badgeValue is emitted when non-zero', () => {
-    const code = generateBasicScript(cfg({ pane: { badgeValue: 5 } as any }));
-    expect(code).toContain('badge: 5');
+  it('never emits isResizable — it is not a documented paneOption', () => {
+    for (const isResizable of [true, false]) {
+      const code = generateBasicScript(cfg({ pane: { isResizable } as any }));
+      expect(code).not.toContain('isResizable');
+    }
   });
 
-  it('badgeValue is omitted when zero', () => {
+  it('badge is assigned on the pane after navigate, never inside createPane', () => {
+    const code = generateBasicScript(cfg({ pane: { badgeValue: 5 } as any }));
+    expect(isValidJS(code)).toBe(true);
+    expect(code).toContain('pane.badge = 5;');
+    expect(code).not.toContain('badge: 5');
+    expect(code.indexOf('pane.navigate(')).toBeLessThan(code.indexOf('pane.badge = 5;'));
+  });
+
+  it('badgeValue of zero emits no badge assignment', () => {
     const code = generateBasicScript(cfg({ pane: { badgeValue: 0 } as any }));
     expect(code).not.toContain('badge');
+  });
+
+  it('imageSrc is prefixed with WebResources/ when unprefixed', () => {
+    const code = generateBasicScript(cfg({ pane: { imageSrc: 'sps_/icons/myicon.svg' } as any }));
+    expect(code).toContain('imageSrc: "WebResources/sps_/icons/myicon.svg"');
+  });
+
+  it('imageSrc already prefixed with WebResources/ is left alone', () => {
+    const code = generateBasicScript(cfg({ pane: { imageSrc: 'WebResources/sps_/icons/myicon.svg' } as any }));
+    expect(code).toContain('imageSrc: "WebResources/sps_/icons/myicon.svg"');
+    expect(code).not.toContain('WebResources/WebResources/');
   });
 });
 
