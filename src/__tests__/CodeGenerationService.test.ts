@@ -578,3 +578,16 @@ describe('buildNavigateInput — record context (CR-001)', () => {
     expect(code).not.toContain('data:');
   });
 });
+
+describe('generateBasicScript — error surfacing (WR-005)', () => {
+  for (const kind of ['FormOnLoad', 'FormButton', 'MainGridButton', 'SubgridButton', 'ManualJS', 'FormOnChange'] as const) {
+    it(`${kind} opens an error dialog as well as logging`, () => {
+      const code = generateBasicScript(
+        cfg({ trigger: { kind, fieldName: kind === 'FormOnChange' ? 'new_field' : '' } as any })
+      );
+      expect(isValidJS(code)).toBe(true);
+      expect(code).toContain('console.error(');
+      expect(code).toContain('Xrm.Navigation.openErrorDialog({ message: e.message })');
+    });
+  }
+});
