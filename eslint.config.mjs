@@ -68,4 +68,14 @@ export default [
       },
     },
   },
+  {
+    ...typescriptEslint.configs.disableTypeChecked,
+    files: ["src/runtime/sidepane.runtime.js"],
+    languageOptions: {
+      ecmaVersion: 2017,
+      sourceType: "script",
+      parserOptions: { project: false, projectService: false },
+      globals: { globalThis: "readonly" },
+    },
+  },
 ];

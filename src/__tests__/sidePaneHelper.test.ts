@@ -1,5 +1,14 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { open, __setXrm } from '../runtime/sidePaneHelper';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import runtimeSource from '../runtime/sidepane.runtime.js?raw';
+import type { SidePaneHelperOptions } from '../runtime/sidePaneHelper';
+
+let open: (options: SidePaneHelperOptions) => Promise<void>;
+beforeEach(() => {
+  vi.stubGlobal('SidePaneHelper', undefined);
+  (0, eval)(runtimeSource);
+  open = (globalThis as unknown as { SidePaneHelper: { open: typeof open } }).SidePaneHelper.open;
+});
+afterEach(() => { vi.unstubAllGlobals(); });
 
 function fakeXrm() {
   const pane = { paneId: 'p', select: vi.fn(), close: vi.fn(), navigate: vi.fn().mockResolvedValue(undefined), badge: 0 };
@@ -14,7 +23,7 @@ function fakeXrm() {
 
 describe('SidePaneHelper.open — createPane options (contract C4/C3)', () => {
   let f: ReturnType<typeof fakeXrm>;
-  beforeEach(() => { f = fakeXrm(); __setXrm(f.xrm as any); });
+  beforeEach(() => { f = fakeXrm(); vi.stubGlobal('Xrm', f.xrm); });
 
   it('forwards only documented paneOptions to createPane', async () => {
     await open({ paneId: 'p', title: 'T', width: 600, pageType: 'custom', name: 'sps_Page', badge: 3, closeOthers: true });
@@ -58,7 +67,7 @@ describe('SidePaneHelper.open — createPane options (contract C4/C3)', () => {
     await open({ paneId: 'p', pageType: 'custom', name: 'sps_Page' });
     expect(f.xrm.App.sidePanes.state).toBe(1);
 
-    const g = fakeXrm(); __setXrm(g.xrm as any);
+    const g = fakeXrm(); vi.stubGlobal('Xrm', g.xrm);
     await open({ paneId: 'p', pageType: 'custom', name: 'sps_Page', expandOnOpen: false });
     expect(g.xrm.App.sidePanes.state).toBe(0);
   });
@@ -77,8 +86,8 @@ describe('SidePaneHelper.open — createPane options (contract C4/C3)', () => {
 });
 
 describe('SidePaneHelper — global attachment', () => {
-  it('publishes SidePaneHelper.open on the window', async () => {
-    await import('../runtime/index');
-    expect(typeof (globalThis as any).SidePaneHelper?.open).toBe('function');
+  it('publishes SidePaneHelper.open on the window', () => {
+    expect(typeof open).toBe('function');
+    expect(runtimeSource).not.toMatch(/\b(?:import|export)\s/);
   });
 });

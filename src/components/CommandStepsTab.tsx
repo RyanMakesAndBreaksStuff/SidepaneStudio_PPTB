@@ -6,6 +6,7 @@ import { theme } from '../theme/tokens';
 import { PaneDefinitionConfig, TriggerKind } from '../types/PaneDefinitionConfig';
 import { Field } from './Field';
 import { Callout } from './Callout';
+import { RUNTIME_WEB_RESOURCE_NAME } from '../constants';
 
 const TRIGGER_SUMMARIES: Record<TriggerKind, string> = {
   FormOnLoad:     'Opens automatically when a record form loads.',
@@ -48,6 +49,10 @@ const DEPLOY_STEPS: Record<TriggerKind, string[]> = {
     'Paste into the Console tab and press Enter.',
   ],
 };
+
+for (const steps of Object.values(DEPLOY_STEPS)) {
+  steps.unshift(`If using Shared Library output, select <strong>Shared Library → Download runtime</strong>, upload the file as <code>${RUNTIME_WEB_RESOURCE_NAME}</code>, and publish it. Load that library before the generated handler; Basic Script output needs no shared runtime.`);
+}
 
 export { TRIGGER_SUMMARIES, DEPLOY_STEPS };
 

@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { OutputPanel } from '../components/OutputPanel';
 import { DEFAULT_CONFIG } from '../types/PaneDefinitionConfig';
 import { xrmStub } from './testHelpers';
+import runtimeSource from '../runtime/sidepane.runtime.js?raw';
 
 let root: Root | undefined;
 let host: HTMLDivElement | undefined;
@@ -25,6 +26,7 @@ afterEach(async () => {
     });
   }
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
   host?.remove();
   root = undefined;
   host = undefined;
@@ -41,6 +43,63 @@ async function clickLibraryTab() {
     tab.click();
   });
 }
+
+async function clickRuntimeDownload() {
+  await render(<OutputPanel config={DEFAULT_CONFIG} xrm={xrmStub()}
+    validation={{ isValid: true, errors: [], warnings: [] }} />);
+  await clickLibraryTab();
+  const button = Array.from(host!.querySelectorAll('button')).find(
+    b => b.textContent === 'Download runtime');
+  expect(button, 'Shared Library must expose Download runtime').toBeDefined();
+  await act(async () => { button!.click(); });
+}
+
+describe('runtime download', () => {
+  it('saves JavaScript through the native dialog', async () => {
+    const saveFile = vi.fn().mockResolvedValue('C:/sidepane.runtime.js');
+    vi.stubGlobal('toolboxAPI', { fileSystem: { saveFile } });
+    await clickRuntimeDownload();
+    expect(saveFile).toHaveBeenCalledWith('sidepane.runtime.js', runtimeSource);
+  });
+
+  it('respects native cancellation without a browser download', async () => {
+    const saveFile = vi.fn().mockResolvedValue(null);
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    vi.stubGlobal('toolboxAPI', { fileSystem: { saveFile } });
+    await clickRuntimeDownload();
+    expect(saveFile).toHaveBeenCalledOnce();
+    expect(click).not.toHaveBeenCalled();
+  });
+
+  it('downloads a Blob and releases its URL when the native API is absent', async () => {
+    vi.stubGlobal('toolboxAPI', undefined);
+    const createObjectURL = vi.fn().mockReturnValue('blob:runtime');
+    const revokeObjectURL = vi.fn();
+    vi.stubGlobal('URL', { createObjectURL, revokeObjectURL });
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+      expect(this.download).toBe('sidepane.runtime.js');
+      expect(this.href).toBe('blob:runtime');
+      expect(this.isConnected).toBe(true);
+    });
+    await clickRuntimeDownload();
+    expect(click).toHaveBeenCalledOnce();
+    expect(createObjectURL.mock.calls[0][0]).toBeInstanceOf(Blob);
+    expect(createObjectURL.mock.calls[0][0].type).toBe('text/javascript;charset=utf-8');
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:runtime');
+    expect(host!.querySelector('a[download]')).toBeNull();
+  });
+
+  it('shows native save errors without silently starting another download', async () => {
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    vi.stubGlobal('toolboxAPI', { fileSystem: {
+      saveFile: vi.fn().mockRejectedValue(new Error('Disk unavailable')),
+    } });
+    await clickRuntimeDownload();
+    expect(host!.textContent).toContain('Could not download runtime: Disk unavailable');
+    expect(click).not.toHaveBeenCalled();
+  });
+});
 
 describe('OutputPanel', () => {
   it('shows generated FormOnChange entitylist code with double-quoted pageType', async () => {
