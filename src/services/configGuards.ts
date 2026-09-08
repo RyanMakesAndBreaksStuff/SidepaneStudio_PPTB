@@ -45,12 +45,37 @@ export function parseStoredConfig(raw: unknown): PaneDefinitionConfig | null {
     return null;
   }
 
+  let normalizedTarget = target as PaneDefinitionConfig['target'];
+  const normalizedContext = { ...DEFAULT_CONFIG.context, ...(isRecord(context) ? context : {}) };
+  if (typeof normalizedContext.staticRecordId !== 'string') return null;
+  if (target.pageType === 'entityrecord' || target.pageType === 'entitylist') {
+    if (typeof target.entityName !== 'string') return null;
+    const keys = target.pageType === 'entityrecord'
+      ? ['formId', 'tabName', 'data', 'entityId'] : ['viewId', 'viewType'];
+    if (keys.some(key => target[key] !== undefined && typeof target[key] !== 'string')) return null;
+    if (target.pageType === 'entityrecord') {
+      normalizedContext.staticRecordId ||= (target.entityId as string | undefined) ?? '';
+      normalizedTarget = {
+        pageType: 'entityrecord', entityName: target.entityName,
+        formId: (target.formId as string | undefined) ?? '',
+        tabName: (target.tabName as string | undefined) ?? '',
+        data: (target.data as string | undefined) ?? '',
+      };
+    } else {
+      if (target.viewType !== undefined && !['', 'savedquery', 'userquery'].includes(target.viewType as string)) return null;
+      normalizedTarget = {
+        pageType: 'entitylist', entityName: target.entityName,
+        viewId: (target.viewId as string | undefined) ?? '',
+        viewType: (target.viewType as '' | 'savedquery' | 'userquery' | undefined) ?? '',
+      };
+    }
+  }
   // Sections added after a config was stored are back-filled from defaults.
   return {
     pane: { ...DEFAULT_CONFIG.pane, ...(isRecord(parsed.pane) ? parsed.pane : {}) },
-    target: target as PaneDefinitionConfig['target'],
+    target: normalizedTarget,
     trigger: { ...DEFAULT_CONFIG.trigger, ...trigger } as PaneDefinitionConfig['trigger'],
-    context: { ...DEFAULT_CONFIG.context, ...(isRecord(context) ? context : {}) },
+    context: normalizedContext,
     behavior: { ...DEFAULT_CONFIG.behavior, ...(isRecord(parsed.behavior) ? parsed.behavior : {}) },
   };
 }

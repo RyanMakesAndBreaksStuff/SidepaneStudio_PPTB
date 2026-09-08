@@ -108,6 +108,8 @@ describe('OutputPanel', () => {
       target: {
         pageType: 'entitylist' as const,
         entityName: 'contact',
+        viewId: '',
+        viewType: '' as const,
       },
       trigger: {
         ...DEFAULT_CONFIG.trigger,

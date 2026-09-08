@@ -33,14 +33,14 @@ const mockTarget = {
   pageType: 'entityrecord' as const,
   name: '',
   entityName: 'account',
-  entityId: '',
+  formId: '', tabName: '', data: '',
 };
 
 const contactTarget = {
   pageType: 'entityrecord' as const,
   name: '',
   entityName: 'contact',
-  entityId: '',
+  formId: '', tabName: '', data: '',
 };
 
 const mockValidation = { isValid: true, errors: [], warnings: [] };
@@ -145,7 +145,7 @@ describe('NativeMdaFrame', () => {
       pageType: 'entityrecord' as const,
       name: '',
       entityName: 'sales order',
-      entityId: '',
+      formId: '', tabName: '', data: '',
     };
 
     await render(

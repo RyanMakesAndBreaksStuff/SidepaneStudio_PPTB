@@ -22,8 +22,8 @@ export interface PaneConfig {
 
 export type TargetConfig =
   | { pageType: 'custom';       name: string }
-  | { pageType: 'entityrecord'; entityName: string; entityId: string }
-  | { pageType: 'entitylist';   entityName: string }
+  | { pageType: 'entityrecord'; entityName: string; formId: string; tabName: string; data: string }
+  | { pageType: 'entitylist'; entityName: string; viewId: string; viewType: '' | 'savedquery' | 'userquery' }
   | { pageType: 'webresource';  name: string }
   | { pageType: 'dashboard';    dashboardId: string; dashboardName: string }
   | { pageType: 'search';       searchText: string };

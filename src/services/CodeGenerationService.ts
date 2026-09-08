@@ -37,9 +37,7 @@ function buildCatchBody(label: string, indent: string): string {
 }
 
 function buildConfiguredRecordIdExpression(config: PaneDefinitionConfig): string {
-  const configuredId =
-    config.context.staticRecordId ||
-    (config.target.pageType === 'entityrecord' ? config.target.entityId : '');
+  const configuredId = config.context.staticRecordId;
   const normalized = normalizeGuid(configuredId);
   if (normalized) return JSON.stringify(normalized);
 
@@ -97,9 +95,7 @@ function buildRecordContext(config: PaneDefinitionConfig): RecordContext {
       }
       break;
     case 'Static': {
-      const normalized = normalizeGuid(
-        context.staticRecordId || (target.pageType === 'entityrecord' ? target.entityId : '')
-      );
+      const normalized = normalizeGuid(context.staticRecordId);
       idExpr = normalized ? JSON.stringify(normalized) : null;
       break;
     }
@@ -108,6 +104,20 @@ function buildRecordContext(config: PaneDefinitionConfig): RecordContext {
   }
 
   return { idExpr, entityName };
+}
+
+function buildTargetParameterParts(target: PaneDefinitionConfig['target']): string[] {
+  const parts: string[] = [];
+  if (target.pageType === 'entitylist' && target.viewId.trim()) {
+    parts.push(`viewId: ${JSON.stringify(normalizeGuid(target.viewId) ?? target.viewId)}`);
+    parts.push(`viewType: ${JSON.stringify(target.viewType)}`);
+  }
+  if (target.pageType === 'entityrecord') {
+    if (target.formId.trim()) parts.push(`formId: ${JSON.stringify(normalizeGuid(target.formId) ?? target.formId)}`);
+    if (target.tabName.trim()) parts.push(`tabName: ${JSON.stringify(target.tabName.trim())}`);
+    if (target.data.trim()) parts.push(`data: JSON.parse(${JSON.stringify(target.data)})`);
+  }
+  return parts;
 }
 
 function buildNavigateInput(config: PaneDefinitionConfig): string {
@@ -128,10 +138,19 @@ function buildNavigateInput(config: PaneDefinitionConfig): string {
     }
     case 'entityrecord': {
       const entityIdExpr = rc.idExpr ?? buildConfiguredRecordIdExpression(config);
-      return `{ pageType: ${JSON.stringify(target.pageType)}, entityName: ${JSON.stringify(rc.entityName)}, entityId: ${entityIdExpr} }`;
+      return `{ ${[
+        `pageType: ${JSON.stringify(target.pageType)}`,
+        `entityName: ${JSON.stringify(rc.entityName)}`,
+        `entityId: ${entityIdExpr}`,
+        ...buildTargetParameterParts(target),
+      ].join(', ')} }`;
     }
     case 'entitylist':
-      return `{ pageType: ${JSON.stringify(target.pageType)}, entityName: ${JSON.stringify(rc.entityName)} }`;
+      return `{ ${[
+        `pageType: ${JSON.stringify(target.pageType)}`,
+        `entityName: ${JSON.stringify(rc.entityName)}`,
+        ...buildTargetParameterParts(target),
+      ].join(', ')} }`;
     case 'webresource': {
       const parts = [
         `pageType: ${JSON.stringify(target.pageType)}`,
@@ -351,7 +370,7 @@ export function generateLibraryScript(config: PaneDefinitionConfig): string {
     }
   } else if (target.pageType === 'entityrecord') {
     optLines.push(`    entityName: ${JSON.stringify(rc.entityName)}`);
-    if (libIdExpr) optLines.push(`    entityId: ${libIdExpr}`);
+    optLines.push(`    entityId: ${libIdExpr ?? buildConfiguredRecordIdExpression(config)}`);
   } else if (target.pageType === 'entitylist') {
     optLines.push(`    entityName: ${JSON.stringify(rc.entityName)}`);
   } else if (target.pageType === 'dashboard') {
@@ -359,6 +378,8 @@ export function generateLibraryScript(config: PaneDefinitionConfig): string {
   } else if (target.pageType === 'search' && target.searchText) {
     optLines.push(`    searchText: ${JSON.stringify(target.searchText)}`);
   }
+
+  optLines.push(...buildTargetParameterParts(target).map(part => `    ${part}`));
 
   // Appearance + behavior keys — contract C4. isResizable is deliberately absent.
   if (pane.width !== 480) optLines.push(`    width: ${pane.width}`);
@@ -381,9 +402,13 @@ export function generateLibraryScript(config: PaneDefinitionConfig): string {
         ? ''
         : 'primaryControl';
 
+  const gridContext = trigger.kind === 'MainGridButton' || trigger.kind === 'SubgridButton'
+    ? `  var selectedRows = primaryControl.getGrid().getSelectedRows();\n  if (!selectedRows || selectedRows.getLength() === 0) { return; }\n  var selectedRecordId = selectedRows.get(0).getData().getEntity().getId();\n`
+    : '';
+
   return `var ${ns} = ${ns} || {};
 ${ns}.${fn} = function(${param}) {
-  SidePaneHelper.open({
+${gridContext}  SidePaneHelper.open({
 ${optLines.join(',\n')}
   });
 };`;

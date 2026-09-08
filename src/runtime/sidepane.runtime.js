@@ -32,9 +32,16 @@
       case 'entityrecord':
         nav.entityName = o.entityName;
         if (o.entityId !== undefined) nav.entityId = o.entityId;
+        if (o.formId) nav.formId = o.formId;
+        if (o.tabName) nav.tabName = o.tabName;
+        if (o.data !== undefined) nav.data = o.data;
         break;
       case 'entitylist':
         nav.entityName = o.entityName;
+        if (o.viewId) {
+          nav.viewId = o.viewId;
+          nav.viewType = o.viewType;
+        }
         break;
       case 'dashboard':
         nav.dashboardId = o.dashboardId;

@@ -17,6 +17,7 @@ function makeMetadataService(overrides: Partial<MetadataService> = {}): Metadata
   return {
     listAccessibleTables: vi.fn().mockResolvedValue({ status: 'ok', tables: [] }),
     listAccessibleDashboards: vi.fn().mockResolvedValue({ status: 'ok', dashboards: [] }),
+    listViewsForEntity: vi.fn().mockResolvedValue({ status: 'ok', views: [] }),
     invalidate: vi.fn(),
     ...overrides,
   } as unknown as MetadataService;
@@ -313,7 +314,7 @@ describe('ConfigurePanel behavior controls', () => {
   it('exposes the static record ID field for ManualJS + entityrecord', async () => {
     const config: PaneDefinitionConfig = {
       ...DEFAULT_CONFIG,
-      target: { pageType: 'entityrecord', entityName: 'account', entityId: '' },
+      target: { pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '' },
       trigger: { ...DEFAULT_CONFIG.trigger, kind: 'ManualJS' },
       context: { ...DEFAULT_CONFIG.context, mode: 'CurrentRecord' },
     };
@@ -440,7 +441,7 @@ describe('ConfigurePanel — record context table name (CR-001)', () => {
     await renderPanel(
       withMode('None', {
         trigger: { kind: 'ManualJS', functionName: 'openPane', namespace: 'Ns', fieldName: '' },
-        target: { pageType: 'entityrecord', entityName: 'account', entityId: '' },
+        target: { pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '' },
       }) as any
     );
     expect(findInputByPlaceholder('00000000-0000-0000-0000-000000000000')).toBeTruthy();

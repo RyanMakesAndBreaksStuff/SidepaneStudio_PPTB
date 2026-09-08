@@ -1,5 +1,6 @@
 import { PaneDefinitionConfig } from '../types/PaneDefinitionConfig';
 import { normalizeGuid } from './odataGuards';
+import { parseFormData } from './formData';
 
 export interface ValidationError {
   field: string;
@@ -156,14 +157,33 @@ export function validate(config: PaneDefinitionConfig, accessibleTables?: Set<st
     });
   }
 
+  if (config.target.pageType === 'entitylist') {
+    if (config.target.viewId.trim() && !normalizeGuid(config.target.viewId)) {
+      errors.push({ field: 'target.viewId', message: 'View ID must be a valid GUID.' });
+    }
+    if (config.target.viewId.trim() && !['savedquery', 'userquery'].includes(config.target.viewType)) {
+      errors.push({ field: 'target.viewType', message: 'Select a view type when a view ID is set.' });
+    }
+  }
+  if (config.target.pageType === 'entityrecord') {
+    if (config.target.formId.trim() && !normalizeGuid(config.target.formId)) {
+      errors.push({ field: 'target.formId', message: 'Form ID must be a valid GUID.' });
+    }
+    try {
+      parseFormData(config.target.data);
+    } catch {
+      errors.push({ field: 'target.data', message: 'Form data must be a JSON object.' });
+    }
+  }
+
   // Error: entityrecord navigation that resolves its ID from configuration rather than
   // from the trigger. Mirrors buildConfiguredRecordIdExpression in CodeGenerationService —
   // without a normalizable GUID the generated script's only effect is to throw.
   if (
     config.target.pageType === 'entityrecord' &&
-    (config.context.mode === 'Static' || config.trigger.kind === 'ManualJS')
+    (config.context.mode === 'Static' || config.context.mode === 'None' || config.trigger.kind === 'ManualJS')
   ) {
-    const configuredId = config.context.staticRecordId || config.target.entityId;
+    const configuredId = config.context.staticRecordId;
     if (!normalizeGuid(configuredId)) {
       errors.push({
         field: 'context.staticRecordId',

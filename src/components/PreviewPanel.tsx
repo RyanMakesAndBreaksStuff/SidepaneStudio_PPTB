@@ -207,7 +207,7 @@ export const PreviewPanel = React.memo(function PreviewPanel({
                   hostTarget={{
                     pageType: 'entityrecord',
                     entityName: previewHostEntity,
-                    entityId: '',
+                    formId: '', tabName: '', data: '',
                   }}
                   paneTarget={config.target}
                   validation={validation}

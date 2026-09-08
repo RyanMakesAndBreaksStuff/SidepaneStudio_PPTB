@@ -37,6 +37,9 @@ export interface FormSelectorProps {
    */
   metadataService: Pick<MetadataService, 'listAccessibleTables' | 'invalidate'>;
   onFormSelected: (selection: FormSelection | null) => void;
+  selectedFormId?: string;
+  hideEntityPicker?: boolean;
+  disabled?: boolean;
 }
 
 export function FormSelector({
@@ -48,17 +51,23 @@ export function FormSelector({
   formXmlService,
   metadataService,
   onFormSelected,
+  selectedFormId: controlledFormId,
+  hideEntityPicker = false,
+  disabled = false,
 }: FormSelectorProps): React.ReactElement {
   const { isDark } = useTheme();
   const T = theme(isDark);
   const [forms, setForms] = useState<FormMeta[]>([]);
-  const [selectedFormId, setSelectedFormId] = useState<string>('');
+  const [localFormId, setSelectedFormId] = useState<string>('');
+  const selectedFormId = controlledFormId ?? localFormId;
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>('');
   const [retryCount, setRetryCount] = useState(0);
   const requestIdRef = useRef(0);
   const onFormSelectedRef = useRef(onFormSelected);
   onFormSelectedRef.current = onFormSelected;
+  const controlledRef = useRef(controlledFormId !== undefined);
+  controlledRef.current = controlledFormId !== undefined;
 
   // Table list state — mirrors TablePicker's loading shape so the combobox
   // can show loading / error / loaded states. Cache is per-MetadataService
@@ -109,14 +118,14 @@ export function FormSelector({
       setSelectedFormId('');
       setLoading(false);
       setError('');
-      onFormSelectedRef.current(null);
+      if (!controlledRef.current) onFormSelectedRef.current(null);
       return;
     }
 
     setLoading(true);
     setError('');
     setSelectedFormId('');
-    onFormSelectedRef.current(null);
+    if (!controlledRef.current) onFormSelectedRef.current(null);
 
     formXmlService.getFormsForEntityResult(entityName).then(result => {
       if (requestIdRef.current !== requestId) return;
@@ -130,7 +139,7 @@ export function FormSelector({
 
       setForms(result.forms);
       setLoading(false);
-      if (result.forms.length === 1) {
+      if (!controlledRef.current && result.forms.length === 1) {
         setSelectedFormId(result.forms[0].id);
         onFormSelectedRef.current({ entityLogicalName: entityName, formId: result.forms[0].id });
       }
@@ -140,6 +149,7 @@ export function FormSelector({
       setLoading(false);
       setError('Could not load main forms.');
     });
+    return () => { requestIdRef.current += 1; };
   }, [entityName, formXmlService, retryCount]);
 
   const handleFormChange = (formId: string) => {
@@ -186,72 +196,74 @@ export function FormSelector({
         minWidth: 0,
       }}
     >
-      <div style={{ flex: '1 1 160px', minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, marginBottom: 2 }}>
-          <div style={{ ...labelStyle, margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span>Preview Entity</span>
-            {configuredEntity && entityName && configuredEntity !== entityName && (
-              <span
-                title={`Preview is showing a different entity than the configured pane target (${configuredEntity}).`}
+      {!hideEntityPicker && (
+        <div style={{ flex: '1 1 160px', minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, marginBottom: 2 }}>
+            <div style={{ ...labelStyle, margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span>Preview Entity</span>
+              {configuredEntity && entityName && configuredEntity !== entityName && (
+                <span
+                  title={`Preview is showing a different entity than the configured pane target (${configuredEntity}).`}
+                  style={{
+                    fontFamily: T.mono,
+                    fontSize: 9,
+                    fontWeight: 600,
+                    color: T.warning,
+                    padding: '1px 5px',
+                    border: `1px solid ${T.warning}`,
+                    borderRadius: 999,
+                    letterSpacing: '.4px',
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  diverged
+                </span>
+              )}
+            </div>
+            {configuredEntity && configuredEntity !== entityName && onUseConfigured && (
+              <button
+                type="button"
+                onClick={onUseConfigured}
+                title={`Set preview entity to ${configuredEntity}`}
                 style={{
-                  fontFamily: T.mono,
-                  fontSize: 9,
-                  fontWeight: 600,
-                  color: T.warning,
-                  padding: '1px 5px',
-                  border: `1px solid ${T.warning}`,
-                  borderRadius: 999,
-                  letterSpacing: '.4px',
-                  textTransform: 'uppercase',
+                  border: 'none',
+                  background: 'transparent',
+                  padding: 0,
+                  margin: 0,
+                  color: T.accent,
+                  fontFamily: T.font,
+                  fontSize: 11,
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  textTransform: 'none',
+                  letterSpacing: 0,
                 }}
               >
-                diverged
-              </span>
+                <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M3 8a5 5 0 0 1 8.5-3.5L13 6" />
+                  <path d="M13 3v3h-3" />
+                  <path d="M13 8a5 5 0 0 1-8.5 3.5L3 10" />
+                  <path d="M3 13v-3h3" />
+                </svg>
+                Use {configuredEntity}
+              </button>
             )}
           </div>
-          {configuredEntity && configuredEntity !== entityName && onUseConfigured && (
-            <button
-              type="button"
-              onClick={onUseConfigured}
-              title={`Set preview entity to ${configuredEntity}`}
-              style={{
-                border: 'none',
-                background: 'transparent',
-                padding: 0,
-                margin: 0,
-                color: T.accent,
-                fontFamily: T.font,
-                fontSize: 11,
-                fontWeight: 500,
-                cursor: 'pointer',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 4,
-                textTransform: 'none',
-                letterSpacing: 0,
-              }}
-            >
-              <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M3 8a5 5 0 0 1 8.5-3.5L13 6" />
-                <path d="M13 3v3h-3" />
-                <path d="M13 8a5 5 0 0 1-8.5 3.5L3 10" />
-                <path d="M3 13v-3h3" />
-              </svg>
-              Use {configuredEntity}
-            </button>
-          )}
+          <TableComboBox
+            value={entityName}
+            onChange={commitEntity}
+            tables={tablesState.status === 'loaded' ? tablesState.tables : []}
+            loading={tablesState.status === 'loading'}
+            error={tablesState.status === 'error' ? tablesState.reason : undefined}
+            onRetry={retryTables}
+            placeholder={entityNameHint ? `e.g. ${entityNameHint}` : 'Select a table…'}
+            ariaLabel="Preview entity"
+          />
         </div>
-        <TableComboBox
-          value={entityName}
-          onChange={commitEntity}
-          tables={tablesState.status === 'loaded' ? tablesState.tables : []}
-          loading={tablesState.status === 'loading'}
-          error={tablesState.status === 'error' ? tablesState.reason : undefined}
-          onRetry={retryTables}
-          placeholder={entityNameHint ? `e.g. ${entityNameHint}` : 'Select a table…'}
-          ariaLabel="Preview entity"
-        />
-      </div>
+      )}
       <div style={{ flex: '1 1 160px', minWidth: 0 }}>
         <div style={labelStyle}>Form</div>
         {loading ? (
@@ -265,6 +277,7 @@ export function FormSelector({
               type="button"
               onClick={() => setRetryCount(count => count + 1)}
               style={{ ...fieldStyle, width: 'auto', cursor: 'pointer' }}
+              disabled={disabled}
             >
               Retry
             </button>
@@ -273,11 +286,14 @@ export function FormSelector({
           <div style={{ ...fieldStyle, color: T.fg3 }}>No main forms found</div>
         ) : (
           <select
+            aria-label="Form"
             value={selectedFormId}
             onChange={e => handleFormChange(e.target.value)}
             style={fieldStyle}
+            disabled={disabled}
           >
-            <option value="">— select form —</option>
+            <option value="">{controlledFormId === undefined ? '— select form —' : 'Default form'}</option>
+            {selectedFormId && !forms.some(f => f.id === selectedFormId) && <option value={selectedFormId}>Configured form (unavailable)</option>}
             {forms.map(f => (
               <option key={f.id} value={f.id}>{f.name}</option>
             ))}

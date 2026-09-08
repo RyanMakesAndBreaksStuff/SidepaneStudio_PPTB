@@ -15,13 +15,13 @@ describe('ValidationService errors', () => {
   });
 
   it('errors on entityrecord with empty entityName', () => {
-    const r = validate(cfg({ target: { pageType: 'entityrecord', entityName: '', entityId: '' } }));
+    const r = validate(cfg({ target: { pageType: 'entityrecord', entityName: '', formId: '', tabName: '', data: '' } }));
     expect(r.isValid).toBe(false);
   });
 
   it('keeps missing entityName blocking even when accessible tables are provided', () => {
     const r = validate(
-      cfg({ target: { pageType: 'entityrecord', entityName: '', entityId: '' } }),
+      cfg({ target: { pageType: 'entityrecord', entityName: '', formId: '', tabName: '', data: '' } }),
       new Set(['account'])
     );
     expect(r.isValid).toBe(false);
@@ -108,7 +108,7 @@ describe('ValidationService warnings', () => {
   it('warns on MainGridButton + entityrecord (no single record context)', () => {
     const r = validate(cfg({
       trigger: { kind: 'MainGridButton' } as any,
-      target: { pageType: 'entityrecord', entityName: 'account' } as any,
+      target: { pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '' } as any,
     }));
     expect(r.isValid).toBe(true); // warn-without-blocking
     expect(r.warnings.some(w => w.field === 'target.pageType')).toBe(true);
@@ -117,7 +117,7 @@ describe('ValidationService warnings', () => {
 
   it('does not warn when selected table is accessible', () => {
     const r = validate(
-      cfg({ target: { pageType: 'entitylist', entityName: 'account' } }),
+      cfg({ target: { pageType: 'entitylist', entityName: 'account', viewId: '', viewType: '' } }),
       new Set(['account'])
     );
     expect(r.warnings.some(w => w.field === 'target.entityName')).toBe(false);
@@ -125,7 +125,7 @@ describe('ValidationService warnings', () => {
 
   it('warns without blocking when selected table is no longer accessible', () => {
     const r = validate(
-      cfg({ target: { pageType: 'entityrecord', entityName: 'account', entityId: '' } }),
+      cfg({ target: { pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '' } }),
       new Set(['contact'])
     );
     expect(r.isValid).toBe(true);
@@ -134,7 +134,7 @@ describe('ValidationService warnings', () => {
 
   it('describes MainGridButton record resolution accurately', () => {
     const r = validate(cfg({
-      target: { pageType: 'entityrecord', entityName: 'account', entityId: '' },
+      target: { pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '' },
       trigger: { kind: 'MainGridButton' } as any,
     }));
     const warning = r.warnings.find(w => w.field === 'target.pageType');
@@ -147,7 +147,7 @@ describe('ValidationService warnings', () => {
 describe('static record ID validation', () => {
   const entityRecordManual = (staticRecordId: string, mode: 'Static' | 'CurrentRecord') =>
     cfg({
-      target: { pageType: 'entityrecord', entityName: 'account', entityId: '' },
+      target: { pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '' },
       trigger: { kind: 'ManualJS' } as any,
       context: { mode, staticRecordId } as any,
     });
@@ -171,7 +171,7 @@ describe('static record ID validation', () => {
 
   it('does not fire when the trigger supplies the record at runtime', () => {
     const config = cfg({
-      target: { pageType: 'entityrecord', entityName: 'account', entityId: '' },
+      target: { pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '' },
       trigger: { kind: 'FormOnLoad' } as any,
       context: { mode: 'CurrentRecord', staticRecordId: '' } as any,
     });

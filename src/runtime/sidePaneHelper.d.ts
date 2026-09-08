@@ -20,7 +20,11 @@ export interface SidePaneHelperOptions {
   recordId?: string;
   dashboardId?: string;
   searchText?: string;
-  data?: string;
+  viewId?: string;
+  viewType?: 'savedquery' | 'userquery';
+  formId?: string;
+  tabName?: string;
+  data?: string | Record<string, unknown>;
   badge?: number;
   reuseExistingPane?: boolean;
   expandOnOpen?: boolean;

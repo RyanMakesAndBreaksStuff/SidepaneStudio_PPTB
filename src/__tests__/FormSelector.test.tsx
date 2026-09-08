@@ -102,4 +102,29 @@ describe('FormSelector', () => {
     expect(host?.textContent).toContain('Could not load main forms');
     expect(getFormsForEntityResult).toHaveBeenCalledWith('account');
   });
+
+  it('keeps a controlled default form until the user selects and follows external resets', async () => {
+    const getFormsForEntityResult = vi.fn().mockResolvedValue({ ok: true, forms: [{ id: 'form-1', name: 'Main Form' }] });
+    const formXmlService = { getFormsForEntityResult } as unknown as FormXmlService;
+    const onFormSelected = vi.fn();
+    const element = (selectedFormId: string) => <FormSelector
+      entityName="account" onEntityNameChange={vi.fn()} formXmlService={formXmlService}
+      metadataService={mockMetadataService} onFormSelected={onFormSelected}
+      selectedFormId={selectedFormId} hideEntityPicker />;
+    await render(element(''));
+    expect(onFormSelected).not.toHaveBeenCalled();
+    expect(host?.textContent).not.toContain('Preview Entity');
+    const select = host!.querySelector<HTMLSelectElement>('select[aria-label="Form"]')!;
+    expect(select.value).toBe('');
+    await act(async () => {
+      select.value = 'form-1';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    expect(onFormSelected).toHaveBeenCalledWith({ entityLogicalName: 'account', formId: 'form-1' });
+    await act(async () => root!.render(element('form-1')));
+    expect(select.value).toBe('form-1');
+    await act(async () => root!.render(element('')));
+    expect(select.value).toBe('');
+    expect(getFormsForEntityResult).toHaveBeenCalledTimes(1);
+  });
 });

@@ -7,12 +7,15 @@ import { PaneDefinitionConfig, TargetConfig, PageType } from '../types/PaneDefin
 import { MetadataFilterConfig } from '../types/MetadataFilterConfig';
 import { ValidationResult } from '../services/ValidationService';
 import { MetadataService } from '../services/MetadataService';
+import { FormXmlService } from '../services/FormXmlService';
 import { Section } from './Section';
 import { Field } from './Field';
 import { Input } from './Input';
 import { Select } from './Select';
 import { TablePicker } from './TablePicker';
 import { DashboardPicker } from './DashboardPicker';
+import { FormSelector } from './FormSelector';
+import { ViewPicker } from './ViewPicker';
 import { Toggle } from './Toggle';
 import { ChoiceGroup } from './ChoiceGroup';
 import { Callout } from './Callout';
@@ -26,6 +29,7 @@ export interface ConfigurePanelProps {
   validation: ValidationResult;
   readOnly?: boolean;
   metadataService: MetadataService;
+  formXmlService?: FormXmlService;
   onAccessibleTablesChange?: (tables: Set<string> | undefined) => void;
   metadataFilterConfig?: MetadataFilterConfig;
   defaultMetadataFilterConfig?: MetadataFilterConfig;
@@ -38,8 +42,8 @@ export interface ConfigurePanelProps {
 function resetTarget(pageType: PageType): TargetConfig {
   switch (pageType) {
     case 'custom':       return { pageType: 'custom', name: '' };
-    case 'entityrecord': return { pageType: 'entityrecord', entityName: '', entityId: '' };
-    case 'entitylist':   return { pageType: 'entitylist', entityName: '' };
+    case 'entityrecord': return { pageType: 'entityrecord', entityName: '', formId: '', tabName: '', data: '' };
+    case 'entitylist': return { pageType: 'entitylist', entityName: '', viewId: '', viewType: '' };
     case 'webresource':  return { pageType: 'webresource', name: '' };
     case 'dashboard':    return { pageType: 'dashboard', dashboardId: '', dashboardName: '' };
     case 'search':       return { pageType: 'search', searchText: '' };
@@ -77,6 +81,7 @@ export function ConfigurePanel({
   validation,
   readOnly,
   metadataService,
+  formXmlService,
   onAccessibleTablesChange,
   metadataFilterConfig,
   defaultMetadataFilterConfig,
@@ -146,7 +151,10 @@ export function ConfigurePanel({
                 onChange(prev => {
                   const t = prev.target;
                   if (t.pageType !== 'entityrecord' && t.pageType !== 'entitylist') return prev;
-                  return { ...prev, target: { ...t, entityName: v } };
+                  if (t.entityName === v) return prev;
+                  return { ...prev, target: t.pageType === 'entityrecord'
+                    ? { ...t, entityName: v, formId: '', tabName: '', data: '' }
+                    : { ...t, entityName: v, viewId: '', viewType: '' } };
                 })
               }
               metadataService={metadataService}
@@ -156,6 +164,31 @@ export function ConfigurePanel({
             />
           </Field>
         )}
+
+        {target.pageType === 'entitylist' && <Field label="View" error={vErrors['target.viewId'] || vErrors['target.viewType']}>
+          <ViewPicker entityName={target.entityName} value={target.viewId} viewType={target.viewType} metadataService={metadataService} disabled={readOnly}
+            onChange={view => onChange(prev => prev.target.pageType !== 'entitylist' ? prev : {
+              ...prev, target: { ...prev.target, viewId: view?.id ?? '', viewType: view?.viewType ?? '' },
+            })} />
+        </Field>}
+        {target.pageType === 'entityrecord' && <>
+          {formXmlService && <Field label="Form" error={vErrors['target.formId']}>
+            <FormSelector entityName={target.entityName} onEntityNameChange={() => undefined}
+              selectedFormId={target.formId} hideEntityPicker disabled={readOnly}
+              formXmlService={formXmlService} metadataService={metadataService}
+              onFormSelected={selection => onChange(prev => prev.target.pageType !== 'entityrecord' ? prev : {
+                ...prev, target: { ...prev.target, formId: selection?.formId ?? '', tabName: '' },
+              })} />
+          </Field>}
+          <Field label="Tab name" hint="Logical name of the form tab to focus">
+            <Input value={target.tabName} disabled={readOnly} onChange={tabName => onChange(prev => prev.target.pageType !== 'entityrecord' ? prev : { ...prev, target: { ...prev.target, tabName } })} />
+          </Field>
+          <Field label="Form data" hint="Optional JSON object of form parameters" error={vErrors['target.data']}>
+            <textarea aria-label="Form data" value={target.data} disabled={readOnly} rows={4}
+              style={{ width: '100%', boxSizing: 'border-box', color: T.fg1, background: T.surface1, border: `1px solid ${T.stroke1}`, borderRadius: T.rS }}
+              onChange={event => { const data = event.target.value; onChange(prev => prev.target.pageType !== 'entityrecord' ? prev : { ...prev, target: { ...prev.target, data } }); }} />
+          </Field>
+        </>}
 
         {target.pageType === 'webresource' && (
           <>
@@ -328,7 +361,8 @@ export function ConfigurePanel({
           )}
 
         {(context.mode === 'Static' ||
-          (trigger.kind === 'ManualJS' && target.pageType === 'entityrecord')) && (
+          (target.pageType === 'entityrecord' &&
+            (context.mode === 'None' || trigger.kind === 'ManualJS'))) && (
           <>
             <Field label="Record ID" hint="GUID of the specific record" error={vErrors['context.staticRecordId']}>
               <Input
