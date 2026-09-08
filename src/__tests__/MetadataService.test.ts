@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { MetadataService } from '../services/MetadataService';
+import { buildViewsForEntityPath } from '../services/odataGuards';
 import type { IXrmContext } from '../adapters/PptbContextAdapter';
 import { DEFAULT_METADATA_FILTER_CONFIG } from '../types/MetadataFilterConfig';
 
@@ -394,5 +395,45 @@ describe('MetadataService', () => {
       if (result.status !== 'error') return;
       expect(result.reason).toBe('Dashboard fetch failed');
     });
+  });
+});
+
+describe('view metadata', () => {
+  it('merges system and personal views with their query source and XML', async () => {
+    const webApiGet = vi.fn()
+      .mockResolvedValueOnce([{
+        savedqueryid: 'aaaaaaaa-0000-0000-0000-000000000001',
+        name: 'System accounts', fetchxml: '<fetch><entity name="account"/></fetch>',
+      }])
+      .mockResolvedValueOnce([{
+        userqueryid: 'bbbbbbbb-0000-0000-0000-000000000002',
+        name: 'My accounts', fetchxml: '<fetch top="3"><entity name="account"/></fetch>',
+      }]);
+    const result = await new MetadataService({ webApiGet }).listViewsForEntity('account', 'secondary');
+    expect(webApiGet.mock.calls).toEqual([
+      ["savedqueries?$select=name,savedqueryid,fetchxml&$filter=returnedtypecode eq 'account' and querytype eq 0&$orderby=name asc", 'secondary'],
+      ["userqueries?$select=name,userqueryid,fetchxml&$filter=returnedtypecode eq 'account' and querytype eq 0&$orderby=name asc", 'secondary'],
+    ]);
+    expect(result).toEqual({ status: 'ok', views: [
+      { id: 'bbbbbbbb-0000-0000-0000-000000000002', name: 'My accounts', viewType: 'userquery', fetchXml: '<fetch top="3"><entity name="account"/></fetch>' },
+      { id: 'aaaaaaaa-0000-0000-0000-000000000001', name: 'System accounts', viewType: 'savedquery', fetchXml: '<fetch><entity name="account"/></fetch>' },
+    ] });
+  });
+
+  it('rejects invalid logical names before making either request', async () => {
+    const webApiGet = vi.fn();
+    const service = new MetadataService({ webApiGet });
+    for (const entity of ['', "account' or true", 'account/contacts']) {
+      expect(buildViewsForEntityPath(entity, 'savedquery')).toBeNull();
+      expect(await service.listViewsForEntity(entity)).toEqual({ status: 'error', reason: 'Invalid table logical name.' });
+    }
+    expect(webApiGet).not.toHaveBeenCalled();
+  });
+
+  it('distinguishes an empty result from a failed query', async () => {
+    const empty = new MetadataService({ webApiGet: vi.fn().mockResolvedValue([]) });
+    expect(await empty.listViewsForEntity('account')).toEqual({ status: 'ok', views: [] });
+    const failed = new MetadataService({ webApiGet: vi.fn().mockRejectedValue(new Error('Access denied')) });
+    expect(await failed.listViewsForEntity('account')).toEqual({ status: 'error', reason: 'Access denied' });
   });
 });
