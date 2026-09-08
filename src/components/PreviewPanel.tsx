@@ -9,6 +9,7 @@ import { FormXmlService, FormModel } from '../services/FormXmlService';
 import { MetadataService } from '../services/MetadataService';
 import { FormSelector, FormSelection } from './FormSelector';
 import { FormXmlRenderer } from './FormXmlRenderer';
+import { GridPreview } from './GridPreview';
 import { MockMDAShell } from './MockMDAShell';
 import { NativeMdaFrame } from './NativeMdaFrame';
 import { PreviewSizeProvider, usePreviewSize } from './previewSize';
@@ -24,7 +25,7 @@ export interface PreviewPanelProps {
   xrm: IXrmContext;
 }
 
-type PreviewMode = 'mock' | 'form';
+type PreviewMode = 'mock' | 'form' | 'grid';
 
 type FormState =
   | { status: 'idle' }
@@ -41,6 +42,11 @@ export const PreviewPanel = React.memo(function PreviewPanel({
   const { isDark } = useTheme();
   const T = theme(isDark);
   const [mode, setMode] = useState<PreviewMode>('mock');
+  const gridEligible = config.target.pageType === 'entitylist' ||
+    config.trigger.kind === 'MainGridButton' || config.trigger.kind === 'SubgridButton';
+  useEffect(() => {
+    if (!gridEligible && mode === 'grid') setMode('mock');
+  }, [gridEligible, mode]);
   const [formState, setFormState] = useState<FormState>({ status: 'idle' });
   // Preview-local host entity. Independent of config.target.entityName so the
   // preview can mimic the pane sitting on a different table than the one the
@@ -102,6 +108,8 @@ export const PreviewPanel = React.memo(function PreviewPanel({
     }
   }, []);
 
+  const configuredGridEntity = 'entityName' in config.target ? config.target.entityName.trim() : '';
+  const gridEntity = configuredGridEntity || previewHostEntity;
   const tabStyle = (active: boolean): React.CSSProperties => ({
     padding: '6px 14px',
     border: 'none',
@@ -124,6 +132,7 @@ export const PreviewPanel = React.memo(function PreviewPanel({
         <div style={{ display: 'flex', borderBottom: `1px solid ${T.stroke1}`, background: T.surface2, flexShrink: 0 }}>
           <button style={tabStyle(mode === 'mock')} onClick={() => setMode('mock')}>Mock</button>
           <button style={tabStyle(mode === 'form')} onClick={() => setMode('form')}>Form</button>
+          {gridEligible && <button style={tabStyle(mode === 'grid')} onClick={() => setMode('grid')}>Grid</button>}
         </div>
 
         {/* Mock mode */}
@@ -144,6 +153,13 @@ export const PreviewPanel = React.memo(function PreviewPanel({
             <PreviewMeta config={config} />
           </div>
         )}
+
+        {/* Grid mode */}
+        {mode === 'grid' && gridEligible && <GridPreview
+          key={JSON.stringify([gridEntity, config.target, config.trigger.kind])}
+          config={config} validation={validation} metadataService={metadataService}
+          entityName={gridEntity} allowEntityChange={!configuredGridEntity} onEntityNameChange={setPreviewHostEntity}
+        />}
 
         {/* Form mode */}
         {mode === 'form' && (
