@@ -1,6 +1,6 @@
-import { defineConfig } from 'vite'
+import { defineConfig, Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
-import type { Plugin } from 'vite'
+
 
 // Strips type="module" and crossorigin; moves scripts before </body>.
 // Required: PPTB loads tools via iframe srcdoc — no ES module support.
@@ -24,11 +24,12 @@ function fixHtmlForPPTB(): Plugin {
   }
 }
 
-export default defineConfig({
-  plugins: [react(), fixHtmlForPPTB()],
-  base: './',
-  publicDir: 'public', 
-  build: {
+export default defineConfig(({ mode }) => ({
+   plugins: [react(), fixHtmlForPPTB()],
+   base: './',
+   publicDir: 'public',
+    build: {
+       sourcemap: mode === 'development', // emitted only in development builds
     rollupOptions: {
       output: {
         format: 'iife',
@@ -37,4 +38,4 @@ export default defineConfig({
       }
     }
   }
-})
+}));
