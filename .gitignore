@@ -23,3 +23,5 @@
 *.pem
 secrets/
 /remainingreviewitems.md
+/.codegraph
+/.gitignore
