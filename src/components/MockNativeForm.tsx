@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useFlTokens } from './flTokens';
+import { FL } from './flTokens';
 import { usePreviewSize } from './previewSize';
 
 interface FieldRowProps {
@@ -12,7 +12,6 @@ interface FieldRowProps {
 }
 
 function FieldRow({ label, value, required, suffix, stacked }: FieldRowProps): React.ReactElement {
-  const FL = useFlTokens();
   if (stacked) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
@@ -52,7 +51,6 @@ function FieldRow({ label, value, required, suffix, stacked }: FieldRowProps): R
 }
 
 function SectionCard({ title, children }: { title: string; children: React.ReactNode }): React.ReactElement {
-  const FL = useFlTokens();
   return (
     <section
       style={{
@@ -73,7 +71,6 @@ function SectionCard({ title, children }: { title: string; children: React.React
 }
 
 function Timeline({ stacked }: { stacked: boolean }): React.ReactElement {
-  const FL = useFlTokens();
   return (
     <SectionCard title="Timeline">
       <div style={{ height: 32, borderRadius: 4, background: FL.fieldBg, color: FL.fgMuted, display: 'flex', alignItems: 'center', padding: '0 12px', fontSize: 13 }}>
@@ -100,7 +97,6 @@ function Timeline({ stacked }: { stacked: boolean }): React.ReactElement {
 }
 
 function RelatedColumn({ stacked }: { stacked: boolean }): React.ReactElement {
-  const FL = useFlTokens();
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 }}>
       <SectionCard title="Primary Contact">

@@ -1,85 +1,25 @@
-import { useTheme } from '../contexts/ThemeContext';
-import { theme } from '../theme/tokens';
-import type { TokenSet } from '../theme/types';
-
-/**
- * Preview token names retained for the mock form/grid consumers. Values are
- * always derived from the authoritative theme TokenSet.
- */
-export interface FLTokens {
-  appBg: string;
-  brand: string;
-  brandDark: string;
-  cardBg: string;
-  fieldBg: string;
-  font: string;
-  fg: string;
-  fg2: string;
-  fgLabel: string;
-  fgMuted: string;
-  fgSubtle: string;
-  green: string;
-  navBg: string;
-  pageBg: string;
-  purple: string;
-  shadow: string;
-  shadowPanel: string;
-  stroke: string;
-  strokeStrong: string;
-  surface: string;
-  tabActiveBorder: string;
-  tabActiveFg: string;
-  tabFg: string;
-  headerBg: string;
-  headerFg: string;
-  paneBg: string;
-  infoBg: string;
-  success: string;
-  warning: string;
-  error: string;
-}
-
-// This is the requested light-mode preview color for muted/label text.
-const LIGHT_PREVIEW_MUTED = '#5BD08D';
-
-export function getFlTokens(T: TokenSet, isDark: boolean): FLTokens {
-  const previewMuted = isDark ? T.accentAlt : LIGHT_PREVIEW_MUTED;
-
-  return {
-    appBg: T.pageBg,
-    brand: T.accent,
-    brandDark: T.accentAlt,
-    cardBg: T.surface1,
-    fieldBg: T.surface3,
-    font: T.font,
-    fg: T.fg1,
-    fg2: T.fg2,
-    fgLabel: previewMuted,
-    fgMuted: previewMuted,
-    fgSubtle: T.fg3,
-    green: T.success,
-    navBg: T.accentBg,
-    pageBg: T.pageBg,
-    purple: T.info,
-    shadow: T.shadow2,
-    shadowPanel: T.shadow8,
-    stroke: T.stroke1,
-    strokeStrong: T.strokeAcc,
-    surface: T.surface1,
-    tabActiveBorder: T.accent,
-    tabActiveFg: T.accent,
-    tabFg: previewMuted,
-    headerBg: T.accent,
-    headerFg: T.surface1,
-    paneBg: T.surface1,
-    infoBg: T.infoBg,
-    success: T.success,
-    warning: T.warning,
-    error: T.error,
-  };
-}
-
-export function useFlTokens(): FLTokens {
-  const { isDark } = useTheme();
-  return getFlTokens(theme(isDark), isDark);
-}
+export const FL = {
+  appBg: '#F5F5F5',
+  brand: '#0078D4',
+  brandDark: '#005A9E',
+  cardBg: '#FFFFFF',
+  fieldBg: '#F3F2F1',
+  font: "'Segoe UI Variable','Segoe UI',system-ui,sans-serif",
+  fg: '#201F1E',
+  fg2: '#323130',
+  fgLabel: '#605E5C',
+  fgMuted: '#605E5C',
+  fgSubtle: '#8A8886',
+  green: '#107C10',
+  navBg: '#FAFAFA',
+  pageBg: 'transparent',
+  purple: '#A426D1',
+  shadow: '0 1px 2px rgba(0,0,0,.14),0 0 2px rgba(0,0,0,.10)',
+  shadowPanel: '0 8px 20px rgba(0,0,0,.16),0 0 2px rgba(0,0,0,.10)',
+  stroke: '#EDEBE9',
+  strokeStrong: '#D2D0CE',
+  surface: '#FFFFFF',
+  tabActiveBorder: '#0078D4',
+  tabActiveFg: '#0078D4',
+  tabFg: '#605E5C',
+} as const;

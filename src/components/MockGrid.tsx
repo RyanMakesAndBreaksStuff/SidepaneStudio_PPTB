@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useFlTokens } from './flTokens';
+import { FL } from './flTokens';
 
 const FORMATTED = '@OData.Community.Display.V1.FormattedValue';
 function cellText(row: Record<string, unknown>, key: string): string {
@@ -14,7 +14,6 @@ export function MockGrid({ rows, viewName, selectedRow, onCommand }: {
   selectedRow: number | null;
   onCommand: (index: number) => void;
 }): React.ReactElement {
-  const FL = useFlTokens();
   const columns = Array.from(new Set(rows.flatMap(row => Object.keys(row)
     .filter(key => !key.includes('@') || key.endsWith(FORMATTED))
     .map(key => key.endsWith(FORMATTED) ? key.slice(0, -FORMATTED.length) : key))));

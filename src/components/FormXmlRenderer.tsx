@@ -2,9 +2,8 @@ import * as React from 'react';
 import { useState } from 'react';
 import { FormModel, FormSection, FormCell } from '../services/FormXmlService';
 
-import { useFlTokens } from './flTokens';
+import { FL } from './flTokens';
 function DisabledInput({ type }: { type: FormCell['fieldType'] }): React.ReactElement {
-  const FL = useFlTokens();
   const base: React.CSSProperties = {
     width: '100%',
     minHeight: 30,
@@ -32,7 +31,6 @@ function DisabledInput({ type }: { type: FormCell['fieldType'] }): React.ReactEl
 }
 
 function CellView({ cell }: { cell: FormCell }): React.ReactElement {
-  const FL = useFlTokens();
   if (cell.empty) return <div />;
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'minmax(130px, 38%) minmax(0, 1fr)', alignItems: 'center', gap: 14, minWidth: 0 }}>
@@ -45,7 +43,6 @@ function CellView({ cell }: { cell: FormCell }): React.ReactElement {
 }
 
 function SectionView({ section }: { section: FormSection }): React.ReactElement {
-  const FL = useFlTokens();
   return (
     <section
       style={{
@@ -99,7 +96,6 @@ interface FormXmlRendererProps {
 }
 
 export function FormXmlRenderer({ model }: FormXmlRendererProps): React.ReactElement {
-  const FL = useFlTokens();
   const [activeTab, setActiveTab] = useState(0);
 
   if (model.tabs.length === 0) {

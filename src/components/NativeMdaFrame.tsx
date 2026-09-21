@@ -4,7 +4,7 @@ import { ValidationResult } from '../services/ValidationService';
 import { FormModel } from '../services/FormXmlService';
 import { PaneOverlay } from './PaneOverlay';
 import { usePreviewSize, PreviewSizeMode } from './previewSize';
-import { useFlTokens } from './flTokens';
+import { FL } from './flTokens';
 
 const PREVIEW_FRAME_MIN_H = 440;
 const PREVIEW_FRAME_MAX_H = 760;
@@ -39,7 +39,6 @@ function CommandButton({
   primary?: boolean;
   overflow?: boolean;
 }): React.ReactElement {
-  const FL = useFlTokens();
   return (
     <button
       type="button"
@@ -101,7 +100,6 @@ const Glyph = {
 }
 
 function AppHeader({ mode }: { mode: PreviewSizeMode }): React.ReactElement {
-  const FL = useFlTokens();
   const showSubtitle = mode !== 'compact';
 
   return (
@@ -159,7 +157,6 @@ function AppHeader({ mode }: { mode: PreviewSizeMode }): React.ReactElement {
 }
 
 function SiteMap({ mode }: { mode: PreviewSizeMode }): React.ReactElement | null {
-  const FL = useFlTokens();
   // Show the sitemap only at wide widths. At regular it'd be a hollow rail
   // (we removed the single-letter placeholders), and compact already hides it.
   if (mode !== 'wide') return null;
@@ -223,7 +220,6 @@ function capitalizeEntity(entityName: string): string {
 }
 
 function FormHeader({ target, mode, formModel }: { target: TargetConfig; mode: PreviewSizeMode; formModel?: FormModel }): React.ReactElement {
-  const FL = useFlTokens();
   const entityLabel =
     (target.pageType === 'entityrecord' || target.pageType === 'entitylist')
       ? target.entityName
@@ -389,7 +385,6 @@ function FormHeader({ target, mode, formModel }: { target: TargetConfig; mode: P
 }
 
 export function NativeMdaFrame({ pane, hostTarget, paneTarget, validation, caption, formModel, children }: NativeMdaFrameProps): React.ReactElement {
-  const FL = useFlTokens();
   const { mode } = usePreviewSize();
   const isCompact = mode === 'compact';
 
