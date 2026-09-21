@@ -245,11 +245,18 @@ function PreviewMeta({ config }: { config: PaneDefinitionConfig }): React.ReactE
   const { isDark } = useTheme();
   const T = theme(isDark);
   const { mode } = usePreviewSize();
-  const items: [string, string][] = useMemo(() => ([
-    ['Width',  `${config.pane.width}px`],
-    ['Header', config.pane.hideHeader ? 'Hidden' : 'Visible'],
-    ['Close',  config.pane.canClose ? '✓' : '–'],
-  ]), [config.pane.width, config.pane.hideHeader, config.pane.canClose]);
+  const items: [string, string][] = useMemo(() => {
+    const rows: [string, string][] = [
+      ['Width', `${config.pane.width}px`],
+      ['Header', config.pane.hideHeader ? 'Hidden' : 'Visible'],
+      ['Close', config.pane.canClose ? '✓' : '–'],
+    ];
+    const target = config.target;
+    if (target.pageType === 'entitylist' && target.viewId) rows.push(['View', target.viewId]);
+    if (target.pageType === 'entityrecord' && target.formId) rows.push(['Form', target.formId]);
+    if (target.pageType === 'entityrecord' && target.tabName.trim()) rows.push(['Tab', target.tabName.trim()]);
+    return rows;
+  }, [config.pane.width, config.pane.hideHeader, config.pane.canClose, config.target]);
 
   return (
     <div
