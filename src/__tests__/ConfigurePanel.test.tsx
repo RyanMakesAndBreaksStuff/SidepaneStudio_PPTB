@@ -17,6 +17,7 @@ function makeMetadataService(overrides: Partial<MetadataService> = {}): Metadata
   return {
     listAccessibleTables: vi.fn().mockResolvedValue({ status: 'ok', tables: [] }),
     listAccessibleDashboards: vi.fn().mockResolvedValue({ status: 'ok', dashboards: [] }),
+    listViewsForEntity: vi.fn().mockResolvedValue({ status: 'ok', views: [] }),
     invalidate: vi.fn(),
     ...overrides,
   } as unknown as MetadataService;
@@ -313,7 +314,7 @@ describe('ConfigurePanel behavior controls', () => {
   it('exposes the static record ID field for ManualJS + entityrecord', async () => {
     const config: PaneDefinitionConfig = {
       ...DEFAULT_CONFIG,
-      target: { pageType: 'entityrecord', entityName: 'account', entityId: '' },
+      target: { pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '' },
       trigger: { ...DEFAULT_CONFIG.trigger, kind: 'ManualJS' },
       context: { ...DEFAULT_CONFIG.context, mode: 'CurrentRecord' },
     };
@@ -323,7 +324,39 @@ describe('ConfigurePanel behavior controls', () => {
   });
 });
 
+describe('ConfigurePanel — LookupTagClick', () => {
+  it('shows a lookup control name field with the lookup placeholder', async () => {
+    await render(
+      <ConfigurePanel
+        config={{ ...DEFAULT_CONFIG, trigger: { ...DEFAULT_CONFIG.trigger, kind: 'LookupTagClick', fieldName: '' } as any }}
+        onChange={() => {}}
+        validation={{ isValid: true, errors: [], warnings: [] }}
+        metadataService={makeMetadataService()}
+      />
+    );
+    await expandSection('How makers launch this pane');
+
+    expect(host?.textContent).toContain('Lookup control name');
+    expect(findInputByPlaceholder('parentaccountid')).toBeTruthy();
+  });
+});
+
 describe('ConfigurePanel — pane appearance (WR-002)', () => {
+  it('shows the blocking error for an invalid pane width', async () => {
+    const config = { ...DEFAULT_CONFIG, pane: { ...DEFAULT_CONFIG.pane, width: 1201 as any } };
+    await render(
+      <ConfigurePanel
+        config={config}
+        onChange={() => {}}
+        validation={validate(config)}
+        metadataService={makeMetadataService()}
+      />
+    );
+    await expandSection('Pane Appearance');
+
+    expect(host?.textContent).toContain('Pane width must be between 300 and 1200 pixels.');
+  });
+
   it('offers no Resizable toggle, because isResizable is not a documented paneOption', async () => {
     await renderPanel({ config: DEFAULT_CONFIG, onChange: vi.fn() });
     await expandSection('Pane Appearance');
@@ -440,7 +473,7 @@ describe('ConfigurePanel — record context table name (CR-001)', () => {
     await renderPanel(
       withMode('None', {
         trigger: { kind: 'ManualJS', functionName: 'openPane', namespace: 'Ns', fieldName: '' },
-        target: { pageType: 'entityrecord', entityName: 'account', entityId: '' },
+        target: { pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '' },
       }) as any
     );
     expect(findInputByPlaceholder('00000000-0000-0000-0000-000000000000')).toBeTruthy();

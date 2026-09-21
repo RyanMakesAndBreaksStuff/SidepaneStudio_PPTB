@@ -7,12 +7,15 @@ import { PaneDefinitionConfig, TargetConfig, PageType } from '../types/PaneDefin
 import { MetadataFilterConfig } from '../types/MetadataFilterConfig';
 import { ValidationResult } from '../services/ValidationService';
 import { MetadataService } from '../services/MetadataService';
+import { FormXmlService } from '../services/FormXmlService';
 import { Section } from './Section';
 import { Field } from './Field';
 import { Input } from './Input';
 import { Select } from './Select';
 import { TablePicker } from './TablePicker';
 import { DashboardPicker } from './DashboardPicker';
+import { FormSelector } from './FormSelector';
+import { ViewPicker } from './ViewPicker';
 import { Toggle } from './Toggle';
 import { ChoiceGroup } from './ChoiceGroup';
 import { Callout } from './Callout';
@@ -26,6 +29,7 @@ export interface ConfigurePanelProps {
   validation: ValidationResult;
   readOnly?: boolean;
   metadataService: MetadataService;
+  formXmlService?: FormXmlService;
   onAccessibleTablesChange?: (tables: Set<string> | undefined) => void;
   metadataFilterConfig?: MetadataFilterConfig;
   defaultMetadataFilterConfig?: MetadataFilterConfig;
@@ -38,8 +42,8 @@ export interface ConfigurePanelProps {
 function resetTarget(pageType: PageType): TargetConfig {
   switch (pageType) {
     case 'custom':       return { pageType: 'custom', name: '' };
-    case 'entityrecord': return { pageType: 'entityrecord', entityName: '', entityId: '' };
-    case 'entitylist':   return { pageType: 'entitylist', entityName: '' };
+    case 'entityrecord': return { pageType: 'entityrecord', entityName: '', formId: '', tabName: '', data: '' };
+    case 'entitylist': return { pageType: 'entitylist', entityName: '', viewId: '', viewType: '' };
     case 'webresource':  return { pageType: 'webresource', name: '' };
     case 'dashboard':    return { pageType: 'dashboard', dashboardId: '', dashboardName: '' };
     case 'search':       return { pageType: 'search', searchText: '' };
@@ -58,10 +62,13 @@ const PAGE_TYPE_OPTIONS = [
 const TRIGGER_OPTIONS = [
   { value: 'FormOnLoad',     label: 'Form on load',                 desc: 'Opens when a record form loads' },
   { value: 'FormButton',     label: 'Command bar button (form)',     desc: 'Wired to a button in the form command bar' },
-  { value: 'MainGridButton', label: 'Command bar button (grid)',     desc: 'Main grid command' },
-  { value: 'SubgridButton',  label: 'Command bar button (subgrid)', desc: 'Subgrid command' },
-  { value: 'ManualJS',       label: 'Console / Manual',             desc: 'Paste into browser console (F12)' },
+  { value: 'MainGridButton',  label: 'Command bar button (grid)',     desc: 'Main grid command' },
+  { value: 'SubgridButton',   label: 'Command bar button (subgrid)', desc: 'Subgrid command' },
+  { value: 'MainGridOnSelect', label: 'Row select (grid)',            desc: 'Opens when a single row is selected in the main grid' },
+  { value: 'SubgridOnSelect',  label: 'Row select (subgrid)',         desc: 'Opens when a single row is selected in a subgrid' },
+  { value: 'ManualJS',        label: 'Console / Manual',             desc: 'Paste into browser console (F12)' },
   { value: 'FormOnChange',   label: 'Field on change',              desc: 'Registers an onChange handler on a specific field' },
+  { value: 'LookupTagClick', label: 'Lookup tag click',              desc: 'Opens when a tag is clicked in a lookup control' },
 ];
 
 const CONTEXT_OPTIONS = [
@@ -77,6 +84,7 @@ export function ConfigurePanel({
   validation,
   readOnly,
   metadataService,
+  formXmlService,
   onAccessibleTablesChange,
   metadataFilterConfig,
   defaultMetadataFilterConfig,
@@ -146,7 +154,10 @@ export function ConfigurePanel({
                 onChange(prev => {
                   const t = prev.target;
                   if (t.pageType !== 'entityrecord' && t.pageType !== 'entitylist') return prev;
-                  return { ...prev, target: { ...t, entityName: v } };
+                  if (t.entityName === v) return prev;
+                  return { ...prev, target: t.pageType === 'entityrecord'
+                    ? { ...t, entityName: v, formId: '', tabName: '', data: '' }
+                    : { ...t, entityName: v, viewId: '', viewType: '' } };
                 })
               }
               metadataService={metadataService}
@@ -156,6 +167,31 @@ export function ConfigurePanel({
             />
           </Field>
         )}
+
+        {target.pageType === 'entitylist' && <Field label="View" error={vErrors['target.viewId'] || vErrors['target.viewType']}>
+          <ViewPicker entityName={target.entityName} value={target.viewId} viewType={target.viewType} metadataService={metadataService} disabled={readOnly}
+            onChange={view => onChange(prev => prev.target.pageType !== 'entitylist' ? prev : {
+              ...prev, target: { ...prev.target, viewId: view?.id ?? '', viewType: view?.viewType ?? '' },
+            })} />
+        </Field>}
+        {target.pageType === 'entityrecord' && <>
+          {formXmlService && <Field label="Form" error={vErrors['target.formId']}>
+            <FormSelector entityName={target.entityName} onEntityNameChange={() => undefined}
+              selectedFormId={target.formId} hideEntityPicker disabled={readOnly}
+              formXmlService={formXmlService} metadataService={metadataService}
+              onFormSelected={selection => onChange(prev => prev.target.pageType !== 'entityrecord' ? prev : {
+                ...prev, target: { ...prev.target, formId: selection?.formId ?? '', tabName: '' },
+              })} />
+          </Field>}
+          <Field label="Tab name" hint="Logical name of the form tab to focus">
+            <Input value={target.tabName} disabled={readOnly} onChange={tabName => onChange(prev => prev.target.pageType !== 'entityrecord' ? prev : { ...prev, target: { ...prev.target, tabName } })} />
+          </Field>
+          <Field label="Form data" hint="Optional JSON object of form parameters" error={vErrors['target.data']}>
+            <textarea aria-label="Form data" value={target.data} disabled={readOnly} rows={4}
+              style={{ width: '100%', boxSizing: 'border-box', color: T.fg1, background: T.surface1, border: `1px solid ${T.stroke1}`, borderRadius: T.rS }}
+              onChange={event => { const data = event.target.value; onChange(prev => prev.target.pageType !== 'entityrecord' ? prev : { ...prev, target: { ...prev.target, data } }); }} />
+          </Field>
+        </>}
 
         {target.pageType === 'webresource' && (
           <>
@@ -240,7 +276,7 @@ export function ConfigurePanel({
           )}
         </Field>
 
-        <Field label="Width" hint={`Min ${MIN_CONFIG_WIDTH}px · Max ${MAX_CONFIG_WIDTH}px · Recommended 400–600px · Current: ${pane.width}px`}>
+        <Field label="Width" error={vErrors['pane.width']} hint={`Min ${MIN_CONFIG_WIDTH}px · Max ${MAX_CONFIG_WIDTH}px · Recommended 400–600px · Current: ${pane.width}px`}>
           <WidthPicker
             value={pane.width}
             onChange={v => patch('pane', 'width', v)}
@@ -282,12 +318,17 @@ export function ConfigurePanel({
           </>
         )}
 
-        {trigger.kind === 'FormOnChange' && (
-          <Field label="Field name" required hint="Logical name of the field to watch for changes" error={vErrors['trigger.fieldName']}>
+        {(trigger.kind === 'FormOnChange' || trigger.kind === 'LookupTagClick') && (
+          <Field
+            label={trigger.kind === 'LookupTagClick' ? 'Lookup control name' : 'Field name'}
+            required
+            hint={trigger.kind === 'LookupTagClick' ? 'Logical name of the lookup control whose tag clicks should open the pane' : 'Logical name of the field to watch for changes'}
+            error={vErrors['trigger.fieldName']}
+          >
             <Input
               value={trigger.fieldName}
               onChange={v => patch('trigger', 'fieldName', v)}
-              placeholder="new_fieldname"
+              placeholder={trigger.kind === 'LookupTagClick' ? 'parentaccountid' : 'new_fieldname'}
               error={!!vErrors['trigger.fieldName']}
             />
           </Field>
@@ -303,6 +344,12 @@ export function ConfigurePanel({
             options={CONTEXT_OPTIONS}
           />
         </Field>
+
+        {trigger.kind === 'LookupTagClick' && (target.pageType === 'custom' || target.pageType === 'entityrecord') && (
+          <Callout type="info" icon="ℹ">
+            The clicked tag supplies the record identity for custom pages and entity records, overriding Current record, Static, or None context at runtime. The selected context mode is not changed automatically.
+          </Callout>
+        )}
 
         {context.mode !== 'None' && (
           <Field
@@ -328,7 +375,8 @@ export function ConfigurePanel({
           )}
 
         {(context.mode === 'Static' ||
-          (trigger.kind === 'ManualJS' && target.pageType === 'entityrecord')) && (
+          (target.pageType === 'entityrecord' &&
+            (context.mode === 'None' || trigger.kind === 'ManualJS') && trigger.kind !== 'LookupTagClick')) && (
           <>
             <Field label="Record ID" hint="GUID of the specific record" error={vErrors['context.staticRecordId']}>
               <Input
@@ -346,7 +394,7 @@ export function ConfigurePanel({
 
         <Toggle
           label="Reuse open pane"
-          desc="Focus instead of reloading if already open"
+          desc={context.reuseExistingPane ? 'Navigate the existing pane to the new page, then select it' : 'Close and recreate the pane when it is already open'}
           checked={context.reuseExistingPane}
           onChange={v => patch('context', 'reuseExistingPane', v)}
         />

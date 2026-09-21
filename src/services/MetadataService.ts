@@ -9,6 +9,7 @@ import {
   buildEntityDefinitionsPath,
   buildSystemDashboardsPath,
   buildUserDashboardsPath,
+  buildViewsForEntityPath,
 } from './odataGuards';
 
 export interface TableInfo {
@@ -22,6 +23,17 @@ export interface DashboardInfo {
   name: string;
   isPersonal: boolean;
 }
+
+export interface ViewInfo {
+  id: string;
+  name: string;
+  viewType: 'savedquery' | 'userquery';
+  fetchXml: string;
+}
+
+export type ViewsForEntityResult =
+  | { status: 'ok'; views: ViewInfo[] }
+  | { status: 'error'; reason: string };
 
 export type AccessibleTablesResult =
   | { status: 'ok'; tables: TableInfo[] }
@@ -162,6 +174,29 @@ export class MetadataService {
     } catch (err) {
       const reason = err instanceof Error ? err.message : 'Unknown error loading dashboards.';
       return { status: 'error', reason };
+    }
+  }
+
+  async listViewsForEntity(
+    entityLogicalName: string,
+    connectionTarget?: 'primary' | 'secondary'
+  ): Promise<ViewsForEntityResult> {
+    const systemPath = buildViewsForEntityPath(entityLogicalName, 'savedquery');
+    const personalPath = buildViewsForEntityPath(entityLogicalName, 'userquery');
+    if (!systemPath || !personalPath) return { status: 'error', reason: 'Invalid table logical name.' };
+    try {
+      const [system, personal] = await Promise.all([
+        this.xrm.webApiGet<{ savedqueryid: string; name: string; fetchxml: string | null }[]>(systemPath, connectionTarget),
+        this.xrm.webApiGet<{ userqueryid: string; name: string; fetchxml: string | null }[]>(personalPath, connectionTarget),
+      ]);
+      const views: ViewInfo[] = [
+        ...system.map(v => ({ id: v.savedqueryid, name: v.name, viewType: 'savedquery' as const, fetchXml: v.fetchxml ?? '' })),
+        ...personal.map(v => ({ id: v.userqueryid, name: v.name, viewType: 'userquery' as const, fetchXml: v.fetchxml ?? '' })),
+      ];
+      views.sort((a, b) => a.name.localeCompare(b.name));
+      return { status: 'ok', views };
+    } catch (error) {
+      return { status: 'error', reason: error instanceof Error ? error.message : String(error) };
     }
   }
 

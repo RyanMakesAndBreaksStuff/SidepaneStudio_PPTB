@@ -12,7 +12,7 @@ function isValidJS(code: string): boolean {
 }
 
 describe('generateBasicScript — syntax validity', () => {
-  for (const kind of ['FormOnLoad', 'FormButton', 'MainGridButton', 'SubgridButton', 'ManualJS', 'FormOnChange'] as const) {
+  for (const kind of ['FormOnLoad', 'FormButton', 'MainGridButton', 'SubgridButton', 'MainGridOnSelect', 'SubgridOnSelect', 'ManualJS', 'FormOnChange', 'LookupTagClick'] as const) {
     it(`${kind} produces valid JS`, () => {
       const config = cfg({ trigger: { kind, fieldName: kind === 'FormOnChange' ? 'new_field' : '' } as any });
       const code = generateBasicScript(config);
@@ -108,15 +108,21 @@ describe('generateBasicScript — reuseExistingPane', () => {
     expect(isValidJS(code)).toBe(true);
     expect(code).toContain('existing.select();');
     expect(code).toContain('await existing.navigate(');
-    // the bare focus-only early return must be gone
-    expect(code).not.toMatch(/existing\.select\(\);\s*return;/);
+    // navigation must happen before focus and the reuse branch must return afterward
+    expect(code).not.toMatch(/existing\.select\(\);\s*await existing\.navigate/);
+  });
+
+  it('navigates an existing pane before selecting it', () => {
+    const code = generateBasicScript(cfg({ context: { ...cfg({}).context, reuseExistingPane: true } }));
+    expect(code.indexOf('await existing.navigate(')).toBeGreaterThan(-1);
+    expect(code.indexOf('existing.select()')).toBeGreaterThan(code.indexOf('await existing.navigate('));
   });
 
   it('reuseExistingPane: true navigates the existing pane with the same input as createPane', () => {
     const code = generateBasicScript(
       cfg({
         trigger: { kind: 'FormButton' } as any,
-        target: { pageType: 'entitylist', entityName: 'account' },
+        target: { pageType: 'entitylist', entityName: 'account', viewId: '', viewType: '' },
         context: { mode: 'None', entityName: '', staticRecordId: '', reuseExistingPane: true },
       })
     );
@@ -169,7 +175,7 @@ describe('buildNavigateInput — pageType branches', () => {
     const code = generateBasicScript(
       cfg({
         trigger: { kind: 'FormOnLoad' } as any,
-        target: { pageType: 'entityrecord', entityName: 'account', entityId: '' },
+        target: { pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '' },
         context: { mode: 'CurrentRecord', entityName: 'account', staticRecordId: '', reuseExistingPane: true },
       })
     );
@@ -182,7 +188,7 @@ describe('buildNavigateInput — pageType branches', () => {
     const code = generateBasicScript(
       cfg({
         trigger: { kind: 'FormButton' } as any,
-        target: { pageType: 'entityrecord', entityName: 'account', entityId: '' },
+        target: { pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '' },
         context: { mode: 'CurrentRecord', entityName: 'account', staticRecordId: '', reuseExistingPane: true },
       })
     );
@@ -194,7 +200,7 @@ describe('buildNavigateInput — pageType branches', () => {
     const code = generateBasicScript(
       cfg({
         trigger: { kind: 'MainGridButton' } as any,
-        target: { pageType: 'entityrecord', entityName: 'account', entityId: '' },
+        target: { pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '' },
         context: { mode: 'CurrentRecord', entityName: 'account', staticRecordId: '', reuseExistingPane: true },
       })
     );
@@ -208,7 +214,7 @@ describe('buildNavigateInput — pageType branches', () => {
     const code = generateBasicScript(
       cfg({
         trigger: { kind: 'SubgridButton' } as any,
-        target: { pageType: 'entityrecord', entityName: 'account', entityId: '' },
+        target: { pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '' },
         context: { mode: 'CurrentRecord', entityName: 'account', staticRecordId: '', reuseExistingPane: true },
       })
     );
@@ -217,11 +223,25 @@ describe('buildNavigateInput — pageType branches', () => {
     expect(code).not.toContain("entityId: ''");
   });
 
+  it('entityrecord + MainGridOnSelect uses getEventSource().getId()', () => {
+    const code = generateBasicScript(
+      cfg({
+        trigger: { kind: 'MainGridOnSelect' } as any,
+        target: { pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '' },
+        context: { mode: 'CurrentRecord', entityName: 'account', staticRecordId: '', reuseExistingPane: true },
+      })
+    );
+    expect(code).toContain('function(executionContext)');
+    expect(code).toContain('var selectedRecordId = executionContext.getEventSource().getId();');
+    expect(code).toContain('entityId: selectedRecordId');
+    expect(code).not.toContain('primaryControl');
+  });
+
   it('entityrecord + ManualJS uses a valid static record ID', () => {
     const code = generateBasicScript(
       cfg({
         trigger: { kind: 'ManualJS' } as any,
-        target: { pageType: 'entityrecord', entityName: 'account', entityId: '' },
+        target: { pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '' },
         context: {
           mode: 'Static',
           entityName: 'account',
@@ -239,7 +259,7 @@ describe('buildNavigateInput — pageType branches', () => {
     const code = generateBasicScript(
       cfg({
         trigger: { kind: 'ManualJS' } as any,
-        target: { pageType: 'entityrecord', entityName: 'account', entityId: '' },
+        target: { pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '' },
         context: { mode: 'Static', entityName: 'account', staticRecordId: 'not-a-guid', reuseExistingPane: true },
       })
     );
@@ -252,7 +272,7 @@ describe('buildNavigateInput — pageType branches', () => {
     const code = generateBasicScript(
       cfg({
         trigger: { kind: 'FormButton' } as any,
-        target: { pageType: 'entityrecord', entityName: 'account', entityId: '' },
+        target: { pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '' },
         context: { mode: 'CurrentRecord', entityName: 'contact', staticRecordId: '', reuseExistingPane: true },
       })
     );
@@ -263,7 +283,7 @@ describe('buildNavigateInput — pageType branches', () => {
     const code = generateBasicScript(
       cfg({
         trigger: { kind: 'FormButton' } as any,
-        target: { pageType: 'entityrecord', entityName: 'account', entityId: '' },
+        target: { pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '' },
         context: { mode: 'CurrentRecord', entityName: '', staticRecordId: '', reuseExistingPane: true },
       })
     );
@@ -273,7 +293,7 @@ describe('buildNavigateInput — pageType branches', () => {
   it('entitylist uses context.entityName when set', () => {
     const code = generateBasicScript(
       cfg({
-        target: { pageType: 'entitylist', entityName: 'account' },
+        target: { pageType: 'entitylist', entityName: 'account', viewId: '', viewType: '' },
         context: { mode: 'None', entityName: 'contact', staticRecordId: '', reuseExistingPane: true },
       })
     );
@@ -282,7 +302,7 @@ describe('buildNavigateInput — pageType branches', () => {
 
   it('entitylist emits pageType and entityName but no entityId', () => {
     const code = generateBasicScript(
-      cfg({ target: { pageType: 'entitylist', entityName: 'contact' } })
+      cfg({ target: { pageType: 'entitylist', entityName: 'contact', viewId: '', viewType: '' } })
     );
     expect(code).toContain('pageType: "entitylist"');
     expect(code).toContain('entityName: "contact"');
@@ -390,6 +410,36 @@ describe('generateBasicScript — FormOnChange', () => {
   });
 });
 
+describe('generateBasicScript — LookupTagClick', () => {
+  const lookup = {
+    ...cfg({}).trigger,
+    kind: 'LookupTagClick' as any,
+    fieldName: 'parentaccountid',
+    namespace: 'Contoso',
+    functionName: 'openTag',
+  };
+
+  it('cancels default navigation and uses the clicked tag', () => {
+    const code = generateBasicScript(cfg({ trigger: lookup, target: {
+      pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '',
+    } }));
+    expect(isValidJS(code)).toBe(true);
+    expect(code).toContain('eventArgs.preventDefault()');
+    expect(code).toContain('eventArgs.getTagValue()');
+    expect(code).toContain('entityName: tag.entityType');
+    expect(code).toContain('entityId: tag.id');
+    expect(code).toContain('addOnLookupTagClick(Contoso.openTag)');
+  });
+
+  it('emits the same event preamble and tag options for Shared Library output', () => {
+    const code = generateLibraryScript(cfg({ trigger: lookup, target: { pageType: 'custom', name: 'sps_Page' } }));
+    expect(isValidJS(code)).toBe(true);
+    expect(code).toContain('eventArgs.preventDefault()');
+    expect(code).toContain('recordId: tag.id');
+    expect(code).toContain('entityName: tag.entityType');
+  });
+});
+
 describe('generateBasicScript — closeOthers', () => {
   it('closeOthers: true emits getAllPanes forEach close after navigate', () => {
     const code = generateBasicScript(
@@ -415,6 +465,16 @@ describe('generateBasicScript — closeOthers', () => {
 });
 
 describe('buildPaneOptions — isSelected and canClose', () => {
+  it.each([generateBasicScript, generateLibraryScript])
+    ('normalizes unsafe width before generating source', generate => {
+      const code = generate(cfg({ pane: {
+        ...cfg({}).pane, width: '480;globalThis.pwned=1',
+      } as any }));
+      expect(isValidJS(code)).toBe(true);
+      expect(code).not.toContain('globalThis.pwned');
+      if (generate === generateBasicScript) expect(code).toContain('width: 480');
+    });
+
   it('isSelected: false is emitted in output', () => {
     const code = generateBasicScript(cfg({ pane: { isSelected: false } as any }));
     expect(code).toContain('isSelected: false');
@@ -539,7 +599,7 @@ describe('generateLibraryScript', () => {
   it('entityrecord emits entityId resolved from the record-context matrix', () => {
     const code = generateLibraryScript(
       cfg({
-        target: { pageType: 'entityrecord', entityName: 'account', entityId: '' },
+        target: { pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '' },
         context: {
           mode: 'Static',
           entityName: 'account',
@@ -657,7 +717,7 @@ describe('buildNavigateInput — record context (CR-001)', () => {
 });
 
 describe('generateBasicScript — error surfacing (WR-005)', () => {
-  for (const kind of ['FormOnLoad', 'FormButton', 'MainGridButton', 'SubgridButton', 'ManualJS', 'FormOnChange'] as const) {
+  for (const kind of ['FormOnLoad', 'FormButton', 'MainGridButton', 'SubgridButton', 'MainGridOnSelect', 'SubgridOnSelect', 'ManualJS', 'FormOnChange', 'LookupTagClick'] as const) {
     it(`${kind} opens an error dialog as well as logging`, () => {
       const code = generateBasicScript(
         cfg({ trigger: { kind, fieldName: kind === 'FormOnChange' ? 'new_field' : '' } as any })

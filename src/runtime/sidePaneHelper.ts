@@ -35,7 +35,11 @@ export interface SidePaneHelperOptions {
   recordId?: string;
   dashboardId?: string;
   searchText?: string;
-  data?: string;
+  viewId?: string;
+  viewType?: 'savedquery' | 'userquery';
+  formId?: string;
+  tabName?: string;
+  data?: string | Record<string, unknown>;
 
   badge?: number;
   reuseExistingPane?: boolean;
@@ -87,9 +91,16 @@ function buildNavigateInput(o: SidePaneHelperOptions): Record<string, unknown> {
     case 'entityrecord':
       nav.entityName = o.entityName;
       if (o.entityId !== undefined) nav.entityId = o.entityId;
+      if (o.formId) nav.formId = o.formId;
+      if (o.tabName) nav.tabName = o.tabName;
+      if (o.data !== undefined) nav.data = o.data;
       break;
     case 'entitylist':
       nav.entityName = o.entityName;
+      if (o.viewId) {
+        nav.viewId = o.viewId;
+        nav.viewType = o.viewType;
+      }
       break;
     case 'dashboard':
       nav.dashboardId = o.dashboardId;
@@ -115,8 +126,8 @@ export async function open(options: SidePaneHelperOptions): Promise<void> {
     const existing = sidePanes.getPane(options.paneId);
     if (existing) {
       if (reuse) {
-        existing.select();
         await existing.navigate(navInput);
+        existing.select();
         if (options.badge) existing.badge = options.badge;
         return;
       }

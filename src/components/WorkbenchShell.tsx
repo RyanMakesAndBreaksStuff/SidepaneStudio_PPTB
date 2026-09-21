@@ -6,6 +6,7 @@ import { PaneDefinitionConfig } from '../types/PaneDefinitionConfig';
 import { MetadataFilterConfig } from '../types/MetadataFilterConfig';
 import { IXrmContext } from '../adapters/PptbContextAdapter';
 import { MetadataService } from '../services/MetadataService';
+import { FormXmlService } from '../services/FormXmlService';
 import { validate } from '../services/ValidationService';
 import { CommandBar } from './CommandBar';
 import { ConfigurePanel } from './ConfigurePanel';
@@ -64,11 +65,14 @@ export function WorkbenchShell({
 
   const validation = useMemo(() => validate(config, accessibleTables), [config, accessibleTables]);
 
+  const formXmlService = useMemo(() => new FormXmlService(xrm), [xrm]);
+
   const configurePanelProps = {
     config,
     onChange,
     validation,
     metadataService,
+    formXmlService,
     onAccessibleTablesChange: setAccessibleTables,
     metadataFilterConfig,
     defaultMetadataFilterConfig,

@@ -1,5 +1,8 @@
 import { PaneDefinitionConfig } from '../types/PaneDefinitionConfig';
 import { normalizeGuid } from './odataGuards';
+import { parseFormData } from './formData';
+import { isConfigWidthValid } from './configGuards';
+import { MAX_CONFIG_WIDTH, MIN_CONFIG_WIDTH } from '../types/PaneDefinitionConfig';
 
 export interface ValidationError {
   field: string;
@@ -24,6 +27,13 @@ export function validate(config: PaneDefinitionConfig, accessibleTables?: Set<st
   // Error: empty paneId
   if (!config.pane.paneId?.trim()) {
     errors.push({ field: 'pane.paneId', message: 'Pane ID is required.' });
+  }
+
+  if (!isConfigWidthValid(config.pane.width)) {
+    errors.push({
+      field: 'pane.width',
+      message: `Pane width must be between ${MIN_CONFIG_WIDTH} and ${MAX_CONFIG_WIDTH} pixels.`,
+    });
   }
 
   // Error: custom pageType with empty name
@@ -119,12 +129,12 @@ export function validate(config: PaneDefinitionConfig, accessibleTables?: Set<st
   }
 
   // Error: the selected context mode resolves to no record for this trigger (CR-001 / contract C1)
-  const GRID_TRIGGERS = ['MainGridButton', 'SubgridButton'];
+  const GRID_TRIGGERS = ['MainGridButton', 'SubgridButton', 'MainGridOnSelect', 'SubgridOnSelect'];
   if (config.context.mode === 'SelectedRow' && !GRID_TRIGGERS.includes(config.trigger.kind)) {
     errors.push({
       field: 'context.mode',
       message:
-        'Selected row context is only available from a main grid or subgrid command. Choose a different context mode or trigger.',
+        'Selected row context is only available from a main grid or subgrid. Choose a different context mode or trigger.',
     });
   }
   if (config.context.mode === 'CurrentRecord' && config.trigger.kind === 'ManualJS') {
@@ -156,14 +166,34 @@ export function validate(config: PaneDefinitionConfig, accessibleTables?: Set<st
     });
   }
 
+  if (config.target.pageType === 'entitylist') {
+    if (config.target.viewId.trim() && !normalizeGuid(config.target.viewId)) {
+      errors.push({ field: 'target.viewId', message: 'View ID must be a valid GUID.' });
+    }
+    if (config.target.viewId.trim() && !['savedquery', 'userquery'].includes(config.target.viewType)) {
+      errors.push({ field: 'target.viewType', message: 'Select a view type when a view ID is set.' });
+    }
+  }
+  if (config.target.pageType === 'entityrecord') {
+    if (config.target.formId.trim() && !normalizeGuid(config.target.formId)) {
+      errors.push({ field: 'target.formId', message: 'Form ID must be a valid GUID.' });
+    }
+    try {
+      parseFormData(config.target.data);
+    } catch {
+      errors.push({ field: 'target.data', message: 'Form data must be a JSON object.' });
+    }
+  }
+
   // Error: entityrecord navigation that resolves its ID from configuration rather than
   // from the trigger. Mirrors buildConfiguredRecordIdExpression in CodeGenerationService —
   // without a normalizable GUID the generated script's only effect is to throw.
   if (
     config.target.pageType === 'entityrecord' &&
-    (config.context.mode === 'Static' || config.trigger.kind === 'ManualJS')
+    (config.context.mode === 'Static' || config.context.mode === 'None' || config.trigger.kind === 'ManualJS') &&
+    config.trigger.kind !== 'LookupTagClick'
   ) {
-    const configuredId = config.context.staticRecordId || config.target.entityId;
+    const configuredId = config.context.staticRecordId;
     if (!normalizeGuid(configuredId)) {
       errors.push({
         field: 'context.staticRecordId',
@@ -173,10 +203,12 @@ export function validate(config: PaneDefinitionConfig, accessibleTables?: Set<st
   }
 
 
-  if (config.trigger.kind === 'FormOnChange' && !config.trigger.fieldName?.trim()) {
+  if ((config.trigger.kind === 'FormOnChange' || config.trigger.kind === 'LookupTagClick') && !config.trigger.fieldName?.trim()) {
     errors.push({
       field: 'trigger.fieldName',
-      message: 'Field name is required for FormOnChange triggers.',
+      message: config.trigger.kind === 'LookupTagClick'
+        ? 'Lookup control name is required for LookupTagClick triggers.'
+        : 'Field name is required for FormOnChange triggers.',
     });
   }
 

@@ -1,6 +1,6 @@
 // src/types/PaneDefinitionConfig.ts
 
-export type TriggerKind = 'FormOnLoad' | 'FormButton' | 'MainGridButton' | 'SubgridButton' | 'ManualJS' | 'FormOnChange';
+export type TriggerKind = 'FormOnLoad' | 'FormButton' | 'MainGridButton' | 'SubgridButton' | 'MainGridOnSelect' | 'SubgridOnSelect' | 'ManualJS' | 'FormOnChange' | 'LookupTagClick';
 export type PageType = 'custom' | 'entityrecord' | 'entitylist' | 'webresource' | 'dashboard' | 'search';
 export type ContextMode = 'CurrentRecord' | 'SelectedRow' | 'Static' | 'None';
 
@@ -22,8 +22,8 @@ export interface PaneConfig {
 
 export type TargetConfig =
   | { pageType: 'custom';       name: string }
-  | { pageType: 'entityrecord'; entityName: string; entityId: string }
-  | { pageType: 'entitylist';   entityName: string }
+  | { pageType: 'entityrecord'; entityName: string; formId: string; tabName: string; data: string }
+  | { pageType: 'entitylist'; entityName: string; viewId: string; viewType: '' | 'savedquery' | 'userquery' }
   | { pageType: 'webresource';  name: string }
   | { pageType: 'dashboard';    dashboardId: string; dashboardName: string }
   | { pageType: 'search';       searchText: string };
@@ -54,6 +54,9 @@ export interface PaneDefinitionConfig {
   context: ContextConfig;
   behavior: BehaviorConfig;
 }
+
+export const MIN_CONFIG_WIDTH = 300;
+export const MAX_CONFIG_WIDTH = 1200;
 
 export const DEFAULT_CONFIG: PaneDefinitionConfig = {
   pane: {

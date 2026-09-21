@@ -37,7 +37,8 @@
     "preview": "vite preview",
     "watch": "vite build --watch",
     "typecheck": "tsc --noEmit",
-    "coverage": "vitest run --coverage"
+    "coverage": "vitest run --coverage",
+    "debug": "vite build --mode development --watch"
   },
   "engines": {
     "node": ">=18.0.0"
@@ -53,7 +54,7 @@
     "@types/react": "^18.0.0",
     "@types/react-dom": "^18.0.0",
     "@vitejs/plugin-react": "^5.0.0",
-    "@vitest/coverage-v8": "4.1.6",
+    "@vitest/coverage-v8": "^4.1.11",
     "eslint": "^9.0.0",
     "eslint-plugin-promise": "7.3.0",
     "eslint-plugin-react": "7.37.5",
@@ -62,6 +63,6 @@
     "typescript": "^5.8.3",
     "typescript-eslint": "8.59.4",
     "vite": "^8.0.12",
-    "vitest": "4.1.6"
+    "vitest": "4.1.11"
   }
 }

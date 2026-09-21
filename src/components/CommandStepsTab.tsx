@@ -6,14 +6,18 @@ import { theme } from '../theme/tokens';
 import { PaneDefinitionConfig, TriggerKind } from '../types/PaneDefinitionConfig';
 import { Field } from './Field';
 import { Callout } from './Callout';
+import { RUNTIME_WEB_RESOURCE_NAME } from '../constants';
 
 const TRIGGER_SUMMARIES: Record<TriggerKind, string> = {
   FormOnLoad:     'Opens automatically when a record form loads.',
   FormOnChange:   'Opens when a specific form field changes value.',
+  LookupTagClick: 'Cancels lookup tag navigation and opens the pane with the clicked tag.',
   FormButton:     'Opens when a command bar button is clicked on a record form.',
-  MainGridButton: 'Opens when a command bar button is clicked in a main grid view.',
-  SubgridButton:  'Opens when a command bar button is clicked in a subgrid.',
-  ManualJS:       'Paste directly into the browser console (F12) to open the pane on demand.',
+  MainGridButton:  'Opens when a command bar button is clicked in a main grid view.',
+  SubgridButton:   'Opens when a command bar button is clicked in a subgrid.',
+  MainGridOnSelect: 'Opens when a single row is selected in a main grid view.',
+  SubgridOnSelect:  'Opens when a single row is selected in a subgrid.',
+  ManualJS:        'Paste directly into the browser console (F12) to open the pane on demand.',
 };
 
 const DEPLOY_STEPS: Record<TriggerKind, string[]> = {
@@ -26,6 +30,11 @@ const DEPLOY_STEPS: Record<TriggerKind, string[]> = {
     'Paste this function into a new JavaScript web resource and publish it.',
     'In the form editor, select the field where you want to detect changes.',
     'Open <strong>Events → OnChange</strong> and add the web resource as a library, then select the function name. Enable <strong>Pass execution context as first parameter</strong>.',
+  ],
+  LookupTagClick: [
+    'Paste this function into a new JavaScript web resource and publish it.',
+    'In the form editor, open <strong>Events → OnLoad</strong> and add the web resource as a library.',
+    'Register <code>formContext.getControl(\'lookuplogicalname\').addOnLookupTagClick(...)</code> from form OnLoad. The lookup event automatically passes execution context.',
   ],
   FormButton: [
     'Paste this function into a new JavaScript web resource and publish it.',
@@ -42,12 +51,26 @@ const DEPLOY_STEPS: Record<TriggerKind, string[]> = {
     'In Command Designer, select <strong>Subgrid commands</strong> and create a button with Action: Run JavaScript.',
     'Select your web resource and enter the full function name. In Action parameters, add <code>primaryControl</code> (Primary Control type) as the first argument. This is required — the function reads selected row data from it.',
   ],
+  MainGridOnSelect: [
+    'Paste this function into a new JavaScript web resource and publish it.',
+    'Enable the <strong>Power Apps grid control</strong> on the table views. An <strong>Events</strong> tab appears on the control.',
+    'Add the web resource as a library, then add an <strong>OnRecordSelect</strong> handler. Select the function name and enable <strong>Pass execution context as first parameter</strong>.',
+  ],
+  SubgridOnSelect: [
+    'Paste this function into a new JavaScript web resource and publish it.',
+    'Enable the <strong>Power Apps grid control</strong> on the form subgrid. An <strong>Events</strong> tab appears on the control.',
+    'Add the web resource as a library, then add an <strong>OnRecordSelect</strong> handler. Select the function name and enable <strong>Pass execution context as first parameter</strong>.',
+  ],
   ManualJS: [
     'Copy the entire code block.',
     'Open a model-driven app in your browser and press <strong>F12</strong> to open DevTools.',
     'Paste into the Console tab and press Enter.',
   ],
 };
+
+for (const steps of Object.values(DEPLOY_STEPS)) {
+  steps.unshift(`If using Shared Library output, select <strong>Shared Library → Download runtime</strong>, upload the file as <code>${RUNTIME_WEB_RESOURCE_NAME}</code>, and publish it. Load that library before the generated handler; Basic Script output needs no shared runtime.`);
+}
 
 export { TRIGGER_SUMMARIES, DEPLOY_STEPS };
 
