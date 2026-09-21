@@ -31,6 +31,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "build:runtime": "vite build --config vite.runtime.config.ts",
     "test": "vitest run",
     "lint": "eslint .",
     "preview": "vite preview",
