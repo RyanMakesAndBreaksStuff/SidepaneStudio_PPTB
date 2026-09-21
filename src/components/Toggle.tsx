@@ -18,7 +18,7 @@ export function Toggle({ label, desc, checked, onChange }: ToggleProps): React.R
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
       <div style={{ flex: 1 }}>
         <div style={{ fontSize: 13, fontWeight: 500, color: T.fg1 }}>{label}</div>
-        {desc && <div style={{ fontSize: 11, color: T.fg3 }}>{desc}</div>}
+        {desc && <div style={{ fontSize: 11, color: T.accentAlt }}>{desc}</div>}
       </div>
       <div
         role="switch"

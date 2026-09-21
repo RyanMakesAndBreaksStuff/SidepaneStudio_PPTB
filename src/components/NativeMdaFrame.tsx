@@ -2,6 +2,8 @@ import * as React from 'react';
 import { PaneConfig, TargetConfig } from '../types/PaneDefinitionConfig';
 import { ValidationResult } from '../services/ValidationService';
 import { FormModel } from '../services/FormXmlService';
+import { useTheme } from '../contexts/ThemeContext';
+import { theme } from '../theme/tokens';
 import { PaneOverlay } from './PaneOverlay';
 import { usePreviewSize, PreviewSizeMode } from './previewSize';
 import { FL } from './flTokens';
@@ -386,6 +388,8 @@ function FormHeader({ target, mode, formModel }: { target: TargetConfig; mode: P
 
 export function NativeMdaFrame({ pane, hostTarget, paneTarget, validation, caption, formModel, children }: NativeMdaFrameProps): React.ReactElement {
   const { mode } = usePreviewSize();
+  const { isDark } = useTheme();
+  const T = theme(isDark);
   const isCompact = mode === 'compact';
 
   // Pane overlay sits on the right side at regular+wide; stacks below in compact.
@@ -440,6 +444,7 @@ export function NativeMdaFrame({ pane, hostTarget, paneTarget, validation, capti
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
+                color: T.accentAlt,
               }}
             >
               {caption}

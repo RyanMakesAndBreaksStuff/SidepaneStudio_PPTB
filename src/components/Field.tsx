@@ -24,7 +24,7 @@ export function Field({ label, required, hint, error, children }: FieldProps): R
       )}
       {children}
       {error && <span style={{ fontSize: 11, color: T.error }}>{error}</span>}
-      {!error && hint && <span style={{ fontSize: 11, color: T.fg3 }}>{hint}</span>}
+      {!error && hint && <span style={{ fontSize: 11, color: T.accentAlt }}>{hint}</span>}
     </div>
   );
 }

@@ -1,5 +1,7 @@
 import * as React from 'react';
 import { useEffect, useRef, useState } from 'react';
+import { useTheme } from '../contexts/ThemeContext';
+import { theme } from '../theme/tokens';
 import { PaneDefinitionConfig } from '../types/PaneDefinitionConfig';
 import { MetadataService } from '../services/MetadataService';
 import { ValidationResult } from '../services/ValidationService';
@@ -36,13 +38,15 @@ interface Props {
 
 export function GridPreview(props: Props): React.ReactElement {
   const { config, entityName, allowEntityChange, metadataService, onEntityNameChange } = props;
+  const { isDark } = useTheme();
+  const T = theme(isDark);
   const configured = config.target.pageType === 'entitylist' && config.target.entityName.trim() === entityName ? config.target : undefined;
   const [selection, setSelection] = useState({ id: configured?.viewId ?? '', viewType: configured?.viewType ?? '' });
-  return <div style={{ flex: 1, overflow: 'auto', padding: 12, minWidth: 0 }}>
-    {allowEntityChange ? <label>Preview entity<TablePicker value={entityName} metadataService={metadataService} onChange={name => {
+  return <div style={{ flex: 1, overflow: 'auto', padding: 12, minWidth: 0, color: T.fg1, fontFamily: T.font }}>
+    {allowEntityChange ? <label style={{ color: T.fg2, fontFamily: T.font, fontSize: 12 }}>Preview entity<TablePicker value={entityName} metadataService={metadataService} onChange={name => {
       setSelection({ id: '', viewType: '' });
       onEntityNameChange(name);
-    }} /></label> : <p>Preview entity: {entityName}</p>}
+    }} /></label> : <p style={{ color: T.fg2, fontFamily: T.font, fontSize: 12 }}>Preview entity: {entityName}</p>}
     <ViewPicker entityName={entityName} value={selection.id} viewType={selection.viewType}
       metadataService={metadataService} onChange={view => setSelection({ id: view?.id ?? '', viewType: view?.viewType ?? '' })} />
     <GridData key={`${entityName}/${selection.viewType}/${selection.id}`} {...props} viewId={selection.id} viewType={selection.viewType} />
@@ -55,6 +59,8 @@ type State = { status: 'idle' | 'loading' } | { status: 'error'; reason: string 
 function GridData({ config, validation, metadataService, entityName, viewId, viewType }: Props & {
   viewId: string; viewType: '' | 'savedquery' | 'userquery';
 }): React.ReactElement {
+  const { isDark } = useTheme();
+  const T = theme(isDark);
   const [state, setState] = useState<State>({ status: 'idle' });
   const [selectedRow, setSelectedRow] = useState<number | null>(null);
   const request = useRef(0);
@@ -86,12 +92,27 @@ function GridData({ config, validation, metadataService, entityName, viewId, vie
     }
   };
   return <>
-    <p>Reads up to 10 rows from the selected view. Preview only.</p>
-    <button type="button" disabled={!entityName || !viewId || !viewType || state.status === 'loading'} onClick={() => void generate()}>
+    <p style={{ color: T.accent, fontFamily: T.font, fontSize: 12 }}>Reads up to 10 rows from the selected view. Preview only.</p>
+    <button
+      type="button"
+      disabled={!entityName || !viewId || !viewType || state.status === 'loading'}
+      onClick={() => void generate()}
+      style={{
+        border: `1px solid ${T.accent}`,
+        borderRadius: T.rS,
+        background: T.accentBg,
+        color: T.accent,
+        fontFamily: T.font,
+        fontSize: 12,
+        fontWeight: 600,
+        padding: '6px 10px',
+        cursor: 'pointer',
+      }}
+    >
       Generate grid preview
     </button>
-    {state.status === 'loading' && <p role="status">Loading grid rows...</p>}
-    {state.status === 'error' && <p role="alert">{state.reason}</p>}
+    {state.status === 'loading' && <p role="status" style={{ color: T.fg3, fontFamily: T.font, fontSize: 12 }}>Loading grid rows...</p>}
+    {state.status === 'error' && <p role="alert" style={{ color: T.error, fontFamily: T.font, fontSize: 12 }}>{state.reason}</p>}
     {state.status === 'loaded' && <NativeMdaFrame
       pane={{ ...config.pane, isSelected: selectedRow !== null }}
       hostTarget={{ pageType: 'entitylist', entityName, viewId, viewType }}
