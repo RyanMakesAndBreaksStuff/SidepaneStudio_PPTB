@@ -80,6 +80,11 @@ function buildRecordContext(config: PaneDefinitionConfig): RecordContext {
     target.pageType === 'entityrecord' || target.pageType === 'entitylist' ? target.entityName : '';
   const entityName = context.entityName || targetEntityName || '';
 
+  if (trigger.kind === 'LookupTagClick' &&
+      (target.pageType === 'custom' || target.pageType === 'entityrecord')) {
+    return { idExpr: 'tag.id', entityName: 'tag.entityType' };
+  }
+
   let idExpr: string | null = null;
   switch (context.mode) {
     case 'CurrentRecord':
@@ -133,7 +138,7 @@ function buildNavigateInput(config: PaneDefinitionConfig): string {
         `name: ${JSON.stringify(target.name)}`,
       ];
       if (rc.idExpr && rc.entityName) {
-        parts.push(`entityName: ${JSON.stringify(rc.entityName)}`);
+        parts.push(`entityName: ${rc.idExpr === 'tag.id' ? rc.entityName : JSON.stringify(rc.entityName)}`);
         parts.push(`recordId: ${rc.idExpr}`);
       }
       return `{ ${parts.join(', ')} }`;
@@ -142,7 +147,7 @@ function buildNavigateInput(config: PaneDefinitionConfig): string {
       const entityIdExpr = rc.idExpr ?? buildConfiguredRecordIdExpression(config);
       return `{ ${[
         `pageType: ${JSON.stringify(target.pageType)}`,
-        `entityName: ${JSON.stringify(rc.entityName)}`,
+        `entityName: ${rc.idExpr === 'tag.id' ? rc.entityName : JSON.stringify(rc.entityName)}`,
         `entityId: ${entityIdExpr}`,
         ...buildTargetParameterParts(target),
       ].join(', ')} }`;
@@ -189,7 +194,7 @@ function buildGetOrCreateBody(config: PaneDefinitionConfig, indent = '  '): stri
   const stateAssign = buildStateAssignment(config);
   const paneIdJson = JSON.stringify(pane.paneId);
   const reuseCheck = context.reuseExistingPane
-    ? `${indent}var existing = Xrm.App.sidePanes.getPane(${paneIdJson});\n${indent}if (existing) { existing.select(); await existing.navigate(${navInput}); return; }\n`
+    ? `${indent}var existing = Xrm.App.sidePanes.getPane(${paneIdJson});\n${indent}if (existing) { await existing.navigate(${navInput}); existing.select(); return; }\n`
     : `${indent}var existing = Xrm.App.sidePanes.getPane(${paneIdJson});\n${indent}if (existing) { existing.close(); await Promise.resolve(); }\n`;
 
   const badgeAssign = pane.badgeValue
@@ -326,6 +331,26 @@ ${body
 };`;
 }
 
+function generateLookupTagClick(config: PaneDefinitionConfig): string {
+  const { trigger } = config;
+  const { ns, fn } = getSafeTriggerNames(config);
+  const body = buildGetOrCreateBody(config, '  ');
+  return `var ${ns} = ${ns} || {};
+${ns}.${fn} = async function(executionContext) {
+  var eventArgs = executionContext.getEventArgs();
+  eventArgs.preventDefault();
+  var tag = eventArgs.getTagValue();
+  if (!tag || !tag.id) return;
+  try {
+${body.split('\n').map(line => '  ' + line).join('\n')}
+  } catch(e) {
+    ${buildCatchBody(`${ns}.${fn}`, '    ')}
+  }
+};
+// Register from form OnLoad:
+// formContext.getControl(${JSON.stringify(trigger.fieldName || '')}).addOnLookupTagClick(${ns}.${fn});`;
+}
+
 export function generateBasicScript(config: PaneDefinitionConfig): string {
   switch (config.trigger.kind) {
     case 'FormOnLoad':
@@ -341,6 +366,8 @@ export function generateBasicScript(config: PaneDefinitionConfig): string {
       return generateManualJS(config);
     case 'FormOnChange':
       return generateFormOnChange(config);
+    case 'LookupTagClick':
+      return generateLookupTagClick(config);
     default:
       return generateFormButton(config);
   }
@@ -360,12 +387,13 @@ export function generateLibraryScript(config: PaneDefinitionConfig): string {
 
   // Guard formContext expressions inside a library wrapper that receives executionContext.
   const libIdExpr = rc.idExpr?.replace(/^formContext\./, 'executionContext.getFormContext().') ?? null;
+  const libEntityName = rc.idExpr === 'tag.id' ? rc.entityName : JSON.stringify(rc.entityName);
 
   // Target keys — contract C4. name and webresourceName are mutually exclusive (WR-007).
   if (target.pageType === 'custom') {
     optLines.push(`    name: ${JSON.stringify(target.name)}`);
     if (libIdExpr && rc.entityName) {
-      optLines.push(`    entityName: ${JSON.stringify(rc.entityName)}`);
+      optLines.push(`    entityName: ${libEntityName}`);
       optLines.push(`    recordId: ${libIdExpr}`);
     }
   } else if (target.pageType === 'webresource') {
@@ -376,7 +404,7 @@ export function generateLibraryScript(config: PaneDefinitionConfig): string {
       );
     }
   } else if (target.pageType === 'entityrecord') {
-    optLines.push(`    entityName: ${JSON.stringify(rc.entityName)}`);
+    optLines.push(`    entityName: ${libEntityName}`);
     optLines.push(`    entityId: ${libIdExpr ?? buildConfiguredRecordIdExpression(config)}`);
   } else if (target.pageType === 'entitylist') {
     optLines.push(`    entityName: ${JSON.stringify(rc.entityName)}`);
@@ -403,7 +431,7 @@ export function generateLibraryScript(config: PaneDefinitionConfig): string {
   if (behavior.closeOthers) optLines.push(`    closeOthers: true`);
 
   const param =
-    trigger.kind === 'FormOnLoad' || trigger.kind === 'FormOnChange' || GRID_SELECT_KINDS.includes(trigger.kind)
+    trigger.kind === 'FormOnLoad' || trigger.kind === 'FormOnChange' || trigger.kind === 'LookupTagClick' || GRID_SELECT_KINDS.includes(trigger.kind)
       ? 'executionContext'
       : trigger.kind === 'ManualJS'
         ? ''
@@ -415,10 +443,18 @@ export function generateLibraryScript(config: PaneDefinitionConfig): string {
       ? `  var selectedRows = primaryControl.getGrid().getSelectedRows();\n  if (!selectedRows || selectedRows.getLength() === 0) { return; }\n  var selectedRecordId = selectedRows.get(0).getData().getEntity().getId();\n`
       : '';
 
+  const lookupPreamble = trigger.kind === 'LookupTagClick'
+    ? `  var eventArgs = executionContext.getEventArgs();\n  eventArgs.preventDefault();\n  var tag = eventArgs.getTagValue();\n  if (!tag || !tag.id) return;\n`
+    : '';
+
+  const lookupRegistration = trigger.kind === 'LookupTagClick'
+    ? `\n// Register from form OnLoad:\n// formContext.getControl(${JSON.stringify(trigger.fieldName || '')}).addOnLookupTagClick(${ns}.${fn});`
+    : '';
+
   return `var ${ns} = ${ns} || {};
 ${ns}.${fn} = function(${param}) {
-${gridContext}  SidePaneHelper.open({
+${lookupPreamble}${gridContext}  SidePaneHelper.open({
 ${optLines.join(',\n')}
   });
-};`;
+};${lookupRegistration}`;
 }

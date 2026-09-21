@@ -11,6 +11,7 @@ import { RUNTIME_WEB_RESOURCE_NAME } from '../constants';
 const TRIGGER_SUMMARIES: Record<TriggerKind, string> = {
   FormOnLoad:     'Opens automatically when a record form loads.',
   FormOnChange:   'Opens when a specific form field changes value.',
+  LookupTagClick: 'Cancels lookup tag navigation and opens the pane with the clicked tag.',
   FormButton:     'Opens when a command bar button is clicked on a record form.',
   MainGridButton:  'Opens when a command bar button is clicked in a main grid view.',
   SubgridButton:   'Opens when a command bar button is clicked in a subgrid.',
@@ -29,6 +30,11 @@ const DEPLOY_STEPS: Record<TriggerKind, string[]> = {
     'Paste this function into a new JavaScript web resource and publish it.',
     'In the form editor, select the field where you want to detect changes.',
     'Open <strong>Events → OnChange</strong> and add the web resource as a library, then select the function name. Enable <strong>Pass execution context as first parameter</strong>.',
+  ],
+  LookupTagClick: [
+    'Paste this function into a new JavaScript web resource and publish it.',
+    'In the form editor, open <strong>Events → OnLoad</strong> and add the web resource as a library.',
+    'Register <code>formContext.getControl(\'lookuplogicalname\').addOnLookupTagClick(...)</code> from form OnLoad. The lookup event automatically passes execution context.',
   ],
   FormButton: [
     'Paste this function into a new JavaScript web resource and publish it.',

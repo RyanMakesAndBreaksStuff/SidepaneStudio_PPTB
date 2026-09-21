@@ -12,7 +12,7 @@ function isValidJS(code: string): boolean {
 }
 
 describe('generateBasicScript — syntax validity', () => {
-  for (const kind of ['FormOnLoad', 'FormButton', 'MainGridButton', 'SubgridButton', 'MainGridOnSelect', 'SubgridOnSelect', 'ManualJS', 'FormOnChange'] as const) {
+  for (const kind of ['FormOnLoad', 'FormButton', 'MainGridButton', 'SubgridButton', 'MainGridOnSelect', 'SubgridOnSelect', 'ManualJS', 'FormOnChange', 'LookupTagClick'] as const) {
     it(`${kind} produces valid JS`, () => {
       const config = cfg({ trigger: { kind, fieldName: kind === 'FormOnChange' ? 'new_field' : '' } as any });
       const code = generateBasicScript(config);
@@ -108,8 +108,14 @@ describe('generateBasicScript — reuseExistingPane', () => {
     expect(isValidJS(code)).toBe(true);
     expect(code).toContain('existing.select();');
     expect(code).toContain('await existing.navigate(');
-    // the bare focus-only early return must be gone
-    expect(code).not.toMatch(/existing\.select\(\);\s*return;/);
+    // navigation must happen before focus and the reuse branch must return afterward
+    expect(code).not.toMatch(/existing\.select\(\);\s*await existing\.navigate/);
+  });
+
+  it('navigates an existing pane before selecting it', () => {
+    const code = generateBasicScript(cfg({ context: { ...cfg({}).context, reuseExistingPane: true } }));
+    expect(code.indexOf('await existing.navigate(')).toBeGreaterThan(-1);
+    expect(code.indexOf('existing.select()')).toBeGreaterThan(code.indexOf('await existing.navigate('));
   });
 
   it('reuseExistingPane: true navigates the existing pane with the same input as createPane', () => {
@@ -404,6 +410,36 @@ describe('generateBasicScript — FormOnChange', () => {
   });
 });
 
+describe('generateBasicScript — LookupTagClick', () => {
+  const lookup = {
+    ...cfg({}).trigger,
+    kind: 'LookupTagClick' as any,
+    fieldName: 'parentaccountid',
+    namespace: 'Contoso',
+    functionName: 'openTag',
+  };
+
+  it('cancels default navigation and uses the clicked tag', () => {
+    const code = generateBasicScript(cfg({ trigger: lookup, target: {
+      pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '',
+    } }));
+    expect(isValidJS(code)).toBe(true);
+    expect(code).toContain('eventArgs.preventDefault()');
+    expect(code).toContain('eventArgs.getTagValue()');
+    expect(code).toContain('entityName: tag.entityType');
+    expect(code).toContain('entityId: tag.id');
+    expect(code).toContain('addOnLookupTagClick(Contoso.openTag)');
+  });
+
+  it('emits the same event preamble and tag options for Shared Library output', () => {
+    const code = generateLibraryScript(cfg({ trigger: lookup, target: { pageType: 'custom', name: 'sps_Page' } }));
+    expect(isValidJS(code)).toBe(true);
+    expect(code).toContain('eventArgs.preventDefault()');
+    expect(code).toContain('recordId: tag.id');
+    expect(code).toContain('entityName: tag.entityType');
+  });
+});
+
 describe('generateBasicScript — closeOthers', () => {
   it('closeOthers: true emits getAllPanes forEach close after navigate', () => {
     const code = generateBasicScript(
@@ -671,7 +707,7 @@ describe('buildNavigateInput — record context (CR-001)', () => {
 });
 
 describe('generateBasicScript — error surfacing (WR-005)', () => {
-  for (const kind of ['FormOnLoad', 'FormButton', 'MainGridButton', 'SubgridButton', 'MainGridOnSelect', 'SubgridOnSelect', 'ManualJS', 'FormOnChange'] as const) {
+  for (const kind of ['FormOnLoad', 'FormButton', 'MainGridButton', 'SubgridButton', 'MainGridOnSelect', 'SubgridOnSelect', 'ManualJS', 'FormOnChange', 'LookupTagClick'] as const) {
     it(`${kind} opens an error dialog as well as logging`, () => {
       const code = generateBasicScript(
         cfg({ trigger: { kind, fieldName: kind === 'FormOnChange' ? 'new_field' : '' } as any })

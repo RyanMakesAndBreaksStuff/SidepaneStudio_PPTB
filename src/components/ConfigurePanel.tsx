@@ -68,6 +68,7 @@ const TRIGGER_OPTIONS = [
   { value: 'SubgridOnSelect',  label: 'Row select (subgrid)',         desc: 'Opens when a single row is selected in a subgrid' },
   { value: 'ManualJS',        label: 'Console / Manual',             desc: 'Paste into browser console (F12)' },
   { value: 'FormOnChange',   label: 'Field on change',              desc: 'Registers an onChange handler on a specific field' },
+  { value: 'LookupTagClick', label: 'Lookup tag click',              desc: 'Opens when a tag is clicked in a lookup control' },
 ];
 
 const CONTEXT_OPTIONS = [
@@ -317,12 +318,17 @@ export function ConfigurePanel({
           </>
         )}
 
-        {trigger.kind === 'FormOnChange' && (
-          <Field label="Field name" required hint="Logical name of the field to watch for changes" error={vErrors['trigger.fieldName']}>
+        {(trigger.kind === 'FormOnChange' || trigger.kind === 'LookupTagClick') && (
+          <Field
+            label={trigger.kind === 'LookupTagClick' ? 'Lookup control name' : 'Field name'}
+            required
+            hint={trigger.kind === 'LookupTagClick' ? 'Logical name of the lookup control whose tag clicks should open the pane' : 'Logical name of the field to watch for changes'}
+            error={vErrors['trigger.fieldName']}
+          >
             <Input
               value={trigger.fieldName}
               onChange={v => patch('trigger', 'fieldName', v)}
-              placeholder="new_fieldname"
+              placeholder={trigger.kind === 'LookupTagClick' ? 'parentaccountid' : 'new_fieldname'}
               error={!!vErrors['trigger.fieldName']}
             />
           </Field>
@@ -338,6 +344,12 @@ export function ConfigurePanel({
             options={CONTEXT_OPTIONS}
           />
         </Field>
+
+        {trigger.kind === 'LookupTagClick' && (target.pageType === 'custom' || target.pageType === 'entityrecord') && (
+          <Callout type="info" icon="ℹ">
+            The clicked tag supplies the record identity for custom pages and entity records, overriding Current record, Static, or None context at runtime. The selected context mode is not changed automatically.
+          </Callout>
+        )}
 
         {context.mode !== 'None' && (
           <Field
@@ -364,7 +376,7 @@ export function ConfigurePanel({
 
         {(context.mode === 'Static' ||
           (target.pageType === 'entityrecord' &&
-            (context.mode === 'None' || trigger.kind === 'ManualJS'))) && (
+            (context.mode === 'None' || trigger.kind === 'ManualJS') && trigger.kind !== 'LookupTagClick')) && (
           <>
             <Field label="Record ID" hint="GUID of the specific record" error={vErrors['context.staticRecordId']}>
               <Input
@@ -382,7 +394,7 @@ export function ConfigurePanel({
 
         <Toggle
           label="Reuse open pane"
-          desc="Focus instead of reloading if already open"
+          desc={context.reuseExistingPane ? 'Navigate the existing pane to the new page, then select it' : 'Close and recreate the pane when it is already open'}
           checked={context.reuseExistingPane}
           onChange={v => patch('context', 'reuseExistingPane', v)}
         />

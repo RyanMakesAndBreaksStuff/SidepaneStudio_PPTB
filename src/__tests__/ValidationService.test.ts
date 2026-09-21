@@ -179,6 +179,25 @@ describe('static record ID validation', () => {
   });
 });
 
+describe('validate — LookupTagClick', () => {
+  it('requires a lookup control name', () => {
+    const result = validate(cfg({ trigger: { kind: 'LookupTagClick', fieldName: '' } as any }));
+    expect(result.errors).toContainEqual({
+      field: 'trigger.fieldName',
+      message: 'Lookup control name is required for LookupTagClick triggers.',
+    });
+  });
+
+  it('does not require a configured record ID when the clicked tag supplies it', () => {
+    const result = validate(cfg({
+      target: { pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '' },
+      trigger: { kind: 'LookupTagClick', fieldName: 'parentaccountid' } as any,
+      context: { mode: 'None', staticRecordId: '' } as any,
+    }));
+    expect(result.errors.map(error => error.field)).not.toContain('context.staticRecordId');
+  });
+});
+
 describe('validate — web resource name (WR-003)', () => {
   it('blocks an empty web resource name the same way it blocks an empty custom page name', () => {
     const result = validate(cfg({ target: { pageType: 'webresource', name: '' } }));

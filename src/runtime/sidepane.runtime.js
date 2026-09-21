@@ -65,8 +65,8 @@
       const existing = sidePanes.getPane(options.paneId);
       if (existing) {
         if (reuse) {
-          existing.select();
           await existing.navigate(navInput);
+          existing.select();
           if (options.badge) existing.badge = options.badge;
           return;
         }

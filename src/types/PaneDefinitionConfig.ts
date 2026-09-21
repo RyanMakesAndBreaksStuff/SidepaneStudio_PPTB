@@ -1,6 +1,6 @@
 // src/types/PaneDefinitionConfig.ts
 
-export type TriggerKind = 'FormOnLoad' | 'FormButton' | 'MainGridButton' | 'SubgridButton' | 'MainGridOnSelect' | 'SubgridOnSelect' | 'ManualJS' | 'FormOnChange';
+export type TriggerKind = 'FormOnLoad' | 'FormButton' | 'MainGridButton' | 'SubgridButton' | 'MainGridOnSelect' | 'SubgridOnSelect' | 'ManualJS' | 'FormOnChange' | 'LookupTagClick';
 export type PageType = 'custom' | 'entityrecord' | 'entitylist' | 'webresource' | 'dashboard' | 'search';
 export type ContextMode = 'CurrentRecord' | 'SelectedRow' | 'Static' | 'None';
 

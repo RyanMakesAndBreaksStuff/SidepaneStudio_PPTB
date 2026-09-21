@@ -324,6 +324,23 @@ describe('ConfigurePanel behavior controls', () => {
   });
 });
 
+describe('ConfigurePanel — LookupTagClick', () => {
+  it('shows a lookup control name field with the lookup placeholder', async () => {
+    await render(
+      <ConfigurePanel
+        config={{ ...DEFAULT_CONFIG, trigger: { ...DEFAULT_CONFIG.trigger, kind: 'LookupTagClick', fieldName: '' } as any }}
+        onChange={() => {}}
+        validation={{ isValid: true, errors: [], warnings: [] }}
+        metadataService={makeMetadataService()}
+      />
+    );
+    await expandSection('How makers launch this pane');
+
+    expect(host?.textContent).toContain('Lookup control name');
+    expect(findInputByPlaceholder('parentaccountid')).toBeTruthy();
+  });
+});
+
 describe('ConfigurePanel — pane appearance (WR-002)', () => {
   it('offers no Resizable toggle, because isResizable is not a documented paneOption', async () => {
     await renderPanel({ config: DEFAULT_CONFIG, onChange: vi.fn() });

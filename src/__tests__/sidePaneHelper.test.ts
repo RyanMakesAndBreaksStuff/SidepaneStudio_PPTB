@@ -54,6 +54,8 @@ describe('SidePaneHelper.open — createPane options (contract C4/C3)', () => {
     expect(f.pane.select).toHaveBeenCalled();
     expect(f.pane.navigate).toHaveBeenCalled();
     expect(f.xrm.App.sidePanes.createPane).not.toHaveBeenCalled();
+    expect(f.pane.navigate.mock.invocationCallOrder[0])
+      .toBeLessThan(f.pane.select.mock.invocationCallOrder[0]);
   });
 
   it('closes an existing pane when reuse is disabled', async () => {

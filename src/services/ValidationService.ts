@@ -181,7 +181,8 @@ export function validate(config: PaneDefinitionConfig, accessibleTables?: Set<st
   // without a normalizable GUID the generated script's only effect is to throw.
   if (
     config.target.pageType === 'entityrecord' &&
-    (config.context.mode === 'Static' || config.context.mode === 'None' || config.trigger.kind === 'ManualJS')
+    (config.context.mode === 'Static' || config.context.mode === 'None' || config.trigger.kind === 'ManualJS') &&
+    config.trigger.kind !== 'LookupTagClick'
   ) {
     const configuredId = config.context.staticRecordId;
     if (!normalizeGuid(configuredId)) {
@@ -193,10 +194,12 @@ export function validate(config: PaneDefinitionConfig, accessibleTables?: Set<st
   }
 
 
-  if (config.trigger.kind === 'FormOnChange' && !config.trigger.fieldName?.trim()) {
+  if ((config.trigger.kind === 'FormOnChange' || config.trigger.kind === 'LookupTagClick') && !config.trigger.fieldName?.trim()) {
     errors.push({
       field: 'trigger.fieldName',
-      message: 'Field name is required for FormOnChange triggers.',
+      message: config.trigger.kind === 'LookupTagClick'
+        ? 'Lookup control name is required for LookupTagClick triggers.'
+        : 'Field name is required for FormOnChange triggers.',
     });
   }
 

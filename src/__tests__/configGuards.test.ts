@@ -21,6 +21,14 @@ describe('parseStoredConfig', () => {
     expect(parseStoredConfig(JSON.stringify(badTrigger))).toBeNull();
   });
 
+  it('accepts a stored LookupTagClick trigger', () => {
+    const config = {
+      ...DEFAULT_CONFIG,
+      trigger: { ...DEFAULT_CONFIG.trigger, kind: 'LookupTagClick', fieldName: 'parentaccountid' },
+    };
+    expect(parseStoredConfig(JSON.stringify(config))?.trigger.kind).toBe('LookupTagClick');
+  });
+
   it('accepts a well-formed config', () => {
     const parsed = parseStoredConfig(JSON.stringify(DEFAULT_CONFIG));
     expect(parsed).toEqual(DEFAULT_CONFIG);
