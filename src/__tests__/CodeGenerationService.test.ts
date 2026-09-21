@@ -12,7 +12,7 @@ function isValidJS(code: string): boolean {
 }
 
 describe('generateBasicScript — syntax validity', () => {
-  for (const kind of ['FormOnLoad', 'FormButton', 'MainGridButton', 'SubgridButton', 'ManualJS', 'FormOnChange'] as const) {
+  for (const kind of ['FormOnLoad', 'FormButton', 'MainGridButton', 'SubgridButton', 'MainGridOnSelect', 'SubgridOnSelect', 'ManualJS', 'FormOnChange', 'LookupTagClick'] as const) {
     it(`${kind} produces valid JS`, () => {
       const config = cfg({ trigger: { kind, fieldName: kind === 'FormOnChange' ? 'new_field' : '' } as any });
       const code = generateBasicScript(config);
@@ -101,20 +101,42 @@ describe('generateBasicScript — safe generated identifiers', () => {
 });
 
 describe('generateBasicScript — reuseExistingPane', () => {
-  it('reuseExistingPane: true emits select(); return;', () => {
-    const code = generateBasicScript(cfg({ context: { reuseExistingPane: true } as any }));
-    expect(code).toContain('.select()');
+  it('reuseExistingPane: true selects AND navigates the existing pane before returning', () => {
+    const code = generateBasicScript(
+      cfg({ trigger: { kind: 'FormButton' } as any, context: { reuseExistingPane: true } as any })
+    );
+    expect(isValidJS(code)).toBe(true);
+    expect(code).toContain('existing.select();');
+    expect(code).toContain('await existing.navigate(');
+    // navigation must happen before focus and the reuse branch must return afterward
+    expect(code).not.toMatch(/existing\.select\(\);\s*await existing\.navigate/);
   });
 
-  it('reuseExistingPane: false proceeds to createPane (no early return on existing)', () => {
+  it('navigates an existing pane before selecting it', () => {
+    const code = generateBasicScript(cfg({ context: { ...cfg({}).context, reuseExistingPane: true } }));
+    expect(code.indexOf('await existing.navigate(')).toBeGreaterThan(-1);
+    expect(code.indexOf('existing.select()')).toBeGreaterThan(code.indexOf('await existing.navigate('));
+  });
+
+  it('reuseExistingPane: true navigates the existing pane with the same input as createPane', () => {
     const code = generateBasicScript(
       cfg({
         trigger: { kind: 'FormButton' } as any,
-        context: { reuseExistingPane: false } as any,
+        target: { pageType: 'entitylist', entityName: 'account', viewId: '', viewType: '' },
+        context: { mode: 'None', entityName: '', staticRecordId: '', reuseExistingPane: true },
       })
     );
+    const occurrences = code.match(/pageType: "entitylist", entityName: "account"/g) || [];
+    expect(occurrences.length).toBe(2);
+  });
+
+  it('reuseExistingPane: false closes the existing pane and proceeds to createPane', () => {
+    const code = generateBasicScript(
+      cfg({ trigger: { kind: 'FormButton' } as any, context: { reuseExistingPane: false } as any })
+    );
+    expect(code).toContain('existing.close()');
     expect(code).toContain('createPane');
-    expect(code).not.toMatch(/getPane\([^)]*\)[\s\S]{0,60}\.select\(\)[\s\S]{0,10}return/);
+    expect(code).not.toContain('existing.select()');
   });
 });
 
@@ -153,7 +175,8 @@ describe('buildNavigateInput — pageType branches', () => {
     const code = generateBasicScript(
       cfg({
         trigger: { kind: 'FormOnLoad' } as any,
-        target: { pageType: 'entityrecord', entityName: 'account', entityId: '' },
+        target: { pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '' },
+        context: { mode: 'CurrentRecord', entityName: 'account', staticRecordId: '', reuseExistingPane: true },
       })
     );
     expect(code).toContain('pageType: "entityrecord"');
@@ -165,7 +188,8 @@ describe('buildNavigateInput — pageType branches', () => {
     const code = generateBasicScript(
       cfg({
         trigger: { kind: 'FormButton' } as any,
-        target: { pageType: 'entityrecord', entityName: 'account', entityId: '' },
+        target: { pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '' },
+        context: { mode: 'CurrentRecord', entityName: 'account', staticRecordId: '', reuseExistingPane: true },
       })
     );
     expect(code).toContain('primaryControl.data.entity.getId()');
@@ -176,7 +200,8 @@ describe('buildNavigateInput — pageType branches', () => {
     const code = generateBasicScript(
       cfg({
         trigger: { kind: 'MainGridButton' } as any,
-        target: { pageType: 'entityrecord', entityName: 'account', entityId: '' },
+        target: { pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '' },
+        context: { mode: 'CurrentRecord', entityName: 'account', staticRecordId: '', reuseExistingPane: true },
       })
     );
     expect(code).toContain('selectedRows.getLength() === 0');
@@ -189,7 +214,8 @@ describe('buildNavigateInput — pageType branches', () => {
     const code = generateBasicScript(
       cfg({
         trigger: { kind: 'SubgridButton' } as any,
-        target: { pageType: 'entityrecord', entityName: 'account', entityId: '' },
+        target: { pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '' },
+        context: { mode: 'CurrentRecord', entityName: 'account', staticRecordId: '', reuseExistingPane: true },
       })
     );
     expect(code).toContain('var selectedRecordId = selectedRows.get(0).getData().getEntity().getId();');
@@ -197,11 +223,25 @@ describe('buildNavigateInput — pageType branches', () => {
     expect(code).not.toContain("entityId: ''");
   });
 
+  it('entityrecord + MainGridOnSelect uses getEventSource().getId()', () => {
+    const code = generateBasicScript(
+      cfg({
+        trigger: { kind: 'MainGridOnSelect' } as any,
+        target: { pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '' },
+        context: { mode: 'CurrentRecord', entityName: 'account', staticRecordId: '', reuseExistingPane: true },
+      })
+    );
+    expect(code).toContain('function(executionContext)');
+    expect(code).toContain('var selectedRecordId = executionContext.getEventSource().getId();');
+    expect(code).toContain('entityId: selectedRecordId');
+    expect(code).not.toContain('primaryControl');
+  });
+
   it('entityrecord + ManualJS uses a valid static record ID', () => {
     const code = generateBasicScript(
       cfg({
         trigger: { kind: 'ManualJS' } as any,
-        target: { pageType: 'entityrecord', entityName: 'account', entityId: '' },
+        target: { pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '' },
         context: {
           mode: 'Static',
           entityName: 'account',
@@ -219,7 +259,7 @@ describe('buildNavigateInput — pageType branches', () => {
     const code = generateBasicScript(
       cfg({
         trigger: { kind: 'ManualJS' } as any,
-        target: { pageType: 'entityrecord', entityName: 'account', entityId: '' },
+        target: { pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '' },
         context: { mode: 'Static', entityName: 'account', staticRecordId: 'not-a-guid', reuseExistingPane: true },
       })
     );
@@ -232,7 +272,7 @@ describe('buildNavigateInput — pageType branches', () => {
     const code = generateBasicScript(
       cfg({
         trigger: { kind: 'FormButton' } as any,
-        target: { pageType: 'entityrecord', entityName: 'account', entityId: '' },
+        target: { pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '' },
         context: { mode: 'CurrentRecord', entityName: 'contact', staticRecordId: '', reuseExistingPane: true },
       })
     );
@@ -243,7 +283,7 @@ describe('buildNavigateInput — pageType branches', () => {
     const code = generateBasicScript(
       cfg({
         trigger: { kind: 'FormButton' } as any,
-        target: { pageType: 'entityrecord', entityName: 'account', entityId: '' },
+        target: { pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '' },
         context: { mode: 'CurrentRecord', entityName: '', staticRecordId: '', reuseExistingPane: true },
       })
     );
@@ -253,7 +293,7 @@ describe('buildNavigateInput — pageType branches', () => {
   it('entitylist uses context.entityName when set', () => {
     const code = generateBasicScript(
       cfg({
-        target: { pageType: 'entitylist', entityName: 'account' },
+        target: { pageType: 'entitylist', entityName: 'account', viewId: '', viewType: '' },
         context: { mode: 'None', entityName: 'contact', staticRecordId: '', reuseExistingPane: true },
       })
     );
@@ -262,7 +302,7 @@ describe('buildNavigateInput — pageType branches', () => {
 
   it('entitylist emits pageType and entityName but no entityId', () => {
     const code = generateBasicScript(
-      cfg({ target: { pageType: 'entitylist', entityName: 'contact' } })
+      cfg({ target: { pageType: 'entitylist', entityName: 'contact', viewId: '', viewType: '' } })
     );
     expect(code).toContain('pageType: "entitylist"');
     expect(code).toContain('entityName: "contact"');
@@ -370,6 +410,36 @@ describe('generateBasicScript — FormOnChange', () => {
   });
 });
 
+describe('generateBasicScript — LookupTagClick', () => {
+  const lookup = {
+    ...cfg({}).trigger,
+    kind: 'LookupTagClick' as any,
+    fieldName: 'parentaccountid',
+    namespace: 'Contoso',
+    functionName: 'openTag',
+  };
+
+  it('cancels default navigation and uses the clicked tag', () => {
+    const code = generateBasicScript(cfg({ trigger: lookup, target: {
+      pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '',
+    } }));
+    expect(isValidJS(code)).toBe(true);
+    expect(code).toContain('eventArgs.preventDefault()');
+    expect(code).toContain('eventArgs.getTagValue()');
+    expect(code).toContain('entityName: tag.entityType');
+    expect(code).toContain('entityId: tag.id');
+    expect(code).toContain('addOnLookupTagClick(Contoso.openTag)');
+  });
+
+  it('emits the same event preamble and tag options for Shared Library output', () => {
+    const code = generateLibraryScript(cfg({ trigger: lookup, target: { pageType: 'custom', name: 'sps_Page' } }));
+    expect(isValidJS(code)).toBe(true);
+    expect(code).toContain('eventArgs.preventDefault()');
+    expect(code).toContain('recordId: tag.id');
+    expect(code).toContain('entityName: tag.entityType');
+  });
+});
+
 describe('generateBasicScript — closeOthers', () => {
   it('closeOthers: true emits getAllPanes forEach close after navigate', () => {
     const code = generateBasicScript(
@@ -395,6 +465,16 @@ describe('generateBasicScript — closeOthers', () => {
 });
 
 describe('buildPaneOptions — isSelected and canClose', () => {
+  it.each([generateBasicScript, generateLibraryScript])
+    ('normalizes unsafe width before generating source', generate => {
+      const code = generate(cfg({ pane: {
+        ...cfg({}).pane, width: '480;globalThis.pwned=1',
+      } as any }));
+      expect(isValidJS(code)).toBe(true);
+      expect(code).not.toContain('globalThis.pwned');
+      if (generate === generateBasicScript) expect(code).toContain('width: 480');
+    });
+
   it('isSelected: false is emitted in output', () => {
     const code = generateBasicScript(cfg({ pane: { isSelected: false } as any }));
     expect(code).toContain('isSelected: false');
@@ -416,14 +496,35 @@ describe('buildPaneOptions — isSelected and canClose', () => {
     expect(code).not.toContain('canClose: omitted');
   });
 
-  it('badgeValue is emitted when non-zero', () => {
-    const code = generateBasicScript(cfg({ pane: { badgeValue: 5 } as any }));
-    expect(code).toContain('badge: 5');
+  it('never emits isResizable — it is not a documented paneOption', () => {
+    for (const isResizable of [true, false]) {
+      const code = generateBasicScript(cfg({ pane: { isResizable } as any }));
+      expect(code).not.toContain('isResizable');
+    }
   });
 
-  it('badgeValue is omitted when zero', () => {
+  it('badge is assigned on the pane after navigate, never inside createPane', () => {
+    const code = generateBasicScript(cfg({ pane: { badgeValue: 5 } as any }));
+    expect(isValidJS(code)).toBe(true);
+    expect(code).toContain('pane.badge = 5;');
+    expect(code).not.toContain('badge: 5');
+    expect(code.indexOf('pane.navigate(')).toBeLessThan(code.indexOf('pane.badge = 5;'));
+  });
+
+  it('badgeValue of zero emits no badge assignment', () => {
     const code = generateBasicScript(cfg({ pane: { badgeValue: 0 } as any }));
     expect(code).not.toContain('badge');
+  });
+
+  it('imageSrc is prefixed with WebResources/ when unprefixed', () => {
+    const code = generateBasicScript(cfg({ pane: { imageSrc: 'sps_/icons/myicon.svg' } as any }));
+    expect(code).toContain('imageSrc: "WebResources/sps_/icons/myicon.svg"');
+  });
+
+  it('imageSrc already prefixed with WebResources/ is left alone', () => {
+    const code = generateBasicScript(cfg({ pane: { imageSrc: 'WebResources/sps_/icons/myicon.svg' } as any }));
+    expect(code).toContain('imageSrc: "WebResources/sps_/icons/myicon.svg"');
+    expect(code).not.toContain('WebResources/WebResources/');
   });
 });
 
@@ -473,4 +574,157 @@ describe('generateLibraryScript', () => {
     expect(isValidJS(code)).toBe(true);
     expect(code).not.toContain('badge');
   });
+
+  it('webresource targets emit webresourceName, never name (WR-007)', () => {
+    const code = generateLibraryScript(
+      cfg({ target: { pageType: 'webresource', name: 'new_mypage.html' } })
+    );
+    expect(code).toContain('webresourceName: "new_mypage.html"');
+    expect(code).not.toContain('name: "new_mypage.html"');
+  });
+
+  it('custom targets still emit name, never webresourceName', () => {
+    const code = generateLibraryScript(
+      cfg({ target: { pageType: 'custom', name: 'sps_Page' } })
+    );
+    expect(code).toContain('name: "sps_Page"');
+    expect(code).not.toContain('webresourceName');
+  });
+
+  it('never emits isResizable (contract C3)', () => {
+    const code = generateLibraryScript(cfg({ pane: { isResizable: false } as any }));
+    expect(code).not.toContain('isResizable');
+  });
+
+  it('entityrecord emits entityId resolved from the record-context matrix', () => {
+    const code = generateLibraryScript(
+      cfg({
+        target: { pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '' },
+        context: {
+          mode: 'Static',
+          entityName: 'account',
+          staticRecordId: '{AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE}',
+          reuseExistingPane: true,
+        },
+      })
+    );
+    expect(code).toContain('entityName: "account"');
+    expect(code).toContain('entityId: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"');
+  });
+
+  it('custom page emits recordId when a static record resolves', () => {
+    const code = generateLibraryScript(
+      cfg({
+        context: {
+          mode: 'Static',
+          entityName: 'account',
+          staticRecordId: '{AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE}',
+          reuseExistingPane: true,
+        },
+      })
+    );
+    expect(code).toContain('recordId: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"');
+  });
+
+  it('imageSrc is WebResources/-prefixed like the basic script', () => {
+    const code = generateLibraryScript(cfg({ pane: { imageSrc: 'sps_/icons/myicon.svg' } as any }));
+    expect(code).toContain('imageSrc: "WebResources/sps_/icons/myicon.svg"');
+  });
+});
+
+describe('buildNavigateInput — record context (CR-001)', () => {
+  it('default config (custom page + CurrentRecord + FormButton) emits recordId and entityName', () => {
+    const code = generateBasicScript(
+      cfg({ context: { mode: 'CurrentRecord', entityName: 'account', staticRecordId: '', reuseExistingPane: true } })
+    );
+    expect(code).toContain('pageType: "custom"');
+    expect(code).toContain('entityName: "account"');
+    expect(code).toContain('recordId: primaryControl.data.entity.getId()');
+  });
+
+  it('custom page omits both record fields when context.mode is None', () => {
+    const code = generateBasicScript(
+      cfg({ context: { mode: 'None', entityName: 'account', staticRecordId: '', reuseExistingPane: true } })
+    );
+    expect(code).toContain('pageType: "custom"');
+    expect(code).not.toContain('recordId');
+    expect(code).not.toContain('entityName');
+  });
+
+  it('custom page omits both record fields when entityName is unknown', () => {
+    const code = generateBasicScript(
+      cfg({ context: { mode: 'CurrentRecord', entityName: '', staticRecordId: '', reuseExistingPane: true } })
+    );
+    expect(code).not.toContain('recordId');
+  });
+
+  it('custom page + FormOnLoad uses formContext', () => {
+    const code = generateBasicScript(
+      cfg({
+        trigger: { kind: 'FormOnLoad', functionName: 'openPane', namespace: 'Contoso', fieldName: '' },
+        context: { mode: 'CurrentRecord', entityName: 'contact', staticRecordId: '', reuseExistingPane: true },
+      })
+    );
+    expect(code).toContain('recordId: formContext.data.entity.getId()');
+  });
+
+  it('custom page + SelectedRow + SubgridButton uses selectedRecordId', () => {
+    const code = generateBasicScript(
+      cfg({
+        trigger: { kind: 'SubgridButton', functionName: 'openPane', namespace: 'Contoso', fieldName: '' },
+        context: { mode: 'SelectedRow', entityName: 'contact', staticRecordId: '', reuseExistingPane: true },
+      })
+    );
+    expect(code).toContain('recordId: selectedRecordId');
+  });
+
+  it('custom page + Static emits the normalized GUID literal', () => {
+    const code = generateBasicScript(
+      cfg({
+        context: {
+          mode: 'Static',
+          entityName: 'account',
+          staticRecordId: '{AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE}',
+          reuseExistingPane: true,
+        },
+      })
+    );
+    expect(code).toContain('recordId: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"');
+  });
+
+  it('webresource emits URL-encoded JSON data when a record resolves', () => {
+    const code = generateBasicScript(
+      cfg({
+        target: { pageType: 'webresource', name: 'new_mypage.html' },
+        context: { mode: 'CurrentRecord', entityName: 'account', staticRecordId: '', reuseExistingPane: true },
+      })
+    );
+    expect(code).toContain('webresourceName: "new_mypage.html"');
+    expect(code).toContain(
+      'data: encodeURIComponent(JSON.stringify({ entityName: "account", recordId: primaryControl.data.entity.getId() }))'
+    );
+  });
+
+  it('webresource omits data when context.mode is None', () => {
+    const code = generateBasicScript(
+      cfg({
+        target: { pageType: 'webresource', name: 'new_mypage.html' },
+        context: { mode: 'None', entityName: 'account', staticRecordId: '', reuseExistingPane: true },
+      })
+    );
+    expect(code).not.toContain('data:');
+  });
+});
+
+describe('generateBasicScript — error surfacing (WR-005)', () => {
+  for (const kind of ['FormOnLoad', 'FormButton', 'MainGridButton', 'SubgridButton', 'MainGridOnSelect', 'SubgridOnSelect', 'ManualJS', 'FormOnChange', 'LookupTagClick'] as const) {
+    it(`${kind} opens an error dialog as well as logging`, () => {
+      const code = generateBasicScript(
+        cfg({ trigger: { kind, fieldName: kind === 'FormOnChange' ? 'new_field' : '' } as any })
+      );
+      expect(isValidJS(code)).toBe(true);
+      expect(code).toContain('console.error(');
+      expect(code).toContain('Xrm.Navigation.openErrorDialog({ message: e.message })');
+    });
+  }
 });

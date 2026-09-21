@@ -19,7 +19,7 @@ export interface MockMDAShellProps {
 const FIXED_MOCK_HOST: TargetConfig = {
   pageType: 'entityrecord',
   entityName: 'account',
-  entityId: '',
+  formId: '', tabName: '', data: '',
 };
 
 export function MockMDAShell({ pane, target, validation }: MockMDAShellProps): React.ReactElement {

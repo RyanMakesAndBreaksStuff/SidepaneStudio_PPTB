@@ -28,6 +28,11 @@ In the Configure panel, choose what the side pane should open:
 Fill in the required fields for the selected target. For table-based targets,
 select or enter the table name before generating code.
 
+Table lists can include a configured `viewId` and `viewType` (`savedquery` or
+`userquery`). Table records can include a `formId`, `tabName`, and JSON-object
+`data` value. Custom-page `entityName` and `recordId` values come from Record
+context at runtime rather than from the custom-page target itself.
+
 ## 3. Configure Pane Settings
 
 Set the pane details that control how the side pane appears:
@@ -55,9 +60,18 @@ Choose how the generated code will be called:
 - **Command bar button (subgrid)** - wires the pane to a subgrid command.
 - **Console / Manual** - creates code you can paste into the browser console.
 - **Field on change** - registers a field change handler.
+- **Lookup tag click** - cancels the lookup's default navigation and opens the
+  pane for the clicked lookup tag.
 
 For command and event triggers, set the generated function namespace and
 function name to match your solution naming conventions.
+
+For Lookup tag click, set the lookup control's logical name. Register the
+generated handler from form OnLoad with
+`formContext.getControl('lookuplogicalname').addOnLookupTagClick(...)`.
+The control event automatically passes execution context. The generated
+handler calls `preventDefault()` synchronously and reads the clicked tag with
+`getTagValue()`.
 
 ## 5. Set Context Behavior
 
@@ -69,8 +83,11 @@ Choose how the target receives record context:
 - **None** - opens the pane independently.
 
 Enable **Reuse open pane** when the same pane should stay loaded instead of
-being recreated. Use **Expand on open** when the pane should become visible
-immediately after the trigger runs.
+ being recreated. Reuse will navigate the existing pane to the new page, then
+ select it. For a Lookup tag click targeting a custom page or table record,
+the clicked tag supplies `tag.entityType` and `tag.id`, overriding Current
+record, Static, or None context at runtime. Use **Expand on open** when the
+pane should become visible immediately after the trigger runs.
 
 ## 6. Preview the Pane
 
@@ -79,6 +96,11 @@ Use the preview area before copying code:
 1. Open the mock preview to check pane layout, title, width, and behavior.
 2. Use the form preview when connected metadata and form XML are available.
 3. Adjust configuration until the pane looks correct for the target app.
+
+Preview metadata shows configured table-list `viewId` and table-record
+`formId`/`tabName` values when present. The mock metadata is not a live
+navigation test. The form preview host's `FormSelector` remains independent
+of the pane target's configured form.
 
 The preview is for validation and layout confidence. Always test generated
 code in the target model-driven app before shipping.
@@ -105,3 +127,7 @@ open.
 - **Wrong record opens** - review the selected context mode and the trigger source.
 - **Code validation fails** - complete all required fields shown in the Configure
   panel before copying output.
+- **Lookup tag does not register** - use `getControl`, not `getAttribute`,
+  and register `addOnLookupTagClick` from form OnLoad with execution context.
+- **Preview differs from the app** - local tests and preview do not replace a
+  target model-driven-app test in a connected Dataverse environment.

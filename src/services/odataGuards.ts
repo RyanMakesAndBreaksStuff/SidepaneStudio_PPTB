@@ -43,3 +43,13 @@ export function buildSystemDashboardsPath(): string {
 export function buildUserDashboardsPath(): string {
   return 'userforms?$filter=type eq 0&$select=name,userformid&$orderby=name asc';
 }
+
+export function buildViewsForEntityPath(
+  entityLogicalName: string,
+  viewType: 'savedquery' | 'userquery'
+): string | null {
+  if (!isValidLogicalName(entityLogicalName)) return null;
+  const collection = viewType === 'savedquery' ? 'savedqueries' : 'userqueries';
+  return `${collection}?$select=name,${viewType}id,fetchxml` +
+    `&$filter=returnedtypecode eq '${entityLogicalName}' and querytype eq 0&$orderby=name asc`;
+}

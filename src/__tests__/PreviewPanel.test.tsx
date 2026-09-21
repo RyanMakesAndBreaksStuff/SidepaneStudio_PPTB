@@ -76,4 +76,27 @@ describe('PreviewPanel', () => {
     // In form mode with no entity selected, should show placeholder text
     expect(host?.textContent).toContain('Pick a preview entity');
   });
+
+  it('shows configured entity-record form and tab parameters in preview metadata', async () => {
+    await render(
+      <PreviewPanel
+        config={{
+          ...DEFAULT_CONFIG,
+          target: {
+            pageType: 'entityrecord',
+            entityName: 'account',
+            formId: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
+            tabName: 'tab_details',
+            data: '',
+          },
+        }}
+        validation={{ isValid: true, errors: [], warnings: [] }}
+        metadataService={mockMetadataService}
+        xrm={xrmStub()}
+      />
+    );
+
+    expect(host?.textContent).toContain('Form: aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee');
+    expect(host?.textContent).toContain('Tab: tab_details');
+  });
 });

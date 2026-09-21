@@ -1,5 +1,8 @@
 import { PaneDefinitionConfig } from '../types/PaneDefinitionConfig';
 import { normalizeGuid } from './odataGuards';
+import { parseFormData } from './formData';
+import { isConfigWidthValid } from './configGuards';
+import { MAX_CONFIG_WIDTH, MIN_CONFIG_WIDTH } from '../types/PaneDefinitionConfig';
 
 export interface ValidationError {
   field: string;
@@ -26,9 +29,21 @@ export function validate(config: PaneDefinitionConfig, accessibleTables?: Set<st
     errors.push({ field: 'pane.paneId', message: 'Pane ID is required.' });
   }
 
+  if (!isConfigWidthValid(config.pane.width)) {
+    errors.push({
+      field: 'pane.width',
+      message: `Pane width must be between ${MIN_CONFIG_WIDTH} and ${MAX_CONFIG_WIDTH} pixels.`,
+    });
+  }
+
   // Error: custom pageType with empty name
   if (config.target.pageType === 'custom' && !config.target.name.trim()) {
     errors.push({ field: 'target.name', message: 'Custom page name is required.' });
+  }
+
+  // Error: webresource pageType with empty name (WR-003)
+  if (config.target.pageType === 'webresource' && !config.target.name.trim()) {
+    errors.push({ field: 'target.name', message: 'Web resource name is required.' });
   }
 
   // Error: entityrecord/entitylist with empty entityName
@@ -54,12 +69,12 @@ export function validate(config: PaneDefinitionConfig, accessibleTables?: Set<st
     });
   }
 
-  // Error: hideHeader + canClose
+  // Warning: hideHeader + canClose — Microsoft publishes this combination (WR-009)
   if (config.pane.hideHeader && config.pane.canClose) {
-    errors.push({
+    warnings.push({
       field: 'pane.hideHeader',
       message:
-        'When the header is hidden, users cannot close the pane. Set canClose to false or show the header.',
+        'Hiding the header also hides the close button, so users cannot dismiss the pane. The generated script emits canClose: false to match.',
     });
   }
 
@@ -95,6 +110,15 @@ export function validate(config: PaneDefinitionConfig, accessibleTables?: Set<st
     });
   }
 
+  // Warning: search pageType is not in the documented navigateTo pageInput list (WR-001)
+  if (config.target.pageType === 'search') {
+    warnings.push({
+      field: 'target.pageType',
+      message:
+        'Search is not a documented navigateTo pageType. Documented values are entitylist, entityrecord, dashboard, webresource, custom, and generative. Generated code may fail at runtime.',
+    });
+  }
+
   // Warning: Static context mode
   if (config.context.mode === 'Static') {
     warnings.push({
@@ -104,12 +128,29 @@ export function validate(config: PaneDefinitionConfig, accessibleTables?: Set<st
     });
   }
 
-  // Warning: SubgridButton + SelectedRow context
+  // Error: the selected context mode resolves to no record for this trigger (CR-001 / contract C1)
+  const GRID_TRIGGERS = ['MainGridButton', 'SubgridButton', 'MainGridOnSelect', 'SubgridOnSelect'];
+  if (config.context.mode === 'SelectedRow' && !GRID_TRIGGERS.includes(config.trigger.kind)) {
+    errors.push({
+      field: 'context.mode',
+      message:
+        'Selected row context is only available from a main grid or subgrid. Choose a different context mode or trigger.',
+    });
+  }
+  if (config.context.mode === 'CurrentRecord' && config.trigger.kind === 'ManualJS') {
+    errors.push({
+      field: 'context.mode',
+      message:
+        'Console / Manual scripts run outside a form or grid, so there is no current record. Use Static record ID or None.',
+    });
+  }
+
+  // Warning: SubgridButton + SelectedRow context (IN-001 — describe behavior, not a to-do)
   if (config.trigger.kind === 'SubgridButton' && config.context.mode === 'SelectedRow') {
     warnings.push({
       field: 'context.mode',
       message:
-        'SubgridButton with SelectedRow context requires a runtime row-guard in the generated code.',
+        'The generated script uses the first selected row. It exits without opening a pane when no row is selected, and ignores rows beyond the first.',
     });
   }
 
@@ -125,14 +166,34 @@ export function validate(config: PaneDefinitionConfig, accessibleTables?: Set<st
     });
   }
 
+  if (config.target.pageType === 'entitylist') {
+    if (config.target.viewId.trim() && !normalizeGuid(config.target.viewId)) {
+      errors.push({ field: 'target.viewId', message: 'View ID must be a valid GUID.' });
+    }
+    if (config.target.viewId.trim() && !['savedquery', 'userquery'].includes(config.target.viewType)) {
+      errors.push({ field: 'target.viewType', message: 'Select a view type when a view ID is set.' });
+    }
+  }
+  if (config.target.pageType === 'entityrecord') {
+    if (config.target.formId.trim() && !normalizeGuid(config.target.formId)) {
+      errors.push({ field: 'target.formId', message: 'Form ID must be a valid GUID.' });
+    }
+    try {
+      parseFormData(config.target.data);
+    } catch {
+      errors.push({ field: 'target.data', message: 'Form data must be a JSON object.' });
+    }
+  }
+
   // Error: entityrecord navigation that resolves its ID from configuration rather than
   // from the trigger. Mirrors buildConfiguredRecordIdExpression in CodeGenerationService —
   // without a normalizable GUID the generated script's only effect is to throw.
   if (
     config.target.pageType === 'entityrecord' &&
-    (config.context.mode === 'Static' || config.trigger.kind === 'ManualJS')
+    (config.context.mode === 'Static' || config.context.mode === 'None' || config.trigger.kind === 'ManualJS') &&
+    config.trigger.kind !== 'LookupTagClick'
   ) {
-    const configuredId = config.context.staticRecordId || config.target.entityId;
+    const configuredId = config.context.staticRecordId;
     if (!normalizeGuid(configuredId)) {
       errors.push({
         field: 'context.staticRecordId',
@@ -142,10 +203,12 @@ export function validate(config: PaneDefinitionConfig, accessibleTables?: Set<st
   }
 
 
-  if (config.trigger.kind === 'FormOnChange' && !config.trigger.fieldName?.trim()) {
+  if ((config.trigger.kind === 'FormOnChange' || config.trigger.kind === 'LookupTagClick') && !config.trigger.fieldName?.trim()) {
     errors.push({
       field: 'trigger.fieldName',
-      message: 'Field name is required for FormOnChange triggers.',
+      message: config.trigger.kind === 'LookupTagClick'
+        ? 'Lookup control name is required for LookupTagClick triggers.'
+        : 'Field name is required for FormOnChange triggers.',
     });
   }
 

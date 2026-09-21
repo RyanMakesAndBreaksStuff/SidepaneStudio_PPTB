@@ -1,4 +1,8 @@
 import { TableInfo } from '../services/MetadataService';
+import { normalizeConfigWidth } from '../services/configGuards';
+import { MAX_CONFIG_WIDTH, MIN_CONFIG_WIDTH } from '../types/PaneDefinitionConfig';
+
+export { MAX_CONFIG_WIDTH, MIN_CONFIG_WIDTH } from '../types/PaneDefinitionConfig';
 
 export interface FilteredEntry {
   table: TableInfo;
@@ -29,15 +33,13 @@ export function filterTables(tables: TableInfo[], query: string): FilteredEntry[
   return out;
 }
 
-export const MIN_CONFIG_WIDTH = 300;
 const MID_CONFIG_WIDTH = 1000;
-export const MAX_CONFIG_WIDTH = 1200;
 const MIN_PREVIEW_WIDTH = 120;
 const MID_PREVIEW_WIDTH = 270;
 const MAX_PREVIEW_WIDTH = 300;
 
 export function getPreviewPaneWidth(configWidth: number): number {
-  const clamped = Math.min(MAX_CONFIG_WIDTH, Math.max(MIN_CONFIG_WIDTH, configWidth));
+  const clamped = normalizeConfigWidth(configWidth);
   if (clamped <= MID_CONFIG_WIDTH) {
     return Math.round(
       MIN_PREVIEW_WIDTH +

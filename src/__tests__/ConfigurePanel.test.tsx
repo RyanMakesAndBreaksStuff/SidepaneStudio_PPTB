@@ -17,6 +17,7 @@ function makeMetadataService(overrides: Partial<MetadataService> = {}): Metadata
   return {
     listAccessibleTables: vi.fn().mockResolvedValue({ status: 'ok', tables: [] }),
     listAccessibleDashboards: vi.fn().mockResolvedValue({ status: 'ok', dashboards: [] }),
+    listViewsForEntity: vi.fn().mockResolvedValue({ status: 'ok', views: [] }),
     invalidate: vi.fn(),
     ...overrides,
   } as unknown as MetadataService;
@@ -62,17 +63,28 @@ async function renderPanel({
   config,
   onChange,
 }: {
-  config: PaneDefinitionConfig;
-  onChange: (updater: (prev: PaneDefinitionConfig) => PaneDefinitionConfig) => void;
-}) {
-  await render(
-    <ConfigurePanel
-      config={config}
-      onChange={onChange}
-      validation={validate(config)}
-      metadataService={makeMetadataService()}
-    />
-  );
+  config?: PaneDefinitionConfig;
+  onChange?: (updater: (prev: PaneDefinitionConfig) => PaneDefinitionConfig) => void;
+} = {}) {
+  const useStateful = config === undefined && onChange === undefined;
+
+  if (useStateful) {
+    await render(
+      <StatefulConfigurePanel
+        initialConfig={DEFAULT_CONFIG}
+        metadataService={makeMetadataService()}
+      />
+    );
+  } else {
+    await render(
+      <ConfigurePanel
+        config={config ?? DEFAULT_CONFIG}
+        onChange={onChange ?? vi.fn()}
+        validation={validate(config ?? DEFAULT_CONFIG)}
+        metadataService={makeMetadataService()}
+      />
+    );
+  }
   await expandSection('Record context');
   await expandSection('Advanced options');
 }
@@ -286,7 +298,7 @@ describe('ConfigurePanel', () => {
 describe('ConfigurePanel behavior controls', () => {
   it('renders a control for every behavior field the generator consumes', async () => {
     const onChange = vi.fn();
-    await renderPanel({ config: DEFAULT_CONFIG, onChange });
+    await renderPanel({ config: DEFAULT_CONFIG, onChange: onChange });
 
     const expand = findToggleByLabel('Expand pane on open');
     const closeOthers = findToggleByLabel('Close other side panes');
@@ -302,12 +314,168 @@ describe('ConfigurePanel behavior controls', () => {
   it('exposes the static record ID field for ManualJS + entityrecord', async () => {
     const config: PaneDefinitionConfig = {
       ...DEFAULT_CONFIG,
-      target: { pageType: 'entityrecord', entityName: 'account', entityId: '' },
+      target: { pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '' },
       trigger: { ...DEFAULT_CONFIG.trigger, kind: 'ManualJS' },
       context: { ...DEFAULT_CONFIG.context, mode: 'CurrentRecord' },
     };
     await renderPanel({ config, onChange: vi.fn() });
 
+    expect(findInputByPlaceholder('00000000-0000-0000-0000-000000000000')).toBeTruthy();
+  });
+});
+
+describe('ConfigurePanel — LookupTagClick', () => {
+  it('shows a lookup control name field with the lookup placeholder', async () => {
+    await render(
+      <ConfigurePanel
+        config={{ ...DEFAULT_CONFIG, trigger: { ...DEFAULT_CONFIG.trigger, kind: 'LookupTagClick', fieldName: '' } as any }}
+        onChange={() => {}}
+        validation={{ isValid: true, errors: [], warnings: [] }}
+        metadataService={makeMetadataService()}
+      />
+    );
+    await expandSection('How makers launch this pane');
+
+    expect(host?.textContent).toContain('Lookup control name');
+    expect(findInputByPlaceholder('parentaccountid')).toBeTruthy();
+  });
+});
+
+describe('ConfigurePanel — pane appearance (WR-002)', () => {
+  it('shows the blocking error for an invalid pane width', async () => {
+    const config = { ...DEFAULT_CONFIG, pane: { ...DEFAULT_CONFIG.pane, width: 1201 as any } };
+    await render(
+      <ConfigurePanel
+        config={config}
+        onChange={() => {}}
+        validation={validate(config)}
+        metadataService={makeMetadataService()}
+      />
+    );
+    await expandSection('Pane Appearance');
+
+    expect(host?.textContent).toContain('Pane width must be between 300 and 1200 pixels.');
+  });
+
+  it('offers no Resizable toggle, because isResizable is not a documented paneOption', async () => {
+    await renderPanel({ config: DEFAULT_CONFIG, onChange: vi.fn() });
+    await expandSection('Pane Appearance');
+    expect(host?.textContent ?? '').not.toMatch(/resizable/i);
+  });
+
+  it('tells makers the tab icon needs the WebResources/ prefix', async () => {
+    await renderPanel({ config: DEFAULT_CONFIG, onChange: vi.fn() });
+    await expandSection('Pane Appearance');
+    expect(findInputByPlaceholder('WebResources/sps_/icons/myicon.svg')).toBeTruthy();
+  });
+
+  it('surfaces the hideHeader warning as a warn callout, not an error', async () => {
+    const config = DEFAULT_CONFIG;
+    const validation = {
+      errors: [] as Array<{ field: string; message: string }>,
+      warnings: [{ field: 'pane.hideHeader', message: 'Hiding the header also hides the close button.' }],
+      isValid: true,
+    };
+    await render(
+      <ConfigurePanel
+        config={config}
+        onChange={vi.fn()}
+        validation={validation}
+        metadataService={makeMetadataService()}
+      />
+    );
+    await expandSection('Pane Appearance');
+
+    expect(host?.textContent ?? '').toMatch(/hides the close button/i);
+  });
+});
+
+describe('ConfigurePanel — search target (WR-001)', () => {
+  it('shows the search warning callout when the search page type is selected', async () => {
+    const config = { ...DEFAULT_CONFIG, target: { pageType: 'search' as const, searchText: '' } };
+    const validation = {
+      errors: [] as Array<{ field: string; message: string }>,
+      warnings: [{ field: 'target.pageType', message: 'Search is not a documented navigateTo pageType.' }],
+      isValid: true,
+    };
+    await render(
+      <ConfigurePanel
+        config={config}
+        onChange={vi.fn()}
+        validation={validation}
+        metadataService={makeMetadataService()}
+      />
+    );
+    await expandSection('What opens in the pane');
+
+    expect(host?.textContent ?? '').toMatch(/not a documented navigateTo pageType/i);
+  });
+
+  it('labels the search option as unsupported in the content type list', async () => {
+    await renderPanel();
+    await expandSection('What opens in the pane');
+
+    const searchBtn = getChoiceButton('Search');
+    await act(async () => {
+      searchBtn?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(host?.textContent ?? '').toMatch(/not documented by navigateTo/i);
+  });
+
+  it('shows no search warning for a custom page target', async () => {
+    await renderPanel();
+    await expandSection('What opens in the pane');
+    expect(host?.textContent ?? '').not.toMatch(/not a documented navigateTo pageType/i);
+  });
+});
+
+describe('ConfigurePanel — record context table name (CR-001)', () => {
+  const withMode = (mode: string, extra: Record<string, unknown> = {}) => ({
+    config: {
+      ...DEFAULT_CONFIG,
+      context: { mode, entityName: '', staticRecordId: '', reuseExistingPane: true },
+      ...extra,
+    },
+  });
+
+  it('offers a table name input on the shipped default (custom + CurrentRecord)', async () => {
+    await renderPanel(withMode('CurrentRecord') as any);
+    expect(findInputByPlaceholder('account')).toBeTruthy();
+  });
+
+  it('offers a table name input for SelectedRow', async () => {
+    await renderPanel(withMode('SelectedRow') as any);
+    expect(findInputByPlaceholder('account')).toBeTruthy();
+  });
+
+  it('offers a table name input for Static', async () => {
+    await renderPanel(withMode('Static') as any);
+    expect(findInputByPlaceholder('account')).toBeTruthy();
+  });
+
+  it('hides the table name input for None, which emits no record fields', async () => {
+    await renderPanel(withMode('None') as any);
+    expect(findInputByPlaceholder('account')).toBeUndefined();
+  });
+
+  it('shows the Record ID input only for Static', async () => {
+    await renderPanel(withMode('Static') as any);
+    expect(findInputByPlaceholder('00000000-0000-0000-0000-000000000000')).toBeTruthy();
+  });
+
+  it('hides the Record ID input for CurrentRecord, which resolves the id at runtime', async () => {
+    await renderPanel(withMode('CurrentRecord') as any);
+    expect(findInputByPlaceholder('00000000-0000-0000-0000-000000000000')).toBeUndefined();
+  });
+
+  it('still shows the Record ID input for ManualJS + entityrecord', async () => {
+    await renderPanel(
+      withMode('None', {
+        trigger: { kind: 'ManualJS', functionName: 'openPane', namespace: 'Ns', fieldName: '' },
+        target: { pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '' },
+      }) as any
+    );
     expect(findInputByPlaceholder('00000000-0000-0000-0000-000000000000')).toBeTruthy();
   });
 });

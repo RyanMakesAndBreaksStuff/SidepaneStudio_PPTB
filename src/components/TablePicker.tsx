@@ -75,7 +75,11 @@ export function TablePicker({
     if (value && !loadState.tables.some(table => table.logicalName === value)) {
       return [{ value, label: `${value} (no longer accessible)`, disabled: true }, ...tableOptions];
     }
-    return tableOptions.length > 0 ? tableOptions : [{ value: '', label: 'No accessible tables found' }];
+    if (tableOptions.length === 0) return [{ value: '', label: 'No accessible tables found' }];
+    // Without an explicit placeholder, an unset value renders as whichever table is
+    // alphabetically first (often "account") — selecting that table then does nothing,
+    // since the <select> already displays it and fires no change event.
+    return value ? tableOptions : [{ value: '', label: 'Select a table…' }, ...tableOptions];
   }, [loadState, value]);
 
   return (

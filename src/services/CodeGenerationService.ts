@@ -1,7 +1,10 @@
-import { PaneDefinitionConfig, TriggerKind } from '../types/PaneDefinitionConfig';
+import { PaneDefinitionConfig, TriggerKind, DEFAULT_CONFIG } from '../types/PaneDefinitionConfig';
 import { normalizeGuid } from './odataGuards';
+import { normalizeConfigWidth } from './configGuards';
 
 const CMD_KINDS: TriggerKind[] = ['FormButton', 'MainGridButton', 'SubgridButton'];
+const GRID_KINDS: TriggerKind[] = ['MainGridButton', 'SubgridButton', 'MainGridOnSelect', 'SubgridOnSelect'];
+const GRID_SELECT_KINDS: TriggerKind[] = ['MainGridOnSelect', 'SubgridOnSelect'];
 
 /** Guard variable name — namespaced to avoid collisions with other scripts. */
 const PENDING_VAR = 'window.__spstudio_pendingPanes';
@@ -14,6 +17,13 @@ function safeIdentifier(value: string, fallback: string): string {
   return IDENTIFIER_PATTERN.test(trimmed) ? trimmed : fallback;
 }
 
+/** WR-002 / contract C3 — official imageSrc samples use the WebResources/ relative form. */
+function normalizeImageSrc(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+  return trimmed.startsWith('WebResources/') ? trimmed : `WebResources/${trimmed}`;
+}
+
 function getSafeTriggerNames(config: PaneDefinitionConfig): { ns: string; fn: string } {
   return {
     ns: safeIdentifier(config.trigger.namespace || '', 'MyNamespace'),
@@ -21,10 +31,16 @@ function getSafeTriggerNames(config: PaneDefinitionConfig): { ns: string; fn: st
   };
 }
 
+/** WR-005 — every generated catch both logs and tells the user. */
+function buildCatchBody(label: string, indent: string): string {
+  return (
+    `${indent}console.error(${JSON.stringify(label)}, e);\n` +
+    `${indent}Xrm.Navigation.openErrorDialog({ message: e.message });`
+  );
+}
+
 function buildConfiguredRecordIdExpression(config: PaneDefinitionConfig): string {
-  const configuredId =
-    config.context.staticRecordId ||
-    (config.target.pageType === 'entityrecord' ? config.target.entityId : '');
+  const configuredId = config.context.staticRecordId;
   const normalized = normalizeGuid(configuredId);
   if (normalized) return JSON.stringify(normalized);
 
@@ -33,62 +49,131 @@ function buildConfiguredRecordIdExpression(config: PaneDefinitionConfig): string
 
 function buildPaneOptions(config: PaneDefinitionConfig): string {
   const { pane } = config;
+  const width = normalizeConfigWidth(pane.width);
   const opts: string[] = [
     `    paneId: ${JSON.stringify(pane.paneId)}`,
     `    title: ${JSON.stringify(pane.title)}`,
-    `    width: ${pane.width}`,
+    `    width: ${width}`,
   ];
 
   // P1-CGS-E: defensively coerce canClose to false when hideHeader hides the entire header bar.
   const effectiveCanClose = pane.hideHeader ? false : pane.canClose;
   opts.push(`    canClose: ${effectiveCanClose ? 'true' : 'false'}`);
 
-  if (!pane.isResizable) {
-    opts.push(`    isResizable: false`);
-  } else {
-    opts.push(`    // isResizable: omitted — defaults to true`);
-  }
-
   // P1-D-C: emit isSelected only when false (API default is true; omitting true is harmless)
   if (pane.isSelected === false) opts.push(`    isSelected: false`);
   if (pane.hideHeader) opts.push(`    hideHeader: true`);
   if (pane.alwaysRender) opts.push(`    alwaysRender: true`);
   if (pane.keepBadgeOnSelect) opts.push(`    keepBadgeOnSelect: true`);
-  if (pane.imageSrc) opts.push(`    imageSrc: ${JSON.stringify(pane.imageSrc)}`);
-  if (pane.badgeValue) opts.push(`    badge: ${JSON.stringify(pane.badgeValue)}`);
+  const imageSrc = normalizeImageSrc(pane.imageSrc);
+  if (imageSrc) opts.push(`    imageSrc: ${JSON.stringify(imageSrc)}`);
   return `{\n${opts.join(',\n')}\n  }`;
 }
 
-function buildNavigateInput(config: PaneDefinitionConfig): string {
-  const { target, trigger, context } = config;
-  switch (target.pageType) {
-    case 'custom':
-      return `{ pageType: ${JSON.stringify(target.pageType)}, name: ${JSON.stringify(target.name)} }`;
-    case 'entityrecord': {
-      let entityIdExpr: string;
-      if (context.mode === 'Static' || trigger.kind === 'ManualJS') {
-        entityIdExpr = buildConfiguredRecordIdExpression(config);
-      } else if (trigger.kind === 'FormOnLoad' || trigger.kind === 'FormOnChange') {
-        entityIdExpr = 'formContext.data.entity.getId()';
+interface RecordContext {
+  idExpr: string | null;
+  entityName: string;
+}
+
+/** CR-001 / plan contract C1 — the single owner of record-context resolution. */
+function buildRecordContext(config: PaneDefinitionConfig): RecordContext {
+  const { context, trigger, target } = config;
+  const targetEntityName =
+    target.pageType === 'entityrecord' || target.pageType === 'entitylist' ? target.entityName : '';
+  const entityName = context.entityName || targetEntityName || '';
+
+  if (trigger.kind === 'LookupTagClick' &&
+      (target.pageType === 'custom' || target.pageType === 'entityrecord')) {
+    return { idExpr: 'tag.id', entityName: 'tag.entityType' };
+  }
+
+  let idExpr: string | null = null;
+  switch (context.mode) {
+    case 'CurrentRecord':
+      if (trigger.kind === 'FormOnLoad' || trigger.kind === 'FormOnChange') {
+        idExpr = 'formContext.data.entity.getId()';
       } else if (trigger.kind === 'FormButton') {
-        entityIdExpr = 'primaryControl.data.entity.getId()';
-      } else if (trigger.kind === 'MainGridButton' || trigger.kind === 'SubgridButton') {
-        entityIdExpr = 'selectedRecordId';
-      } else {
-        entityIdExpr = buildConfiguredRecordIdExpression(config);
+        idExpr = 'primaryControl.data.entity.getId()';
+      } else if (GRID_KINDS.includes(trigger.kind)) {
+        idExpr = 'selectedRecordId';
       }
-      const effectiveEntityName = context.entityName || target.entityName;
-      return `{ pageType: ${JSON.stringify(target.pageType)}, entityName: ${JSON.stringify(effectiveEntityName)}, entityId: ${entityIdExpr} }`;
+      break;
+    case 'SelectedRow':
+      if (GRID_KINDS.includes(trigger.kind)) {
+        idExpr = 'selectedRecordId';
+      }
+      break;
+    case 'Static': {
+      const normalized = normalizeGuid(context.staticRecordId);
+      idExpr = normalized ? JSON.stringify(normalized) : null;
+      break;
     }
-    case 'entitylist': {
-      const effectiveEntityName = context.entityName || target.entityName;
-      return `{ pageType: ${JSON.stringify(target.pageType)}, entityName: ${JSON.stringify(effectiveEntityName)} }`;
+    case 'None':
+      break;
+  }
+
+  return { idExpr, entityName };
+}
+
+function buildTargetParameterParts(target: PaneDefinitionConfig['target']): string[] {
+  const parts: string[] = [];
+  if (target.pageType === 'entitylist' && target.viewId.trim()) {
+    parts.push(`viewId: ${JSON.stringify(normalizeGuid(target.viewId) ?? target.viewId)}`);
+    parts.push(`viewType: ${JSON.stringify(target.viewType)}`);
+  }
+  if (target.pageType === 'entityrecord') {
+    if (target.formId.trim()) parts.push(`formId: ${JSON.stringify(normalizeGuid(target.formId) ?? target.formId)}`);
+    if (target.tabName.trim()) parts.push(`tabName: ${JSON.stringify(target.tabName.trim())}`);
+    if (target.data.trim()) parts.push(`data: JSON.parse(${JSON.stringify(target.data)})`);
+  }
+  return parts;
+}
+
+function buildNavigateInput(config: PaneDefinitionConfig): string {
+  const { target } = config;
+  const rc = buildRecordContext(config);
+
+  switch (target.pageType) {
+    case 'custom': {
+      const parts = [
+        `pageType: ${JSON.stringify(target.pageType)}`,
+        `name: ${JSON.stringify(target.name)}`,
+      ];
+      if (rc.idExpr && rc.entityName) {
+        parts.push(`entityName: ${rc.idExpr === 'tag.id' ? rc.entityName : JSON.stringify(rc.entityName)}`);
+        parts.push(`recordId: ${rc.idExpr}`);
+      }
+      return `{ ${parts.join(', ')} }`;
     }
-    case 'webresource':
-      return `{ pageType: ${JSON.stringify(target.pageType)}, webresourceName: ${JSON.stringify(target.name)} }`;
+    case 'entityrecord': {
+      const entityIdExpr = rc.idExpr ?? buildConfiguredRecordIdExpression(config);
+      return `{ ${[
+        `pageType: ${JSON.stringify(target.pageType)}`,
+        `entityName: ${rc.idExpr === 'tag.id' ? rc.entityName : JSON.stringify(rc.entityName)}`,
+        `entityId: ${entityIdExpr}`,
+        ...buildTargetParameterParts(target),
+      ].join(', ')} }`;
+    }
+    case 'entitylist':
+      return `{ ${[
+        `pageType: ${JSON.stringify(target.pageType)}`,
+        `entityName: ${JSON.stringify(rc.entityName)}`,
+        ...buildTargetParameterParts(target),
+      ].join(', ')} }`;
+    case 'webresource': {
+      const parts = [
+        `pageType: ${JSON.stringify(target.pageType)}`,
+        `webresourceName: ${JSON.stringify(target.name)}`,
+      ];
+      if (rc.idExpr && rc.entityName) {
+        parts.push(
+          `data: encodeURIComponent(JSON.stringify({ entityName: ${JSON.stringify(rc.entityName)}, recordId: ${rc.idExpr} }))`
+        );
+      }
+      return `{ ${parts.join(', ')} }`;
+    }
     case 'dashboard':
       return `{ pageType: ${JSON.stringify(target.pageType)}, dashboardId: ${JSON.stringify(target.dashboardId)} }`;
-
     case 'search':
       return target.searchText
         ? `{ pageType: ${JSON.stringify(target.pageType)}, searchText: ${JSON.stringify(target.searchText)} }`
@@ -111,14 +196,18 @@ function buildGetOrCreateBody(config: PaneDefinitionConfig, indent = '  '): stri
   const stateAssign = buildStateAssignment(config);
   const paneIdJson = JSON.stringify(pane.paneId);
   const reuseCheck = context.reuseExistingPane
-    ? `${indent}var existing = Xrm.App.sidePanes.getPane(${paneIdJson});\n${indent}if (existing) { existing.select(); return; }\n`
+    ? `${indent}var existing = Xrm.App.sidePanes.getPane(${paneIdJson});\n${indent}if (existing) { await existing.navigate(${navInput}); existing.select(); return; }\n`
     : `${indent}var existing = Xrm.App.sidePanes.getPane(${paneIdJson});\n${indent}if (existing) { existing.close(); await Promise.resolve(); }\n`;
+
+  const badgeAssign = pane.badgeValue
+    ? `${indent}pane.badge = ${JSON.stringify(pane.badgeValue)};\n`
+    : '';
 
   const closeOthersBlock = config.behavior.closeOthers
     ? `${indent}var allPanes = Xrm.App.sidePanes.getAllPanes();\n${indent}allPanes.forEach(function(p) { if (p.paneId !== ${paneIdJson}) p.close(); });\n`
     : '';
 
-  return `${reuseCheck}${stateAssign}${indent}var pane = await Xrm.App.sidePanes.createPane(${paneOpts});\n${indent}await pane.navigate(${navInput});\n${closeOthersBlock}`;
+  return `${reuseCheck}${stateAssign}${indent}var pane = await Xrm.App.sidePanes.createPane(${paneOpts});\n${indent}await pane.navigate(${navInput});\n${badgeAssign}${closeOthersBlock}`;
 }
 
 function generateFormOnLoad(config: PaneDefinitionConfig): string {
@@ -136,7 +225,7 @@ ${body
     // Staleness guard after await
     if (executionContext.getFormContext() !== formContext) return;
   } catch(e) {
-    console.error(${JSON.stringify(`${ns}.${fn}`)}, e);
+    ${buildCatchBody(`${ns}.${fn}`, '    ')}
   }
 };`;
 }
@@ -159,7 +248,7 @@ ${body
   .map(l => '    ' + l)
   .join('\n')}
     } catch(e) {
-      console.error(${JSON.stringify(`${ns}.${fn}`)}, e);
+      ${buildCatchBody(`${ns}.${fn}`, '      ')}
     } finally {
       delete ${PENDING_VAR}[${paneIdJson}];
     }
@@ -171,14 +260,18 @@ function generateGridButtonScript(config: PaneDefinitionConfig): string {
   const { ns, fn } = getSafeTriggerNames(config);
   const body = buildGetOrCreateBody(config, '    ');
   const paneIdJson = JSON.stringify(config.pane.paneId);
+  const onSelect = GRID_SELECT_KINDS.includes(config.trigger.kind);
+  const arg = onSelect ? 'executionContext' : 'primaryControl';
+  // OnRecordSelect: executionContext.getEventSource().getId() — Power Apps grid control sample
+  // https://learn.microsoft.com/power-apps/developer/model-driven-apps/clientapi/reference/events/grid-onrecordselect
+  const rowPreamble = onSelect
+    ? `  var selectedRecordId = executionContext.getEventSource().getId();\n`
+    : `  var selectedRows = primaryControl.getGrid().getSelectedRows();\n  if (!selectedRows || selectedRows.getLength() === 0) { return; }\n  var selectedRecordId = selectedRows.get(0).getData().getEntity().getId();\n`;
 
   return `var ${ns} = ${ns} || {};
 ${PENDING_VAR} = ${PENDING_VAR} || {};
-${ns}.${fn} = function(primaryControl) {
-  var selectedRows = primaryControl.getGrid().getSelectedRows();
-  if (!selectedRows || selectedRows.getLength() === 0) { return; }
-  var selectedRecordId = selectedRows.get(0).getData().getEntity().getId();
-  if (${PENDING_VAR}[${paneIdJson}] && (Date.now() - ${PENDING_VAR}[${paneIdJson}]) < ${PENDING_TTL_MS}) return;
+${ns}.${fn} = function(${arg}) {
+${rowPreamble}  if (${PENDING_VAR}[${paneIdJson}] && (Date.now() - ${PENDING_VAR}[${paneIdJson}]) < ${PENDING_TTL_MS}) return;
   ${PENDING_VAR}[${paneIdJson}] = Date.now();
   (async function() {
     try {
@@ -187,20 +280,12 @@ ${body
   .map(l => '    ' + l)
   .join('\n')}
     } catch(e) {
-      console.error(${JSON.stringify(`${ns}.${fn}`)}, e);
+      ${buildCatchBody(`${ns}.${fn}`, '      ')}
     } finally {
       delete ${PENDING_VAR}[${paneIdJson}];
     }
   })();
 };`;
-}
-
-function generateMainGridButton(config: PaneDefinitionConfig): string {
-  return generateGridButtonScript(config);
-}
-
-function generateSubgridButton(config: PaneDefinitionConfig): string {
-  return generateGridButtonScript(config);
 }
 
 function generateManualJS(config: PaneDefinitionConfig): string {
@@ -214,7 +299,7 @@ ${body
   .map(l => '  ' + l)
   .join('\n')}
   } catch(e) {
-    console.error(${JSON.stringify(fn)}, e);
+    ${buildCatchBody(fn, '    ')}
   }
 }
 ${fn}().catch(console.error);`;
@@ -242,10 +327,30 @@ ${body
       // Staleness guard after await
       if (executionContext.getFormContext() !== formContext) return;
     } catch(e) {
-      console.error(${JSON.stringify(`${ns}.${fn}`)}, e);
+      ${buildCatchBody(`${ns}.${fn}`, '      ')}
     }
   }, 150);
 };`;
+}
+
+function generateLookupTagClick(config: PaneDefinitionConfig): string {
+  const { trigger } = config;
+  const { ns, fn } = getSafeTriggerNames(config);
+  const body = buildGetOrCreateBody(config, '  ');
+  return `var ${ns} = ${ns} || {};
+${ns}.${fn} = async function(executionContext) {
+  var eventArgs = executionContext.getEventArgs();
+  eventArgs.preventDefault();
+  var tag = eventArgs.getTagValue();
+  if (!tag || !tag.id) return;
+  try {
+${body.split('\n').map(line => '  ' + line).join('\n')}
+  } catch(e) {
+    ${buildCatchBody(`${ns}.${fn}`, '    ')}
+  }
+};
+// Register from form OnLoad:
+// formContext.getControl(${JSON.stringify(trigger.fieldName || '')}).addOnLookupTagClick(${ns}.${fn});`;
 }
 
 export function generateBasicScript(config: PaneDefinitionConfig): string {
@@ -255,13 +360,16 @@ export function generateBasicScript(config: PaneDefinitionConfig): string {
     case 'FormButton':
       return generateFormButton(config);
     case 'MainGridButton':
-      return generateMainGridButton(config);
     case 'SubgridButton':
-      return generateSubgridButton(config);
+    case 'MainGridOnSelect':
+    case 'SubgridOnSelect':
+      return generateGridButtonScript(config);
     case 'ManualJS':
       return generateManualJS(config);
     case 'FormOnChange':
       return generateFormOnChange(config);
+    case 'LookupTagClick':
+      return generateLookupTagClick(config);
     default:
       return generateFormButton(config);
   }
@@ -269,8 +377,10 @@ export function generateBasicScript(config: PaneDefinitionConfig): string {
 
 export function generateLibraryScript(config: PaneDefinitionConfig): string {
   const { pane, trigger, target, context, behavior } = config;
+  const width = normalizeConfigWidth(pane.width);
   const ns = safeIdentifier(trigger.namespace || '', 'MyOrg');
   const fn = safeIdentifier(trigger.functionName || '', 'openPane');
+  const rc = buildRecordContext(config);
 
   const optLines: string[] = [
     `    paneId: ${JSON.stringify(pane.paneId)}`,
@@ -278,36 +388,76 @@ export function generateLibraryScript(config: PaneDefinitionConfig): string {
     `    pageType: ${JSON.stringify(target.pageType)}`,
   ];
 
-  if (target.pageType === 'custom' || target.pageType === 'webresource') {
+  // Guard formContext expressions inside a library wrapper that receives executionContext.
+  const libIdExpr = rc.idExpr?.replace(/^formContext\./, 'executionContext.getFormContext().') ?? null;
+  const libEntityName = rc.idExpr === 'tag.id' ? rc.entityName : JSON.stringify(rc.entityName);
+
+  // Target keys — contract C4. name and webresourceName are mutually exclusive (WR-007).
+  if (target.pageType === 'custom') {
     optLines.push(`    name: ${JSON.stringify(target.name)}`);
-  } else if (target.pageType === 'entityrecord' || target.pageType === 'entitylist') {
-    optLines.push(`    entityName: ${JSON.stringify(target.entityName)}`);
+    if (libIdExpr && rc.entityName) {
+      optLines.push(`    entityName: ${libEntityName}`);
+      optLines.push(`    recordId: ${libIdExpr}`);
+    }
+  } else if (target.pageType === 'webresource') {
+    optLines.push(`    webresourceName: ${JSON.stringify(target.name)}`);
+    if (libIdExpr && rc.entityName) {
+      optLines.push(
+        `    data: encodeURIComponent(JSON.stringify({ entityName: ${JSON.stringify(rc.entityName)}, recordId: ${libIdExpr} }))`
+      );
+    }
+  } else if (target.pageType === 'entityrecord') {
+    optLines.push(`    entityName: ${libEntityName}`);
+    optLines.push(`    entityId: ${libIdExpr ?? buildConfiguredRecordIdExpression(config)}`);
+  } else if (target.pageType === 'entitylist') {
+    optLines.push(`    entityName: ${JSON.stringify(rc.entityName)}`);
   } else if (target.pageType === 'dashboard') {
     optLines.push(`    dashboardId: ${JSON.stringify(target.dashboardId)}`);
   } else if (target.pageType === 'search' && target.searchText) {
     optLines.push(`    searchText: ${JSON.stringify(target.searchText)}`);
   }
 
-  if (pane.width !== 480) optLines.push(`    width: ${pane.width}`);
+  optLines.push(...buildTargetParameterParts(target).map(part => `    ${part}`));
+
+  // Appearance + behavior keys — contract C4. isResizable is deliberately absent.
+  if (width !== DEFAULT_CONFIG.pane.width) optLines.push(`    width: ${width}`);
   if (!pane.canClose) optLines.push(`    canClose: false`);
-  if (!pane.isResizable) optLines.push(`    isResizable: false`);
   if (pane.hideHeader) optLines.push(`    hideHeader: true`);
+  if (pane.isSelected === false) optLines.push(`    isSelected: false`);
   if (pane.alwaysRender) optLines.push(`    alwaysRender: true`);
+  if (pane.keepBadgeOnSelect) optLines.push(`    keepBadgeOnSelect: true`);
+  const imageSrc = normalizeImageSrc(pane.imageSrc);
+  if (imageSrc) optLines.push(`    imageSrc: ${JSON.stringify(imageSrc)}`);
+  if (pane.badgeValue) optLines.push(`    badge: ${JSON.stringify(pane.badgeValue)}`);
   if (!context.reuseExistingPane) optLines.push(`    reuseExistingPane: false`);
   if (!behavior.expandOnOpen) optLines.push(`    expandOnOpen: false`);
   if (behavior.closeOthers) optLines.push(`    closeOthers: true`);
-  if (pane.keepBadgeOnSelect) optLines.push(`    keepBadgeOnSelect: true`);
-  if (pane.imageSrc) optLines.push(`    imageSrc: ${JSON.stringify(pane.imageSrc)}`);
-  if (pane.badgeValue) optLines.push(`    badge: ${JSON.stringify(pane.badgeValue)}`);
 
-  const param = (trigger.kind === 'FormOnLoad' || trigger.kind === 'FormOnChange') ? 'executionContext'
-    : trigger.kind === 'ManualJS' ? ''
-    : 'primaryControl';
+  const param =
+    trigger.kind === 'FormOnLoad' || trigger.kind === 'FormOnChange' || trigger.kind === 'LookupTagClick' || GRID_SELECT_KINDS.includes(trigger.kind)
+      ? 'executionContext'
+      : trigger.kind === 'ManualJS'
+        ? ''
+        : 'primaryControl';
+
+  const gridContext = GRID_SELECT_KINDS.includes(trigger.kind)
+    ? `  var selectedRecordId = executionContext.getEventSource().getId();\n`
+    : trigger.kind === 'MainGridButton' || trigger.kind === 'SubgridButton'
+      ? `  var selectedRows = primaryControl.getGrid().getSelectedRows();\n  if (!selectedRows || selectedRows.getLength() === 0) { return; }\n  var selectedRecordId = selectedRows.get(0).getData().getEntity().getId();\n`
+      : '';
+
+  const lookupPreamble = trigger.kind === 'LookupTagClick'
+    ? `  var eventArgs = executionContext.getEventArgs();\n  eventArgs.preventDefault();\n  var tag = eventArgs.getTagValue();\n  if (!tag || !tag.id) return;\n`
+    : '';
+
+  const lookupRegistration = trigger.kind === 'LookupTagClick'
+    ? `\n// Register from form OnLoad:\n// formContext.getControl(${JSON.stringify(trigger.fieldName || '')}).addOnLookupTagClick(${ns}.${fn});`
+    : '';
 
   return `var ${ns} = ${ns} || {};
 ${ns}.${fn} = function(${param}) {
-  SidePaneHelper.open({
+${lookupPreamble}${gridContext}  SidePaneHelper.open({
 ${optLines.join(',\n')}
   });
-};`;
+};${lookupRegistration}`;
 }

@@ -15,23 +15,37 @@ describe('ValidationService errors', () => {
   });
 
   it('errors on entityrecord with empty entityName', () => {
-    const r = validate(cfg({ target: { pageType: 'entityrecord', entityName: '', entityId: '' } }));
+    const r = validate(cfg({ target: { pageType: 'entityrecord', entityName: '', formId: '', tabName: '', data: '' } }));
     expect(r.isValid).toBe(false);
   });
 
   it('keeps missing entityName blocking even when accessible tables are provided', () => {
     const r = validate(
-      cfg({ target: { pageType: 'entityrecord', entityName: '', entityId: '' } }),
+      cfg({ target: { pageType: 'entityrecord', entityName: '', formId: '', tabName: '', data: '' } }),
       new Set(['account'])
     );
     expect(r.isValid).toBe(false);
     expect(r.errors.some(e => e.field === 'target.entityName')).toBe(true);
   });
+});
 
-  it('errors on hideHeader + canClose', () => {
-    const r = validate(cfg({ pane: { hideHeader: true, canClose: true } as any }));
-    expect(r.isValid).toBe(false);
-    expect(r.errors.some(e => e.field === 'pane.hideHeader')).toBe(true);
+describe('validate — hideHeader + canClose (WR-009)', () => {
+  it('does not block the official hideHeader + canClose combination', () => {
+    const result = validate(cfg({ pane: { hideHeader: true, canClose: true } as any }));
+    expect(result.isValid).toBe(true);
+    expect(result.errors.map(e => e.field)).not.toContain('pane.hideHeader');
+  });
+
+  it('warns that the close button will be unreachable', () => {
+    const result = validate(cfg({ pane: { hideHeader: true, canClose: true } as any }));
+    const w = result.warnings.find(x => x.field === 'pane.hideHeader');
+    expect(w).toBeDefined();
+    expect(w!.message).toContain('close');
+  });
+
+  it('emits no hideHeader warning when the header is visible', () => {
+    const result = validate(cfg({ pane: { hideHeader: false, canClose: true } as any }));
+    expect(result.warnings.map(w => w.field)).not.toContain('pane.hideHeader');
   });
 });
 
@@ -94,7 +108,7 @@ describe('ValidationService warnings', () => {
   it('warns on MainGridButton + entityrecord (no single record context)', () => {
     const r = validate(cfg({
       trigger: { kind: 'MainGridButton' } as any,
-      target: { pageType: 'entityrecord', entityName: 'account' } as any,
+      target: { pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '' } as any,
     }));
     expect(r.isValid).toBe(true); // warn-without-blocking
     expect(r.warnings.some(w => w.field === 'target.pageType')).toBe(true);
@@ -103,7 +117,7 @@ describe('ValidationService warnings', () => {
 
   it('does not warn when selected table is accessible', () => {
     const r = validate(
-      cfg({ target: { pageType: 'entitylist', entityName: 'account' } }),
+      cfg({ target: { pageType: 'entitylist', entityName: 'account', viewId: '', viewType: '' } }),
       new Set(['account'])
     );
     expect(r.warnings.some(w => w.field === 'target.entityName')).toBe(false);
@@ -111,7 +125,7 @@ describe('ValidationService warnings', () => {
 
   it('warns without blocking when selected table is no longer accessible', () => {
     const r = validate(
-      cfg({ target: { pageType: 'entityrecord', entityName: 'account', entityId: '' } }),
+      cfg({ target: { pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '' } }),
       new Set(['contact'])
     );
     expect(r.isValid).toBe(true);
@@ -120,7 +134,7 @@ describe('ValidationService warnings', () => {
 
   it('describes MainGridButton record resolution accurately', () => {
     const r = validate(cfg({
-      target: { pageType: 'entityrecord', entityName: 'account', entityId: '' },
+      target: { pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '' },
       trigger: { kind: 'MainGridButton' } as any,
     }));
     const warning = r.warnings.find(w => w.field === 'target.pageType');
@@ -133,7 +147,7 @@ describe('ValidationService warnings', () => {
 describe('static record ID validation', () => {
   const entityRecordManual = (staticRecordId: string, mode: 'Static' | 'CurrentRecord') =>
     cfg({
-      target: { pageType: 'entityrecord', entityName: 'account', entityId: '' },
+      target: { pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '' },
       trigger: { kind: 'ManualJS' } as any,
       context: { mode, staticRecordId } as any,
     });
@@ -157,10 +171,138 @@ describe('static record ID validation', () => {
 
   it('does not fire when the trigger supplies the record at runtime', () => {
     const config = cfg({
-      target: { pageType: 'entityrecord', entityName: 'account', entityId: '' },
+      target: { pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '' },
       trigger: { kind: 'FormOnLoad' } as any,
       context: { mode: 'CurrentRecord', staticRecordId: '' } as any,
     });
     expect(validate(config).errors.map(e => e.field)).not.toContain('context.staticRecordId');
+  });
+});
+
+describe('validate — pane width', () => {
+  it.each([299, 1201, Number.NaN, Number.POSITIVE_INFINITY, '480;globalThis.pwned=1'])
+    ('rejects invalid pane width %p', width => {
+      const result = validate(cfg({ pane: { ...cfg({}).pane, width } as any }));
+      expect(result.errors.some(error => error.field === 'pane.width')).toBe(true);
+    });
+
+  it.each([300, 1200])('accepts boundary pane width %p', width => {
+    const result = validate(cfg({ pane: { ...cfg({}).pane, width } }));
+    expect(result.errors.some(error => error.field === 'pane.width')).toBe(false);
+  });
+});
+
+describe('validate — LookupTagClick', () => {
+  it('requires a lookup control name', () => {
+    const result = validate(cfg({ trigger: { kind: 'LookupTagClick', fieldName: '' } as any }));
+    expect(result.errors).toContainEqual({
+      field: 'trigger.fieldName',
+      message: 'Lookup control name is required for LookupTagClick triggers.',
+    });
+  });
+
+  it('does not require a configured record ID when the clicked tag supplies it', () => {
+    const result = validate(cfg({
+      target: { pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '' },
+      trigger: { kind: 'LookupTagClick', fieldName: 'parentaccountid' } as any,
+      context: { mode: 'None', staticRecordId: '' } as any,
+    }));
+    expect(result.errors.map(error => error.field)).not.toContain('context.staticRecordId');
+  });
+});
+
+describe('validate — web resource name (WR-003)', () => {
+  it('blocks an empty web resource name the same way it blocks an empty custom page name', () => {
+    const result = validate(cfg({ target: { pageType: 'webresource', name: '' } }));
+    expect(result.isValid).toBe(false);
+    expect(result.errors.map(e => e.field)).toContain('target.name');
+  });
+
+  it('blocks a whitespace-only web resource name', () => {
+    const result = validate(cfg({ target: { pageType: 'webresource', name: '   ' } }));
+    expect(result.isValid).toBe(false);
+  });
+
+  it('accepts a populated web resource name', () => {
+    const result = validate(cfg({ target: { pageType: 'webresource', name: 'new_mypage.html' } }));
+    expect(result.errors.map(e => e.field)).not.toContain('target.name');
+  });
+});
+
+describe('validate — search page type (WR-001)', () => {
+  it('warns that search is not a documented navigateTo pageType', () => {
+    const result = validate(cfg({ target: { pageType: 'search', searchText: 'Contoso' } }));
+    const w = result.warnings.find(x => x.field === 'target.pageType');
+    expect(w).toBeDefined();
+    expect(w!.message).toContain('not a documented');
+  });
+
+  it('keeps search advisory, not blocking', () => {
+    const result = validate(cfg({ target: { pageType: 'search', searchText: 'Contoso' } }));
+    expect(result.isValid).toBe(true);
+  });
+
+  it('emits no search warning for a custom page', () => {
+    const result = validate(cfg({ target: { pageType: 'custom', name: 'sps_Page' } }));
+    expect(result.warnings.map(w => w.field)).not.toContain('target.pageType');
+  });
+});
+
+describe('validate — record context (CR-001 companion)', () => {
+  it('blocks SelectedRow on a trigger that has no grid', () => {
+    const result = validate(
+      cfg({
+        trigger: { kind: 'FormButton', functionName: 'openPane', namespace: 'Ns', fieldName: '' },
+        context: { mode: 'SelectedRow', entityName: 'account', staticRecordId: '', reuseExistingPane: true },
+      })
+    );
+    expect(result.isValid).toBe(false);
+    expect(result.errors.map(e => e.field)).toContain('context.mode');
+  });
+
+  it('allows SelectedRow on a SubgridButton trigger', () => {
+    const result = validate(
+      cfg({
+        trigger: { kind: 'SubgridButton', functionName: 'openPane', namespace: 'Ns', fieldName: '' },
+        context: { mode: 'SelectedRow', entityName: 'account', staticRecordId: '', reuseExistingPane: true },
+      })
+    );
+    expect(result.errors.map(e => e.field)).not.toContain('context.mode');
+  });
+
+  it('blocks CurrentRecord on ManualJS, which has no ambient record', () => {
+    const result = validate(
+      cfg({
+        trigger: { kind: 'ManualJS', functionName: 'openPane', namespace: 'Ns', fieldName: '' },
+        context: { mode: 'CurrentRecord', entityName: 'account', staticRecordId: '', reuseExistingPane: true },
+      })
+    );
+    expect(result.isValid).toBe(false);
+    expect(result.errors.map(e => e.field)).toContain('context.mode');
+  });
+
+  it('allows None on ManualJS', () => {
+    const result = validate(
+      cfg({
+        trigger: { kind: 'ManualJS', functionName: 'openPane', namespace: 'Ns', fieldName: '' },
+        context: { mode: 'None', entityName: '', staticRecordId: '', reuseExistingPane: true },
+      })
+    );
+    expect(result.errors.map(e => e.field)).not.toContain('context.mode');
+  });
+});
+
+describe('validate — subgrid row-guard warning (IN-001)', () => {
+  it('describes the actual runtime behavior instead of demanding a guard', () => {
+    const result = validate(
+      cfg({
+        trigger: { kind: 'SubgridButton', functionName: 'openPane', namespace: 'Ns', fieldName: '' },
+        context: { mode: 'SelectedRow', entityName: 'account', staticRecordId: '', reuseExistingPane: true },
+      })
+    );
+    const w = result.warnings.find(x => x.field === 'context.mode');
+    expect(w).toBeDefined();
+    expect(w!.message).not.toContain('requires a runtime row-guard');
+    expect(w!.message).toContain('first selected row');
   });
 });

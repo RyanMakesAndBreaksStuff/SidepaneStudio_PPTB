@@ -470,7 +470,7 @@ export function NativeMdaFrame({ pane, hostTarget, paneTarget, validation, capti
         <div style={{ flex: 1, minHeight: 0, display: 'flex', overflow: 'hidden', minWidth: 0 }}>
           <SiteMap mode={mode} />
           <main style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: FL.appBg }}>
-            <FormHeader target={hostTarget} mode={mode} formModel={formModel} />
+            {hostTarget.pageType !== 'entitylist' && <FormHeader target={hostTarget} mode={mode} formModel={formModel} />}
             <div
               style={{
                 flex: 1,

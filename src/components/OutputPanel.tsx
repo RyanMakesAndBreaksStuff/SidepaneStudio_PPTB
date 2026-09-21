@@ -12,6 +12,7 @@ import { SummaryCard } from './SummaryCard';
 import { Callout } from './Callout';
 import { CommandStepsTab, TRIGGER_SUMMARIES, DEPLOY_STEPS } from './CommandStepsTab';
 import { escapeHtml } from './previewHelpers';
+import runtimeSource from '../runtime/sidepane.runtime.js?raw';
 
 export interface OutputPanelProps {
   config: PaneDefinitionConfig;
@@ -40,10 +41,38 @@ export const OutputPanel = React.memo(function OutputPanel({ config, xrm, valida
   const [showRaw, setShowRaw] = useState(false);
   const [runtimeExists, setRuntimeExists] = useState<boolean | null>(null);
   const [runtimeCheckError, setRuntimeCheckError] = useState<string | null>(null);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [savingRuntime, setSavingRuntime] = useState(false);
 
   const basicCode   = useMemo(() => generateBasicScript(config), [config]);
   const libCode     = useMemo(() => generateLibraryScript(config), [config]);
   const rawCode     = useMemo(() => generateRawConfig(config), [config]);
+
+  const downloadRuntime = async () => {
+    setDownloadError(null);
+    setSavingRuntime(true);
+    try {
+      if (window.toolboxAPI?.fileSystem?.saveFile) {
+        await window.toolboxAPI.fileSystem.saveFile('sidepane.runtime.js', runtimeSource);
+        return;
+      }
+      const url = URL.createObjectURL(new Blob([runtimeSource], { type: 'text/javascript;charset=utf-8' }));
+      const anchor = document.createElement('a');
+      try {
+        anchor.href = url;
+        anchor.download = 'sidepane.runtime.js';
+        document.body.appendChild(anchor);
+        anchor.click();
+      } finally {
+        anchor.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 0);
+      }
+    } catch (error) {
+      setDownloadError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setSavingRuntime(false);
+    }
+  };
 
   // Re-check runtime web resource every time the library tab is activated
   useEffect(() => {
@@ -109,6 +138,13 @@ export const OutputPanel = React.memo(function OutputPanel({ config, xrm, valida
         {/* Shared Library */}
         {activeTab === 'library' && (
           <>
+            <button type="button" onClick={downloadRuntime} disabled={savingRuntime}
+              style={{ padding: '8px 12px', alignSelf: 'flex-start', fontFamily: T.font,
+                color: T.fg1, background: T.surface1, border: `1px solid ${T.stroke1}`,
+                borderRadius: T.rM, cursor: savingRuntime ? 'wait' : 'pointer' }}>
+              {savingRuntime ? 'Saving runtime...' : 'Download runtime'}
+            </button>
+            {downloadError && <Callout type="err" icon="✕">Could not download runtime: {downloadError}</Callout>}
             {runtimeCheckError && (
               <Callout type="err" icon="✕">
                 <strong>Could not verify prerequisite:</strong> {runtimeCheckError}
