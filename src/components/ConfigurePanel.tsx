@@ -62,9 +62,11 @@ const PAGE_TYPE_OPTIONS = [
 const TRIGGER_OPTIONS = [
   { value: 'FormOnLoad',     label: 'Form on load',                 desc: 'Opens when a record form loads' },
   { value: 'FormButton',     label: 'Command bar button (form)',     desc: 'Wired to a button in the form command bar' },
-  { value: 'MainGridButton', label: 'Command bar button (grid)',     desc: 'Main grid command' },
-  { value: 'SubgridButton',  label: 'Command bar button (subgrid)', desc: 'Subgrid command' },
-  { value: 'ManualJS',       label: 'Console / Manual',             desc: 'Paste into browser console (F12)' },
+  { value: 'MainGridButton',  label: 'Command bar button (grid)',     desc: 'Main grid command' },
+  { value: 'SubgridButton',   label: 'Command bar button (subgrid)', desc: 'Subgrid command' },
+  { value: 'MainGridOnSelect', label: 'Row select (grid)',            desc: 'Opens when a single row is selected in the main grid' },
+  { value: 'SubgridOnSelect',  label: 'Row select (subgrid)',         desc: 'Opens when a single row is selected in a subgrid' },
+  { value: 'ManualJS',        label: 'Console / Manual',             desc: 'Paste into browser console (F12)' },
   { value: 'FormOnChange',   label: 'Field on change',              desc: 'Registers an onChange handler on a specific field' },
 ];
 

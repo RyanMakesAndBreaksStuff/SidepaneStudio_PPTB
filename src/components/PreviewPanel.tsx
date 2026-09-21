@@ -43,7 +43,8 @@ export const PreviewPanel = React.memo(function PreviewPanel({
   const T = theme(isDark);
   const [mode, setMode] = useState<PreviewMode>('mock');
   const gridEligible = config.target.pageType === 'entitylist' ||
-    config.trigger.kind === 'MainGridButton' || config.trigger.kind === 'SubgridButton';
+    config.trigger.kind === 'MainGridButton' || config.trigger.kind === 'SubgridButton' ||
+    config.trigger.kind === 'MainGridOnSelect' || config.trigger.kind === 'SubgridOnSelect';
   useEffect(() => {
     if (!gridEligible && mode === 'grid') setMode('mock');
   }, [gridEligible, mode]);

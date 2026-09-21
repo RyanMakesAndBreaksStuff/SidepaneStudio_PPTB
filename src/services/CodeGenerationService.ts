@@ -2,6 +2,8 @@ import { PaneDefinitionConfig, TriggerKind } from '../types/PaneDefinitionConfig
 import { normalizeGuid } from './odataGuards';
 
 const CMD_KINDS: TriggerKind[] = ['FormButton', 'MainGridButton', 'SubgridButton'];
+const GRID_KINDS: TriggerKind[] = ['MainGridButton', 'SubgridButton', 'MainGridOnSelect', 'SubgridOnSelect'];
+const GRID_SELECT_KINDS: TriggerKind[] = ['MainGridOnSelect', 'SubgridOnSelect'];
 
 /** Guard variable name — namespaced to avoid collisions with other scripts. */
 const PENDING_VAR = 'window.__spstudio_pendingPanes';
@@ -85,12 +87,12 @@ function buildRecordContext(config: PaneDefinitionConfig): RecordContext {
         idExpr = 'formContext.data.entity.getId()';
       } else if (trigger.kind === 'FormButton') {
         idExpr = 'primaryControl.data.entity.getId()';
-      } else if (trigger.kind === 'MainGridButton' || trigger.kind === 'SubgridButton') {
+      } else if (GRID_KINDS.includes(trigger.kind)) {
         idExpr = 'selectedRecordId';
       }
       break;
     case 'SelectedRow':
-      if (trigger.kind === 'MainGridButton' || trigger.kind === 'SubgridButton') {
+      if (GRID_KINDS.includes(trigger.kind)) {
         idExpr = 'selectedRecordId';
       }
       break;
@@ -251,14 +253,18 @@ function generateGridButtonScript(config: PaneDefinitionConfig): string {
   const { ns, fn } = getSafeTriggerNames(config);
   const body = buildGetOrCreateBody(config, '    ');
   const paneIdJson = JSON.stringify(config.pane.paneId);
+  const onSelect = GRID_SELECT_KINDS.includes(config.trigger.kind);
+  const arg = onSelect ? 'executionContext' : 'primaryControl';
+  // OnRecordSelect: executionContext.getEventSource().getId() — Power Apps grid control sample
+  // https://learn.microsoft.com/power-apps/developer/model-driven-apps/clientapi/reference/events/grid-onrecordselect
+  const rowPreamble = onSelect
+    ? `  var selectedRecordId = executionContext.getEventSource().getId();\n`
+    : `  var selectedRows = primaryControl.getGrid().getSelectedRows();\n  if (!selectedRows || selectedRows.getLength() === 0) { return; }\n  var selectedRecordId = selectedRows.get(0).getData().getEntity().getId();\n`;
 
   return `var ${ns} = ${ns} || {};
 ${PENDING_VAR} = ${PENDING_VAR} || {};
-${ns}.${fn} = function(primaryControl) {
-  var selectedRows = primaryControl.getGrid().getSelectedRows();
-  if (!selectedRows || selectedRows.getLength() === 0) { return; }
-  var selectedRecordId = selectedRows.get(0).getData().getEntity().getId();
-  if (${PENDING_VAR}[${paneIdJson}] && (Date.now() - ${PENDING_VAR}[${paneIdJson}]) < ${PENDING_TTL_MS}) return;
+${ns}.${fn} = function(${arg}) {
+${rowPreamble}  if (${PENDING_VAR}[${paneIdJson}] && (Date.now() - ${PENDING_VAR}[${paneIdJson}]) < ${PENDING_TTL_MS}) return;
   ${PENDING_VAR}[${paneIdJson}] = Date.now();
   (async function() {
     try {
@@ -327,8 +333,9 @@ export function generateBasicScript(config: PaneDefinitionConfig): string {
     case 'FormButton':
       return generateFormButton(config);
     case 'MainGridButton':
-      return generateGridButtonScript(config);
     case 'SubgridButton':
+    case 'MainGridOnSelect':
+    case 'SubgridOnSelect':
       return generateGridButtonScript(config);
     case 'ManualJS':
       return generateManualJS(config);
@@ -396,15 +403,17 @@ export function generateLibraryScript(config: PaneDefinitionConfig): string {
   if (behavior.closeOthers) optLines.push(`    closeOthers: true`);
 
   const param =
-    trigger.kind === 'FormOnLoad' || trigger.kind === 'FormOnChange'
+    trigger.kind === 'FormOnLoad' || trigger.kind === 'FormOnChange' || GRID_SELECT_KINDS.includes(trigger.kind)
       ? 'executionContext'
       : trigger.kind === 'ManualJS'
         ? ''
         : 'primaryControl';
 
-  const gridContext = trigger.kind === 'MainGridButton' || trigger.kind === 'SubgridButton'
-    ? `  var selectedRows = primaryControl.getGrid().getSelectedRows();\n  if (!selectedRows || selectedRows.getLength() === 0) { return; }\n  var selectedRecordId = selectedRows.get(0).getData().getEntity().getId();\n`
-    : '';
+  const gridContext = GRID_SELECT_KINDS.includes(trigger.kind)
+    ? `  var selectedRecordId = executionContext.getEventSource().getId();\n`
+    : trigger.kind === 'MainGridButton' || trigger.kind === 'SubgridButton'
+      ? `  var selectedRows = primaryControl.getGrid().getSelectedRows();\n  if (!selectedRows || selectedRows.getLength() === 0) { return; }\n  var selectedRecordId = selectedRows.get(0).getData().getEntity().getId();\n`
+      : '';
 
   return `var ${ns} = ${ns} || {};
 ${ns}.${fn} = function(${param}) {

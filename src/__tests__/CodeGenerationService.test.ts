@@ -12,7 +12,7 @@ function isValidJS(code: string): boolean {
 }
 
 describe('generateBasicScript — syntax validity', () => {
-  for (const kind of ['FormOnLoad', 'FormButton', 'MainGridButton', 'SubgridButton', 'ManualJS', 'FormOnChange'] as const) {
+  for (const kind of ['FormOnLoad', 'FormButton', 'MainGridButton', 'SubgridButton', 'MainGridOnSelect', 'SubgridOnSelect', 'ManualJS', 'FormOnChange'] as const) {
     it(`${kind} produces valid JS`, () => {
       const config = cfg({ trigger: { kind, fieldName: kind === 'FormOnChange' ? 'new_field' : '' } as any });
       const code = generateBasicScript(config);
@@ -215,6 +215,20 @@ describe('buildNavigateInput — pageType branches', () => {
     expect(code).toContain('var selectedRecordId = selectedRows.get(0).getData().getEntity().getId();');
     expect(code).toContain('entityId: selectedRecordId');
     expect(code).not.toContain("entityId: ''");
+  });
+
+  it('entityrecord + MainGridOnSelect uses getEventSource().getId()', () => {
+    const code = generateBasicScript(
+      cfg({
+        trigger: { kind: 'MainGridOnSelect' } as any,
+        target: { pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '' },
+        context: { mode: 'CurrentRecord', entityName: 'account', staticRecordId: '', reuseExistingPane: true },
+      })
+    );
+    expect(code).toContain('function(executionContext)');
+    expect(code).toContain('var selectedRecordId = executionContext.getEventSource().getId();');
+    expect(code).toContain('entityId: selectedRecordId');
+    expect(code).not.toContain('primaryControl');
   });
 
   it('entityrecord + ManualJS uses a valid static record ID', () => {
@@ -657,7 +671,7 @@ describe('buildNavigateInput — record context (CR-001)', () => {
 });
 
 describe('generateBasicScript — error surfacing (WR-005)', () => {
-  for (const kind of ['FormOnLoad', 'FormButton', 'MainGridButton', 'SubgridButton', 'ManualJS', 'FormOnChange'] as const) {
+  for (const kind of ['FormOnLoad', 'FormButton', 'MainGridButton', 'SubgridButton', 'MainGridOnSelect', 'SubgridOnSelect', 'ManualJS', 'FormOnChange'] as const) {
     it(`${kind} opens an error dialog as well as logging`, () => {
       const code = generateBasicScript(
         cfg({ trigger: { kind, fieldName: kind === 'FormOnChange' ? 'new_field' : '' } as any })

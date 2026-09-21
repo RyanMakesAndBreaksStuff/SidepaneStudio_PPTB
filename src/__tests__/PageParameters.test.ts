@@ -26,11 +26,19 @@ async function navigate(c: PaneDefinitionConfig, library: boolean) {
     getLength: () => 1,
     get: () => ({ getData: () => ({ getEntity: () => ({ getId: () => otherId }) }) }),
   }) }) };
+  const executionContext = { getEventSource: () => ({ getId: () => otherId, getEntityName: () => 'account' }) };
+  const onSelect = c.trigger.kind === 'MainGridOnSelect' || c.trigger.kind === 'SubgridOnSelect';
   if (library) {
     (0, eval)(runtimeSource);
-    new Function('primaryControl', `${generateLibraryScript(c)}; return ParameterTest.open(primaryControl);`)(primaryControl);
+    if (onSelect) {
+      new Function('executionContext', `${generateLibraryScript(c)}; return ParameterTest.open(executionContext);`)(executionContext);
+    } else {
+      new Function('primaryControl', `${generateLibraryScript(c)}; return ParameterTest.open(primaryControl);`)(primaryControl);
+    }
   } else if (c.trigger.kind === 'MainGridButton' || c.trigger.kind === 'SubgridButton') {
     new Function('primaryControl', `${generateBasicScript(c)}; return ParameterTest.open(primaryControl);`)(primaryControl);
+  } else if (onSelect) {
+    new Function('executionContext', `${generateBasicScript(c)}; return ParameterTest.open(executionContext);`)(executionContext);
   } else {
     new Function(generateBasicScript(c))();
   }
@@ -44,7 +52,7 @@ afterEach(() => {
 });
 
 describe('page parameter contract', () => {
-  it.each(['MainGridButton', 'SubgridButton'] as const)('delivers selected row parameters from %s through both outputs', async kind => {
+  it.each(['MainGridButton', 'SubgridButton', 'MainGridOnSelect', 'SubgridOnSelect'] as const)('delivers selected row parameters from %s through both outputs', async kind => {
     const c = config({ pageType: 'entityrecord', entityName: 'account', formId: id, tabName: '', data: '' });
     c.trigger.kind = kind;
     c.context.mode = 'SelectedRow';

@@ -169,7 +169,7 @@ describe('grid preview', () => {
     expect(host!.textContent).toContain('Generate grid preview');
     await render(panel(cfg()));
     expect(host!.textContent).not.toContain('Generate grid preview');
-    for (const kind of ['MainGridButton', 'SubgridButton'] as const) {
+    for (const kind of ['MainGridButton', 'SubgridButton', 'MainGridOnSelect', 'SubgridOnSelect'] as const) {
       await render(panel(cfg({ trigger: { ...config.trigger, kind } })));
       expect(Array.from(host!.querySelectorAll('button')).some(b => b.textContent === 'Grid')).toBe(true);
     }

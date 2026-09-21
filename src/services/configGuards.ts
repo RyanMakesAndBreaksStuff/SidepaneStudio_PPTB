@@ -8,7 +8,7 @@ import {
 } from '../types/PaneDefinitionConfig';
 
 const PAGE_TYPES: PageType[] = ['custom', 'entityrecord', 'entitylist', 'webresource', 'dashboard', 'search'];
-const TRIGGER_KINDS: TriggerKind[] = ['FormOnLoad', 'FormButton', 'MainGridButton', 'SubgridButton', 'ManualJS', 'FormOnChange'];
+const TRIGGER_KINDS: TriggerKind[] = ['FormOnLoad', 'FormButton', 'MainGridButton', 'SubgridButton', 'MainGridOnSelect', 'SubgridOnSelect', 'ManualJS', 'FormOnChange'];
 const CONTEXT_MODES: ContextMode[] = ['CurrentRecord', 'SelectedRow', 'Static', 'None'];
 
 function isRecord(value: unknown): value is Record<string, unknown> {

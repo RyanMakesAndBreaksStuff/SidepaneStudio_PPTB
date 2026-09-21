@@ -12,9 +12,11 @@ const TRIGGER_SUMMARIES: Record<TriggerKind, string> = {
   FormOnLoad:     'Opens automatically when a record form loads.',
   FormOnChange:   'Opens when a specific form field changes value.',
   FormButton:     'Opens when a command bar button is clicked on a record form.',
-  MainGridButton: 'Opens when a command bar button is clicked in a main grid view.',
-  SubgridButton:  'Opens when a command bar button is clicked in a subgrid.',
-  ManualJS:       'Paste directly into the browser console (F12) to open the pane on demand.',
+  MainGridButton:  'Opens when a command bar button is clicked in a main grid view.',
+  SubgridButton:   'Opens when a command bar button is clicked in a subgrid.',
+  MainGridOnSelect: 'Opens when a single row is selected in a main grid view.',
+  SubgridOnSelect:  'Opens when a single row is selected in a subgrid.',
+  ManualJS:        'Paste directly into the browser console (F12) to open the pane on demand.',
 };
 
 const DEPLOY_STEPS: Record<TriggerKind, string[]> = {
@@ -42,6 +44,16 @@ const DEPLOY_STEPS: Record<TriggerKind, string[]> = {
     'Paste this function into a new JavaScript web resource and publish it.',
     'In Command Designer, select <strong>Subgrid commands</strong> and create a button with Action: Run JavaScript.',
     'Select your web resource and enter the full function name. In Action parameters, add <code>primaryControl</code> (Primary Control type) as the first argument. This is required — the function reads selected row data from it.',
+  ],
+  MainGridOnSelect: [
+    'Paste this function into a new JavaScript web resource and publish it.',
+    'Enable the <strong>Power Apps grid control</strong> on the table views. An <strong>Events</strong> tab appears on the control.',
+    'Add the web resource as a library, then add an <strong>OnRecordSelect</strong> handler. Select the function name and enable <strong>Pass execution context as first parameter</strong>.',
+  ],
+  SubgridOnSelect: [
+    'Paste this function into a new JavaScript web resource and publish it.',
+    'Enable the <strong>Power Apps grid control</strong> on the form subgrid. An <strong>Events</strong> tab appears on the control.',
+    'Add the web resource as a library, then add an <strong>OnRecordSelect</strong> handler. Select the function name and enable <strong>Pass execution context as first parameter</strong>.',
   ],
   ManualJS: [
     'Copy the entire code block.',

@@ -120,12 +120,12 @@ export function validate(config: PaneDefinitionConfig, accessibleTables?: Set<st
   }
 
   // Error: the selected context mode resolves to no record for this trigger (CR-001 / contract C1)
-  const GRID_TRIGGERS = ['MainGridButton', 'SubgridButton'];
+  const GRID_TRIGGERS = ['MainGridButton', 'SubgridButton', 'MainGridOnSelect', 'SubgridOnSelect'];
   if (config.context.mode === 'SelectedRow' && !GRID_TRIGGERS.includes(config.trigger.kind)) {
     errors.push({
       field: 'context.mode',
       message:
-        'Selected row context is only available from a main grid or subgrid command. Choose a different context mode or trigger.',
+        'Selected row context is only available from a main grid or subgrid. Choose a different context mode or trigger.',
     });
   }
   if (config.context.mode === 'CurrentRecord' && config.trigger.kind === 'ManualJS') {
