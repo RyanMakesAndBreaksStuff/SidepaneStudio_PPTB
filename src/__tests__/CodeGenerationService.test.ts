@@ -465,6 +465,16 @@ describe('generateBasicScript — closeOthers', () => {
 });
 
 describe('buildPaneOptions — isSelected and canClose', () => {
+  it.each([generateBasicScript, generateLibraryScript])
+    ('normalizes unsafe width before generating source', generate => {
+      const code = generate(cfg({ pane: {
+        ...cfg({}).pane, width: '480;globalThis.pwned=1',
+      } as any }));
+      expect(isValidJS(code)).toBe(true);
+      expect(code).not.toContain('globalThis.pwned');
+      if (generate === generateBasicScript) expect(code).toContain('width: 480');
+    });
+
   it('isSelected: false is emitted in output', () => {
     const code = generateBasicScript(cfg({ pane: { isSelected: false } as any }));
     expect(code).toContain('isSelected: false');

@@ -1,5 +1,6 @@
-import { PaneDefinitionConfig, TriggerKind } from '../types/PaneDefinitionConfig';
+import { PaneDefinitionConfig, TriggerKind, DEFAULT_CONFIG } from '../types/PaneDefinitionConfig';
 import { normalizeGuid } from './odataGuards';
+import { normalizeConfigWidth } from './configGuards';
 
 const CMD_KINDS: TriggerKind[] = ['FormButton', 'MainGridButton', 'SubgridButton'];
 const GRID_KINDS: TriggerKind[] = ['MainGridButton', 'SubgridButton', 'MainGridOnSelect', 'SubgridOnSelect'];
@@ -48,10 +49,11 @@ function buildConfiguredRecordIdExpression(config: PaneDefinitionConfig): string
 
 function buildPaneOptions(config: PaneDefinitionConfig): string {
   const { pane } = config;
+  const width = normalizeConfigWidth(pane.width);
   const opts: string[] = [
     `    paneId: ${JSON.stringify(pane.paneId)}`,
     `    title: ${JSON.stringify(pane.title)}`,
-    `    width: ${pane.width}`,
+    `    width: ${width}`,
   ];
 
   // P1-CGS-E: defensively coerce canClose to false when hideHeader hides the entire header bar.
@@ -375,6 +377,7 @@ export function generateBasicScript(config: PaneDefinitionConfig): string {
 
 export function generateLibraryScript(config: PaneDefinitionConfig): string {
   const { pane, trigger, target, context, behavior } = config;
+  const width = normalizeConfigWidth(pane.width);
   const ns = safeIdentifier(trigger.namespace || '', 'MyOrg');
   const fn = safeIdentifier(trigger.functionName || '', 'openPane');
   const rc = buildRecordContext(config);
@@ -417,7 +420,7 @@ export function generateLibraryScript(config: PaneDefinitionConfig): string {
   optLines.push(...buildTargetParameterParts(target).map(part => `    ${part}`));
 
   // Appearance + behavior keys — contract C4. isResizable is deliberately absent.
-  if (pane.width !== 480) optLines.push(`    width: ${pane.width}`);
+  if (width !== DEFAULT_CONFIG.pane.width) optLines.push(`    width: ${width}`);
   if (!pane.canClose) optLines.push(`    canClose: false`);
   if (pane.hideHeader) optLines.push(`    hideHeader: true`);
   if (pane.isSelected === false) optLines.push(`    isSelected: false`);

@@ -1,6 +1,8 @@
 import { PaneDefinitionConfig } from '../types/PaneDefinitionConfig';
 import { normalizeGuid } from './odataGuards';
 import { parseFormData } from './formData';
+import { isConfigWidthValid } from './configGuards';
+import { MAX_CONFIG_WIDTH, MIN_CONFIG_WIDTH } from '../types/PaneDefinitionConfig';
 
 export interface ValidationError {
   field: string;
@@ -25,6 +27,13 @@ export function validate(config: PaneDefinitionConfig, accessibleTables?: Set<st
   // Error: empty paneId
   if (!config.pane.paneId?.trim()) {
     errors.push({ field: 'pane.paneId', message: 'Pane ID is required.' });
+  }
+
+  if (!isConfigWidthValid(config.pane.width)) {
+    errors.push({
+      field: 'pane.width',
+      message: `Pane width must be between ${MIN_CONFIG_WIDTH} and ${MAX_CONFIG_WIDTH} pixels.`,
+    });
   }
 
   // Error: custom pageType with empty name

@@ -342,6 +342,21 @@ describe('ConfigurePanel — LookupTagClick', () => {
 });
 
 describe('ConfigurePanel — pane appearance (WR-002)', () => {
+  it('shows the blocking error for an invalid pane width', async () => {
+    const config = { ...DEFAULT_CONFIG, pane: { ...DEFAULT_CONFIG.pane, width: 1201 as any } };
+    await render(
+      <ConfigurePanel
+        config={config}
+        onChange={() => {}}
+        validation={validate(config)}
+        metadataService={makeMetadataService()}
+      />
+    );
+    await expandSection('Pane Appearance');
+
+    expect(host?.textContent).toContain('Pane width must be between 300 and 1200 pixels.');
+  });
+
   it('offers no Resizable toggle, because isResizable is not a documented paneOption', async () => {
     await renderPanel({ config: DEFAULT_CONFIG, onChange: vi.fn() });
     await expandSection('Pane Appearance');

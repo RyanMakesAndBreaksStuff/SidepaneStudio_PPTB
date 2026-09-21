@@ -276,7 +276,7 @@ export function ConfigurePanel({
           )}
         </Field>
 
-        <Field label="Width" hint={`Min ${MIN_CONFIG_WIDTH}px · Max ${MAX_CONFIG_WIDTH}px · Recommended 400–600px · Current: ${pane.width}px`}>
+        <Field label="Width" error={vErrors['pane.width']} hint={`Min ${MIN_CONFIG_WIDTH}px · Max ${MAX_CONFIG_WIDTH}px · Recommended 400–600px · Current: ${pane.width}px`}>
           <WidthPicker
             value={pane.width}
             onChange={v => patch('pane', 'width', v)}

@@ -179,6 +179,19 @@ describe('static record ID validation', () => {
   });
 });
 
+describe('validate — pane width', () => {
+  it.each([299, 1201, Number.NaN, Number.POSITIVE_INFINITY, '480;globalThis.pwned=1'])
+    ('rejects invalid pane width %p', width => {
+      const result = validate(cfg({ pane: { ...cfg({}).pane, width } as any }));
+      expect(result.errors.some(error => error.field === 'pane.width')).toBe(true);
+    });
+
+  it.each([300, 1200])('accepts boundary pane width %p', width => {
+    const result = validate(cfg({ pane: { ...cfg({}).pane, width } }));
+    expect(result.errors.some(error => error.field === 'pane.width')).toBe(false);
+  });
+});
+
 describe('validate — LookupTagClick', () => {
   it('requires a lookup control name', () => {
     const result = validate(cfg({ trigger: { kind: 'LookupTagClick', fieldName: '' } as any }));
