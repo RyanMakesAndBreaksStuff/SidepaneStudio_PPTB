@@ -55,6 +55,9 @@ export interface PaneDefinitionConfig {
   behavior: BehaviorConfig;
 }
 
+export const MIN_CONFIG_WIDTH = 300;
+export const MAX_CONFIG_WIDTH = 1200;
+
 export const DEFAULT_CONFIG: PaneDefinitionConfig = {
   pane: {
     paneId: 'relatedRecordsPane',
