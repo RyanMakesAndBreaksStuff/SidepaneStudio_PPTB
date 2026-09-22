@@ -7,6 +7,7 @@ import {
 } from '../types/MetadataFilterConfig';
 import {
   buildEntityDefinitionsPath,
+  buildAttributeLabelsPath,
   buildSystemDashboardsPath,
   buildUserDashboardsPath,
   buildViewsForEntityPath,
@@ -29,6 +30,12 @@ export interface ViewInfo {
   name: string;
   viewType: 'savedquery' | 'userquery';
   fetchXml: string;
+  layoutXml: string;
+}
+
+export interface AttributeLabel {
+  LogicalName: string;
+  DisplayName?: { UserLocalizedLabel?: { Label?: string | null } | null } | null;
 }
 
 export type ViewsForEntityResult =
@@ -186,18 +193,27 @@ export class MetadataService {
     if (!systemPath || !personalPath) return { status: 'error', reason: 'Invalid table logical name.' };
     try {
       const [system, personal] = await Promise.all([
-        this.xrm.webApiGet<{ savedqueryid: string; name: string; fetchxml: string | null }[]>(systemPath, connectionTarget),
-        this.xrm.webApiGet<{ userqueryid: string; name: string; fetchxml: string | null }[]>(personalPath, connectionTarget),
+        this.xrm.webApiGet<{ savedqueryid: string; name: string; fetchxml: string | null; layoutxml: string | null }[]>(systemPath, connectionTarget),
+        this.xrm.webApiGet<{ userqueryid: string; name: string; fetchxml: string | null; layoutxml: string | null }[]>(personalPath, connectionTarget),
       ]);
       const views: ViewInfo[] = [
-        ...system.map(v => ({ id: v.savedqueryid, name: v.name, viewType: 'savedquery' as const, fetchXml: v.fetchxml ?? '' })),
-        ...personal.map(v => ({ id: v.userqueryid, name: v.name, viewType: 'userquery' as const, fetchXml: v.fetchxml ?? '' })),
+        ...system.map(v => ({ id: v.savedqueryid, name: v.name, viewType: 'savedquery' as const, fetchXml: v.fetchxml ?? '', layoutXml: v.layoutxml ?? '' })),
+        ...personal.map(v => ({ id: v.userqueryid, name: v.name, viewType: 'userquery' as const, fetchXml: v.fetchxml ?? '', layoutXml: v.layoutxml ?? '' })),
       ];
       views.sort((a, b) => a.name.localeCompare(b.name));
       return { status: 'ok', views };
     } catch (error) {
       return { status: 'error', reason: error instanceof Error ? error.message : String(error) };
     }
+  }
+
+  async listAttributeLabels(
+    entityLogicalName: string,
+    connectionTarget?: 'primary' | 'secondary'
+  ): Promise<AttributeLabel[]> {
+    const path = buildAttributeLabelsPath(entityLogicalName);
+    if (!path) throw new Error('Invalid table logical name.');
+    return this.xrm.webApiGet<AttributeLabel[]>(path, connectionTarget);
   }
 
   invalidate(): void {

@@ -50,6 +50,11 @@ export function buildViewsForEntityPath(
 ): string | null {
   if (!isValidLogicalName(entityLogicalName)) return null;
   const collection = viewType === 'savedquery' ? 'savedqueries' : 'userqueries';
-  return `${collection}?$select=name,${viewType}id,fetchxml` +
+  return `${collection}?$select=name,${viewType}id,fetchxml,layoutxml` +
     `&$filter=returnedtypecode eq '${entityLogicalName}' and querytype eq 0&$orderby=name asc`;
+}
+
+export function buildAttributeLabelsPath(entityLogicalName: string): string | null {
+  if (!isValidLogicalName(entityLogicalName)) return null;
+  return `EntityDefinitions(LogicalName='${entityLogicalName}')/Attributes?$select=LogicalName,DisplayName`;
 }

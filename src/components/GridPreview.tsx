@@ -9,6 +9,8 @@ import { TablePicker } from './TablePicker';
 import { ViewPicker } from './ViewPicker';
 import { NativeMdaFrame } from './NativeMdaFrame';
 import { MockGrid } from './MockGrid';
+import type { GridColumn } from '../services/GridViewModel';
+import { resolveGridColumns } from '../services/GridViewModel';
 
 export function capGridFetchXml(source: string, entityName: string): string {
   const doc = new DOMParser().parseFromString(source, 'text/xml');
@@ -54,7 +56,7 @@ export function GridPreview(props: Props): React.ReactElement {
 }
 
 type State = { status: 'idle' | 'loading' } | { status: 'error'; reason: string } |
-  { status: 'loaded'; rows: Record<string, unknown>[]; viewName: string };
+  { status: 'loaded'; rows: Record<string, unknown>[]; viewName: string; columns: GridColumn[] };
 
 function GridData({ config, validation, metadataService, entityName, viewId, viewType }: Props & {
   viewId: string; viewType: '' | 'savedquery' | 'userquery';
@@ -80,12 +82,14 @@ function GridData({ config, validation, metadataService, entityName, viewId, vie
       const view = result.views.find(item => item.id === viewId && item.viewType === viewType);
       if (!view) throw new Error('Select an accessible view.');
       const xml = capGridFetchXml(view.fetchXml, entityName);
+      const columns = await resolveGridColumns(view, entityName, metadataService);
+      if (id !== request.current) return;
       const response = await window.dataverseAPI.fetchXmlQuery(xml);
       if (id !== request.current) return;
       if (!Array.isArray(response.value) || response.value.some(row => !row || typeof row !== 'object' || Array.isArray(row))) {
         throw new Error('The grid query returned an invalid response.');
       }
-      setState({ status: 'loaded', rows: response.value.slice(0, 10), viewName: view.name });
+      setState({ status: 'loaded', rows: response.value.slice(0, 10), viewName: view.name, columns });
     } catch (error) {
       if (id !== request.current) return;
       setState({ status: 'error', reason: error instanceof Error ? error.message : 'Could not load grid rows.' });
@@ -117,7 +121,7 @@ function GridData({ config, validation, metadataService, entityName, viewId, vie
       pane={{ ...config.pane, isSelected: selectedRow !== null }}
       hostTarget={{ pageType: 'entitylist', entityName, viewId, viewType }}
       paneTarget={config.target} validation={validation} caption={`${entityName} · ${state.viewName} · live data, simulated command`}>
-      <MockGrid rows={state.rows} viewName={state.viewName} selectedRow={selectedRow} onCommand={setSelectedRow} />
+      <MockGrid rows={state.rows} columns={state.columns} viewName={state.viewName} selectedRow={selectedRow} onCommand={setSelectedRow} />
     </NativeMdaFrame>}
   </>;
 }

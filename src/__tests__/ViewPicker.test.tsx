@@ -8,7 +8,7 @@ import type { ViewsForEntityResult } from '../services/MetadataService';
 
 it('ignores stale views and emits the complete personal view only after selection', async () => {
   let finishOld!: (result: ViewsForEntityResult) => void;
-  const view = { id: '11111111-2222-3333-4444-555555555555', name: 'My contacts', viewType: 'userquery' as const, fetchXml: '<fetch />' };
+  const view = { id: '11111111-2222-3333-4444-555555555555', name: 'My contacts', viewType: 'userquery' as const, fetchXml: '<fetch />', layoutXml: '' };
   const metadataService = { listViewsForEntity: vi.fn()
     .mockImplementationOnce(() => new Promise<ViewsForEntityResult>(resolve => { finishOld = resolve; }))
     .mockResolvedValue({ status: 'ok', views: [view] }) };

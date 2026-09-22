@@ -411,13 +411,24 @@ describe('view metadata', () => {
       }]);
     const result = await new MetadataService({ webApiGet }).listViewsForEntity('account', 'secondary');
     expect(webApiGet.mock.calls).toEqual([
-      ["savedqueries?$select=name,savedqueryid,fetchxml&$filter=returnedtypecode eq 'account' and querytype eq 0&$orderby=name asc", 'secondary'],
-      ["userqueries?$select=name,userqueryid,fetchxml&$filter=returnedtypecode eq 'account' and querytype eq 0&$orderby=name asc", 'secondary'],
+      ["savedqueries?$select=name,savedqueryid,fetchxml,layoutxml&$filter=returnedtypecode eq 'account' and querytype eq 0&$orderby=name asc", 'secondary'],
+      ["userqueries?$select=name,userqueryid,fetchxml,layoutxml&$filter=returnedtypecode eq 'account' and querytype eq 0&$orderby=name asc", 'secondary'],
     ]);
     expect(result).toEqual({ status: 'ok', views: [
-      { id: 'bbbbbbbb-0000-0000-0000-000000000002', name: 'My accounts', viewType: 'userquery', fetchXml: '<fetch top="3"><entity name="account"/></fetch>' },
-      { id: 'aaaaaaaa-0000-0000-0000-000000000001', name: 'System accounts', viewType: 'savedquery', fetchXml: '<fetch><entity name="account"/></fetch>' },
+      { id: 'bbbbbbbb-0000-0000-0000-000000000002', name: 'My accounts', viewType: 'userquery', fetchXml: '<fetch top="3"><entity name="account"/></fetch>', layoutXml: '' },
+      { id: 'aaaaaaaa-0000-0000-0000-000000000001', name: 'System accounts', viewType: 'savedquery', fetchXml: '<fetch><entity name="account"/></fetch>', layoutXml: '' },
     ] });
+  });
+
+  it('retrieves attribute labels through the guarded metadata endpoint', async () => {
+    const labels = [{ LogicalName: 'name', DisplayName: { UserLocalizedLabel: { Label: 'Account Name' } } }];
+    const webApiGet = vi.fn().mockResolvedValue(labels);
+    const service = new MetadataService({ webApiGet });
+    expect(await service.listAttributeLabels('account', 'secondary')).toEqual(labels);
+    expect(webApiGet).toHaveBeenCalledWith(
+      "EntityDefinitions(LogicalName='account')/Attributes?$select=LogicalName,DisplayName", 'secondary');
+    await expect(service.listAttributeLabels("account'bad")).rejects.toThrow('Invalid table logical name.');
+    expect(webApiGet).toHaveBeenCalledTimes(1);
   });
 
   it('rejects invalid logical names before making either request', async () => {

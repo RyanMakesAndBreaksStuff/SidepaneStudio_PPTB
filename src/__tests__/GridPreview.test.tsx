@@ -5,17 +5,30 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { capGridFetchXml, GridPreview } from '../components/GridPreview';
 import { PreviewPanel } from '../components/PreviewPanel';
 import { MetadataService } from '../services/MetadataService';
+import { gridCellText, resolveGridColumns } from '../services/GridViewModel';
 import { cfg, deferred, xrmStub } from './testHelpers';
 
 let root: Root | undefined;
 let host: HTMLDivElement | undefined;
-const view = { id: '11111111-1111-1111-1111-111111111111', name: 'Active accounts', viewType: 'savedquery' as const,
-  fetchXml: '<fetch><entity name="account"><attribute name="name"/></entity></fetch>' };
+const view = {
+  id: '11111111-1111-1111-1111-111111111111',
+  name: 'Active accounts', viewType: 'savedquery' as const,
+  fetchXml: '<fetch><entity name="account"><attribute name="name"/><attribute name="statuscode"/><attribute name="primarycontactid"/><link-entity name="contact" alias="c" from="contactid" to="primarycontactid"><attribute name="emailaddress1"/></link-entity></entity></fetch>',
+  layoutXml: '<grid jump="name"><row id="accountid"><cell name="name" width="240"/><cell name="statuscode" width="100"/><cell name="primarycontactid" width="180"/><cell name="c.emailaddress1" width="200"/></row></grid>',
+};
 const config = cfg({ target: { pageType: 'entitylist', entityName: 'account', viewId: view.id, viewType: view.viewType } });
 const validation = { isValid: true, errors: [], warnings: [] };
 function metadata() {
   return { listViewsForEntity: vi.fn().mockResolvedValue({ status: 'ok', views: [view] }),
-    listAccessibleTables: vi.fn().mockResolvedValue({ status: 'ok', tables: [] }), invalidate: vi.fn() } as unknown as MetadataService;
+    listAccessibleTables: vi.fn().mockResolvedValue({ status: 'ok', tables: [] }),
+    listAttributeLabels: vi.fn().mockImplementation(async (entity: string) => entity === 'account' ? [
+      { LogicalName: 'name', DisplayName: { UserLocalizedLabel: { Label: 'Account Name' } } },
+      { LogicalName: 'statuscode', DisplayName: { UserLocalizedLabel: { Label: 'Status Reason' } } },
+      { LogicalName: 'primarycontactid', DisplayName: { UserLocalizedLabel: { Label: 'Primary Contact' } } },
+    ] : [
+      { LogicalName: 'emailaddress1', DisplayName: { UserLocalizedLabel: { Label: 'Email' } } },
+    ]),
+    invalidate: vi.fn() } as unknown as MetadataService;
 }
 async function render(element: React.ReactElement) {
   if (!root) { host = document.createElement('div'); document.body.append(host); root = createRoot(host); }
@@ -36,6 +49,43 @@ afterEach(async () => {
 });
 
 describe('grid preview', () => {
+  it('uses layout display labels and excludes incidental record keys', async () => {
+    vi.stubGlobal('dataverseAPI', { fetchXmlQuery: vi.fn().mockResolvedValue({ value: [{
+      accountid: 'record-id', name: 'Acme', statuscode: 1,
+      'statuscode@OData.Community.Display.V1.FormattedValue': 'Active',
+      _primarycontactid_value: 'contact-id',
+      '_primarycontactid_value@OData.Community.Display.V1.FormattedValue': 'Pat Lee',
+      'c.emailaddress1': 'pat@example.com',
+    }] }) });
+    await render(preview());
+    await click('Generate grid preview');
+    expect(Array.from(host!.querySelectorAll('thead th')).slice(1).map(th => th.textContent))
+      .toEqual(['Account Name', 'Status Reason', 'Primary Contact', 'Email']);
+    expect(host!.textContent).toContain('Pat Lee');
+    expect(host!.textContent).toContain('pat@example.com');
+    expect(host!.textContent).not.toContain('record-id');
+    expect(host!.textContent).not.toContain('contact-id');
+  });
+
+  it('resolves empty grids and rejects missing labels or broken layouts without raw-name fallback', async () => {
+    const service = metadata();
+    const columns = await resolveGridColumns(view, 'account', service);
+    expect(columns.map(c => c.width)).toEqual([240, 100, 180, 200]);
+    expect(gridCellText({}, columns[0])).toBe('');
+    expect(gridCellText({ name: null }, columns[0])).toBe('');
+    expect(columns[0].primary).toBe(true);
+    await expect(resolveGridColumns({ ...view, layoutXml: '<grid>' }, 'account', service)).rejects.toThrow();
+    await expect(resolveGridColumns({ ...view, layoutXml: '<grid><row><cell name="unknown"/></row></grid>' }, 'account', service)).rejects.toThrow();
+    await expect(resolveGridColumns(view, 'account', { listAttributeLabels: async () => [] })).rejects.toThrow('Display labels');
+    const aliasView = { ...view,
+      fetchXml: '<fetch><entity name="account"><attribute name="name" alias="caption"/></entity></fetch>',
+      layoutXml: '<grid><row><cell name="caption"/></row></grid>',
+    };
+    const aliasColumns = await resolveGridColumns(aliasView, 'account', service);
+    expect(aliasColumns[0].label).toBe('Account Name');
+    expect(gridCellText({ caption: 'Aliased' }, aliasColumns[0])).toBe('Aliased');
+  });
+
   it('caps the root while preserving filters, joins, ordering and smaller limits', () => {
     const xml = '<?xml version="1.0"?><fetch top="25" count="200" page="2" paging-cookie="cookie" returntotalrecordcount="true"><entity name="account"><filter><condition attribute="name" operator="eq" value="A &amp; B"/></filter><order attribute="name"/><link-entity name="contact" from="parentcustomerid" to="accountid" alias="c"/></entity></fetch>';
     const doc = new DOMParser().parseFromString(capGridFetchXml(xml, 'account'), 'text/xml');
