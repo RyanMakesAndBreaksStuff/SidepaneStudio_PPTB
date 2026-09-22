@@ -17,6 +17,7 @@ export interface TableInfo {
   logicalName: string;
   displayName: string;
   objectTypeCode: number;
+  isCustomEntity?: boolean;
 }
 
 export interface DashboardInfo {
@@ -143,6 +144,7 @@ export class MetadataService {
           logicalName: e.LogicalName,
           displayName: e.DisplayName?.UserLocalizedLabel?.Label ?? e.LogicalName,
           objectTypeCode: e.ObjectTypeCode ?? 0,
+          isCustomEntity: e.IsCustomEntity === true,
         }))
         .sort((a, b) => a.displayName.localeCompare(b.displayName));
       this._tableCache.set(cacheKey, { tables, expiresAt: Date.now() + CACHE_TTL_MS });

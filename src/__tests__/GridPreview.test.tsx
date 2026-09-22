@@ -229,8 +229,8 @@ describe('grid preview', () => {
     await render(<PreviewPanel config={cfg({ trigger: { ...config.trigger, kind: 'MainGridButton' } })}
       validation={validation} metadataService={service} xrm={xrmStub()} />);
     await click('Grid');
-    const entityLabel = Array.from(host!.querySelectorAll('label')).find(label => label.textContent?.startsWith('Preview entity'));
-    const entitySelect = entityLabel?.querySelector('select');
+    const entityGroup = host!.querySelector('[role="group"][aria-label="Preview entity"]');
+    const entitySelect = entityGroup?.querySelector('select');
     expect(entitySelect).toBeTruthy();
     await act(async () => {
       entitySelect!.value = 'account';

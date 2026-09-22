@@ -5,6 +5,8 @@ import { theme } from '../theme/tokens';
 import { FormXmlService, FormMeta } from '../services/FormXmlService';
 import { MetadataService, TableInfo } from '../services/MetadataService';
 import { TableComboBox } from './TableComboBox';
+import { CustomTableFilterButton } from './CustomTableFilterButton';
+import { usePreviewSessionState } from '../contexts/PreviewSessionContext';
 
 export interface FormSelection {
   entityLogicalName: string;
@@ -78,6 +80,24 @@ export function FormSelector({
     | { status: 'error'; reason: string };
   const [tablesState, setTablesState] = useState<TablesState>({ status: 'loading' });
   const [tablesReloadKey, setTablesReloadKey] = useState(0);
+  const [customOnly, setCustomOnly] =
+    usePreviewSessionState<boolean>('form-custom-tables-only', false);
+  const visibleTables = useMemo(() => {
+    if (tablesState.status !== 'loaded') return [];
+    return customOnly
+      ? tablesState.tables.filter(table => table.isCustomEntity === true)
+      : tablesState.tables;
+  }, [tablesState, customOnly]);
+  const formEntity = !hideEntityPicker && customOnly && tablesState.status === 'loaded' &&
+    !visibleTables.some(table => table.logicalName === entityName) ? '' : entityName;
+  const toggleCustomOnly = () => {
+    const next = !customOnly;
+    setCustomOnly(next);
+    if (next && entityName && tablesState.status === 'loaded' &&
+        !tablesState.tables.some(table => table.logicalName === entityName && table.isCustomEntity === true)) {
+      onEntityNameChange('');
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -113,7 +133,7 @@ export function FormSelector({
     const requestId = requestIdRef.current + 1;
     requestIdRef.current = requestId;
 
-    if (!entityName) {
+    if (!formEntity) {
       setForms([]);
       setSelectedFormId('');
       setLoading(false);
@@ -122,12 +142,13 @@ export function FormSelector({
       return;
     }
 
+    setForms([]);
     setLoading(true);
     setError('');
     setSelectedFormId('');
     if (!controlledRef.current) onFormSelectedRef.current(null);
 
-    formXmlService.getFormsForEntityResult(entityName).then(result => {
+    formXmlService.getFormsForEntityResult(formEntity).then(result => {
       if (requestIdRef.current !== requestId) return;
 
       if (!result.ok) {
@@ -141,7 +162,7 @@ export function FormSelector({
       setLoading(false);
       if (!controlledRef.current && result.forms.length === 1) {
         setSelectedFormId(result.forms[0].id);
-        onFormSelectedRef.current({ entityLogicalName: entityName, formId: result.forms[0].id });
+        onFormSelectedRef.current({ entityLogicalName: formEntity, formId: result.forms[0].id });
       }
     }).catch(() => {
       if (requestIdRef.current !== requestId) return;
@@ -150,12 +171,12 @@ export function FormSelector({
       setError('Could not load main forms.');
     });
     return () => { requestIdRef.current += 1; };
-  }, [entityName, formXmlService, retryCount]);
+  }, [formEntity, formXmlService, retryCount]);
 
   const handleFormChange = (formId: string) => {
     setSelectedFormId(formId);
     if (formId) {
-      onFormSelected({ entityLogicalName: entityName, formId });
+      onFormSelected({ entityLogicalName: formEntity, formId });
     } else {
       onFormSelected(null);
     }
@@ -223,7 +244,10 @@ export function FormSelector({
             {configuredEntity && configuredEntity !== entityName && onUseConfigured && (
               <button
                 type="button"
-                onClick={onUseConfigured}
+                onClick={() => {
+                  setCustomOnly(false);
+                  onUseConfigured?.();
+                }}
                 title={`Set preview entity to ${configuredEntity}`}
                 style={{
                   border: 'none',
@@ -252,10 +276,16 @@ export function FormSelector({
               </button>
             )}
           </div>
+          <CustomTableFilterButton
+            pressed={customOnly}
+            disabled={disabled || tablesState.status !== 'loaded'}
+            onClick={toggleCustomOnly}
+          />
           <TableComboBox
-            value={entityName}
+            key={String(customOnly)}
+            value={formEntity}
             onChange={commitEntity}
-            tables={tablesState.status === 'loaded' ? tablesState.tables : []}
+            tables={visibleTables}
             loading={tablesState.status === 'loading'}
             error={tablesState.status === 'error' ? tablesState.reason : undefined}
             onRetry={retryTables}
@@ -268,7 +298,7 @@ export function FormSelector({
         <div style={labelStyle}>Form</div>
         {loading ? (
           <div style={{ ...fieldStyle, color: T.fg3 }}>Loading…</div>
-        ) : !entityName ? (
+        ) : !formEntity ? (
           <div style={{ ...fieldStyle, color: T.fg3 }}>Pick a preview entity</div>
         ) : error ? (
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>

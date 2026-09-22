@@ -5,6 +5,7 @@ import { theme } from '../theme/tokens';
 import { MetadataService, TableInfo } from '../services/MetadataService';
 import { Select, SelectOption } from './Select';
 import { Callout } from './Callout';
+import { CustomTableFilterButton } from './CustomTableFilterButton';
 
 type LoadState =
   | { status: 'loading' }
@@ -18,6 +19,7 @@ export interface TablePickerProps {
   error?: boolean;
   disabled?: boolean;
   onAccessibleTablesChange?: (tables: Set<string> | undefined) => void;
+  customOnlyState?: readonly [boolean, (enabled: boolean) => void];
 }
 
 export function TablePicker({
@@ -27,11 +29,23 @@ export function TablePicker({
   error,
   disabled,
   onAccessibleTablesChange,
+  customOnlyState,
 }: TablePickerProps): React.ReactElement {
   const { isDark } = useTheme();
   const T = theme(isDark);
   const [loadState, setLoadState] = useState<LoadState>({ status: 'loading' });
   const [reloadKey, setReloadKey] = useState(0);
+  const [localCustomOnly, setLocalCustomOnly] = useState(false);
+  const customOnly = customOnlyState?.[0] ?? localCustomOnly;
+  const setCustomOnly = customOnlyState?.[1] ?? setLocalCustomOnly;
+  const toggleCustomOnly = () => {
+    const next = !customOnly;
+    setCustomOnly(next);
+    if (next && value && loadState.status === 'loaded' &&
+        !loadState.tables.some(table => table.logicalName === value && table.isCustomEntity === true)) {
+      onChange('');
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -68,24 +82,36 @@ export function TablePicker({
     if (loadState.status === 'loading') return [{ value: value || '', label: 'Loading tables...' }];
     if (loadState.status === 'error') return [{ value: value || '', label: 'Could not load table list' }];
 
-    const tableOptions = loadState.tables.map(table => ({
+    const visibleTables = customOnly
+      ? loadState.tables.filter(table => table.isCustomEntity === true)
+      : loadState.tables;
+    const tableOptions = visibleTables.map(table => ({
       value: table.logicalName,
       label: `${table.displayName} (${table.logicalName})`,
     }));
-    if (value && !loadState.tables.some(table => table.logicalName === value)) {
+    if (!customOnly && value && !loadState.tables.some(table => table.logicalName === value)) {
       return [{ value, label: `${value} (no longer accessible)`, disabled: true }, ...tableOptions];
     }
-    if (tableOptions.length === 0) return [{ value: '', label: 'No accessible tables found' }];
+    if (tableOptions.length === 0) {
+      return [{ value: '', label: customOnly ? 'No custom tables found' : 'No accessible tables found' }];
+    }
     // Without an explicit placeholder, an unset value renders as whichever table is
     // alphabetically first (often "account") — selecting that table then does nothing,
     // since the <select> already displays it and fires no change event.
-    return value ? tableOptions : [{ value: '', label: 'Select a table…' }, ...tableOptions];
-  }, [loadState, value]);
+    return !value || (customOnly && !visibleTables.some(table => table.logicalName === value))
+      ? [{ value: '', label: 'Select a table…' }, ...tableOptions]
+      : tableOptions;
+  }, [loadState, value, customOnly]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <CustomTableFilterButton
+        pressed={customOnly}
+        disabled={loadState.status !== 'loaded' || disabled}
+        onClick={toggleCustomOnly}
+      />
       <Select
-        value={value}
+        value={customOnly && !options.some(option => option.value === value) ? '' : value}
         onChange={onChange}
         options={options}
         disabled={loadState.status !== 'loaded' || disabled}

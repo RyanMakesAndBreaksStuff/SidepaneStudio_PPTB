@@ -47,8 +47,16 @@ export function GridPreview(props: Props): React.ReactElement {
   const selectionKey = JSON.stringify(['grid-view', entityName, configured?.viewId ?? '', configured?.viewType ?? '']);
   const [selection, setSelection] = usePreviewSessionState<{ id: string; viewType: '' | 'savedquery' | 'userquery' }>(
     selectionKey, { id: configured?.viewId ?? '', viewType: configured?.viewType ?? '' });
+  const customOnlyState = usePreviewSessionState<boolean>('grid-custom-tables-only', false);
   return <div style={{ flex: 1, overflow: 'auto', padding: 12, minWidth: 0, color: T.fg1, fontFamily: T.font }}>
-    {allowEntityChange ? <label style={{ color: T.fg2, fontFamily: T.font, fontSize: 12 }}>Preview entity<TablePicker value={entityName} metadataService={metadataService} onChange={onEntityNameChange} /></label> : <p style={{ color: T.fg2, fontFamily: T.font, fontSize: 12 }}>Preview entity: {entityName}</p>}
+    {allowEntityChange ? (
+      <div role="group" aria-label="Preview entity"
+        style={{ color: T.fg2, fontFamily: T.font, fontSize: 12 }}>
+        <span>Preview entity</span>
+        <TablePicker value={entityName} metadataService={metadataService}
+          onChange={onEntityNameChange} customOnlyState={customOnlyState} />
+      </div>
+    ) : <p style={{ color: T.fg2, fontFamily: T.font, fontSize: 12 }}>Preview entity: {entityName}</p>}
     <ViewPicker entityName={entityName} value={selection.id} viewType={selection.viewType}
       metadataService={metadataService} onChange={view => setSelection({ id: view?.id ?? '', viewType: view?.viewType ?? '' })} />
     <GridData key={JSON.stringify([entityName, selection.viewType, selection.id])} {...props} viewId={selection.id} viewType={selection.viewType} />

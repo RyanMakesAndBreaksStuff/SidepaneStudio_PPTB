@@ -356,12 +356,17 @@ export function ConfigurePanel({
             label="Table name"
             hint="Logical name of the record's table — required before a custom page or web resource receives record context"
             error={vErrors['context.entityName']}
-          >
-            <Input
+        >
+            <TablePicker
               value={context.entityName}
-              onChange={v => patch('context', 'entityName', v)}
-              placeholder="account"
+              onChange={entityName => onChange(prev =>
+                prev.context.entityName === entityName ? prev : {
+                  ...prev,
+                  context: { ...prev.context, entityName, staticRecordId: '' },
+                })}
+              metadataService={metadataService}
               error={!!vErrors['context.entityName']}
+              disabled={readOnly}
             />
           </Field>
         )}

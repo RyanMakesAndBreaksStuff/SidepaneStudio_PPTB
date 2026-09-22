@@ -92,7 +92,9 @@ describe('TablePicker', () => {
     expect(host?.textContent).toContain('Could not load table list');
 
     await act(async () => {
-      host?.querySelector('button')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      Array.from(host?.querySelectorAll('button') ?? [])
+        .find(button => button.textContent === 'Retry')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
     expect(service.invalidate).toHaveBeenCalledTimes(1);
