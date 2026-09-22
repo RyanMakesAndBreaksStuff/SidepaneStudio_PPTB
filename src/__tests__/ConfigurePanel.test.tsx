@@ -483,3 +483,43 @@ describe('ConfigurePanel — record context table name (CR-001)', () => {
     expect(findInputByPlaceholder('00000000-0000-0000-0000-000000000000')).toBeTruthy();
   });
 });
+
+describe('ConfigurePanel — form data guidance', () => {
+  const entityRecordConfig = {
+    ...DEFAULT_CONFIG,
+    target: { pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '' },
+  } as PaneDefinitionConfig;
+
+  function formDataTextarea(): HTMLTextAreaElement | undefined {
+    return (host?.querySelector('textarea[aria-label="Form data"]') ?? undefined) as HTMLTextAreaElement | undefined;
+  }
+
+  it('shows a sample-object placeholder on the Form data textarea', async () => {
+    await renderPanel({ config: entityRecordConfig, onChange: vi.fn() });
+    await expandSection('What opens in the pane');
+    expect(formDataTextarea()?.placeholder).toContain('"name"');
+  });
+
+  it('inserts the sample object when Insert example is clicked', async () => {
+    let current = entityRecordConfig;
+    await renderPanel({ config: current, onChange: updater => { current = updater(current); } });
+    await expandSection('What opens in the pane');
+    const btn = Array.from(host?.querySelectorAll('button') ?? []).find(
+      b => b.textContent?.includes('Insert example')
+    );
+    expect(btn).toBeTruthy();
+    await act(async () => { btn!.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+    expect(JSON.parse(current.target.pageType === 'entityrecord' ? current.target.data : '{}')).toEqual(
+      expect.objectContaining({ name: expect.any(String) })
+    );
+  });
+
+  it('tells makers column defaults need create mode and links the docs', async () => {
+    await renderPanel({ config: entityRecordConfig, onChange: vi.fn() });
+    await expandSection('What opens in the pane');
+    expect(host?.textContent ?? '').toMatch(/always navigates to an existing record/i);
+    const links = Array.from(host?.querySelectorAll('a') ?? []).map(a => (a as HTMLAnchorElement).href);
+    expect(links.some(h => h.includes('set-field-values-using-parameters-passed-form'))).toBe(true);
+    expect(links.some(h => h.includes('configure-form-accept-custom-querystring-parameters'))).toBe(true);
+  });
+});

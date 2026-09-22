@@ -39,6 +39,12 @@ export interface ConfigurePanelProps {
   onResetMetadataFilterConfig?: () => Promise<void> | void;
 }
 
+const FORM_DATA_EXAMPLE = `{
+  "name": "Contoso",
+  "description": "Opened from the side pane.",
+  "donotemail": 1
+}`;
+
 function resetTarget(pageType: PageType): TargetConfig {
   switch (pageType) {
     case 'custom':       return { pageType: 'custom', name: '' };
@@ -186,10 +192,26 @@ export function ConfigurePanel({
           <Field label="Tab name" hint="Logical name of the form tab to focus">
             <Input value={target.tabName} disabled={readOnly} onChange={tabName => onChange(prev => prev.target.pageType !== 'entityrecord' ? prev : { ...prev, target: { ...prev.target, tabName } })} />
           </Field>
-          <Field label="Form data" hint="Optional JSON object of form parameters" error={vErrors['target.data']}>
+          <Field label="Form data" hint="Optional JSON object of extra form parameters. Keys are column logical names (e.g. name) or pre-registered custom params. Lookups need a pair/triple: primarycontactid + primarycontactidname, or parentcustomerid + parentcustomeridname + parentcustomeridtype (account|contact|systemuser|team)." error={vErrors['target.data']}>
             <textarea aria-label="Form data" value={target.data} disabled={readOnly} rows={4}
-              style={{ width: '100%', boxSizing: 'border-box', color: T.fg1, background: T.surface1, border: `1px solid ${T.stroke1}`, borderRadius: T.rS }}
+              placeholder={FORM_DATA_EXAMPLE}
+              style={{ width: '100%', boxSizing: 'border-box', color: T.fg1, background: T.surface1, border: `1px solid ${T.stroke1}`, borderRadius: T.rS, fontFamily: "'Cascadia Code','Consolas',monospace", fontSize: 12 }}
               onChange={event => { const data = event.target.value; onChange(prev => prev.target.pageType !== 'entityrecord' ? prev : { ...prev, target: { ...prev.target, data } }); }} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <button type="button" disabled={readOnly}
+                style={{ fontSize: 12, padding: '4px 10px', borderRadius: T.rM, border: `1px solid ${T.stroke1}`, background: T.surface2, color: T.fg1, cursor: readOnly ? 'default' : 'pointer' }}
+                onClick={() => onChange(prev => prev.target.pageType !== 'entityrecord' ? prev : { ...prev, target: { ...prev.target, data: FORM_DATA_EXAMPLE } })}>
+                Insert example
+              </button>
+              <span style={{ fontSize: 11, color: T.fg3 }}>
+                <a href="https://learn.microsoft.com/en-us/power-apps/developer/model-driven-apps/set-field-values-using-parameters-passed-form" target="_blank" rel="noreferrer">Set column values</a>
+                {' · '}
+                <a href="https://learn.microsoft.com/en-us/power-apps/developer/model-driven-apps/configure-form-accept-custom-querystring-parameters" target="_blank" rel="noreferrer">Custom query-string params</a>
+              </span>
+            </div>
+            <Callout type="info" icon="ℹ">
+              This tool always navigates to an existing record (entityId is always emitted), so column default values only apply to create-mode forms this configuration never opens. Only pre-registered custom params take effect here — and any invalid key fails the navigate at runtime.
+            </Callout>
           </Field>
         </>}
 
