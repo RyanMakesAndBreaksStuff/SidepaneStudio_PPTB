@@ -114,10 +114,49 @@ describe('grid preview', () => {
     expect(host!.textContent).toContain('Acme 0');
     expect(host!.textContent).not.toContain('secret');
     expect(host!.textContent).not.toContain('SelectedRow:');
-    await click('Preview command for row 2');
+    await act(async () => { host!.querySelector<HTMLInputElement>('input[aria-label="Select row 2"]')!.click(); });
+    await click('Preview command');
     expect(host!.textContent).toContain('SelectedRow: row 2');
     expect(host!.textContent).toContain(config.pane.title);
     expect(config.pane.isSelected).toBe(true);
+  });
+
+  it('uses checkbox selection and an explicit ribbon command without choosing row one', async () => {
+    const fetchXmlQuery = vi.fn().mockResolvedValue({ value: [{ name: 'Acme' }, { name: 'Beta' }] });
+    vi.stubGlobal('dataverseAPI', { fetchXmlQuery });
+    await render(preview());
+    await click('Generate grid preview');
+    const command = () => Array.from(host!.querySelectorAll('button')).find(b => b.textContent === 'Preview command')!;
+    expect(command().disabled).toBe(true);
+    const boxes = () => Array.from(host!.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'));
+    expect(boxes()).toHaveLength(3);
+    await act(async () => { boxes()[2].click(); });
+    expect(boxes()[0].indeterminate).toBe(true);
+    expect(command().disabled).toBe(false);
+    await click('Preview command');
+    expect(host!.textContent).toContain('SelectedRow: row 2');
+    await act(async () => { boxes()[0].click(); });
+    expect(boxes().every(b => b.checked)).toBe(true);
+    expect(command().disabled).toBe(true);
+    expect(host!.textContent).not.toContain('SelectedRow:');
+    expect(host!.querySelector('[aria-label="Grid commands"]')).toBeTruthy();
+    for (const label of ['New', 'Delete', 'Visualize this view', 'Email a Link', 'Flow', 'Run Report', 'Share']) {
+      expect(host!.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)?.disabled).toBe(true);
+    }
+    await click('Refresh');
+    expect(fetchXmlQuery).toHaveBeenCalledTimes(2);
+    expect(boxes().every(b => !b.checked)).toBe(true);
+  });
+
+  it.each(['MainGridOnSelect', 'SubgridOnSelect'] as const)('simulates %s only for one selected row', async kind => {
+    vi.stubGlobal('dataverseAPI', { fetchXmlQuery: vi.fn().mockResolvedValue({ value: [{ name: 'Acme' }, { name: 'Beta' }] }) });
+    await render(<GridPreview config={{ ...config, trigger: { ...config.trigger, kind } }} validation={validation}
+      metadataService={metadata()} entityName="account" allowEntityChange={false} onEntityNameChange={() => undefined} />);
+    await click('Generate grid preview');
+    await act(async () => { host!.querySelector<HTMLInputElement>('input[aria-label="Select row 2"]')!.click(); });
+    expect(host!.textContent).toContain('SelectedRow: row 2');
+    await act(async () => { host!.querySelector<HTMLInputElement>('input[aria-label="Select row 1"]')!.click(); });
+    expect(host!.textContent).not.toContain('SelectedRow:');
   });
 
   it('shows empty results and query failures with a repeatable explicit action', async () => {

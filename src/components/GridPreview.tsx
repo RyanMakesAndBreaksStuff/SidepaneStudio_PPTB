@@ -64,16 +64,24 @@ function GridData({ config, validation, metadataService, entityName, viewId, vie
   const { isDark } = useTheme();
   const T = theme(isDark);
   const [state, setState] = useState<State>({ status: 'idle' });
-  const [selectedRow, setSelectedRow] = useState<number | null>(null);
+  const [selectedRows, setSelectedRows] = useState<number[]>([]);
+  const [activeRow, setActiveRow] = useState<number | null>(null);
+  const onSelectionChange = (indices: number[]) => {
+    setSelectedRows(indices);
+    const onSelect = config.trigger.kind === 'MainGridOnSelect' || config.trigger.kind === 'SubgridOnSelect';
+    setActiveRow(onSelect && indices.length === 1 ? indices[0] : null);
+  };
   const request = useRef(0);
   useEffect(() => {
     setState({ status: 'idle' });
-    setSelectedRow(null);
+    setSelectedRows([]);
+    setActiveRow(null);
     return () => { request.current += 1; };
   }, [metadataService]);
   const generate = async () => {
     const id = ++request.current;
-    setSelectedRow(null);
+    setSelectedRows([]);
+    setActiveRow(null);
     setState({ status: 'loading' });
     try {
       const result = await metadataService.listViewsForEntity(entityName);
@@ -118,10 +126,13 @@ function GridData({ config, validation, metadataService, entityName, viewId, vie
     {state.status === 'loading' && <p role="status" style={{ color: T.fg3, fontFamily: T.font, fontSize: 12 }}>Loading grid rows...</p>}
     {state.status === 'error' && <p role="alert" style={{ color: T.error, fontFamily: T.font, fontSize: 12 }}>{state.reason}</p>}
     {state.status === 'loaded' && <NativeMdaFrame
-      pane={{ ...config.pane, isSelected: selectedRow !== null }}
+      pane={{ ...config.pane, isSelected: activeRow !== null }}
       hostTarget={{ pageType: 'entitylist', entityName, viewId, viewType }}
       paneTarget={config.target} validation={validation} caption={`${entityName} · ${state.viewName} · live data, simulated command`}>
-      <MockGrid rows={state.rows} columns={state.columns} viewName={state.viewName} selectedRow={selectedRow} onCommand={setSelectedRow} />
+      <MockGrid rows={state.rows} columns={state.columns} viewName={state.viewName}
+        selectedRows={selectedRows} activeRow={activeRow} onSelectionChange={onSelectionChange}
+        onCommand={() => { if (selectedRows.length === 1) setActiveRow(selectedRows[0]); }}
+        onRefresh={() => void generate()} />
     </NativeMdaFrame>}
   </>;
 }
