@@ -11,6 +11,7 @@ import { NativeMdaFrame } from './NativeMdaFrame';
 import { MockGrid } from './MockGrid';
 import type { GridColumn } from '../services/GridViewModel';
 import { resolveGridColumns } from '../services/GridViewModel';
+import { usePreviewSessionState } from '../contexts/PreviewSessionContext';
 
 export function capGridFetchXml(source: string, entityName: string): string {
   const doc = new DOMParser().parseFromString(source, 'text/xml');
@@ -43,15 +44,14 @@ export function GridPreview(props: Props): React.ReactElement {
   const { isDark } = useTheme();
   const T = theme(isDark);
   const configured = config.target.pageType === 'entitylist' && config.target.entityName.trim() === entityName ? config.target : undefined;
-  const [selection, setSelection] = useState({ id: configured?.viewId ?? '', viewType: configured?.viewType ?? '' });
+  const selectionKey = JSON.stringify(['grid-view', entityName, configured?.viewId ?? '', configured?.viewType ?? '']);
+  const [selection, setSelection] = usePreviewSessionState<{ id: string; viewType: '' | 'savedquery' | 'userquery' }>(
+    selectionKey, { id: configured?.viewId ?? '', viewType: configured?.viewType ?? '' });
   return <div style={{ flex: 1, overflow: 'auto', padding: 12, minWidth: 0, color: T.fg1, fontFamily: T.font }}>
-    {allowEntityChange ? <label style={{ color: T.fg2, fontFamily: T.font, fontSize: 12 }}>Preview entity<TablePicker value={entityName} metadataService={metadataService} onChange={name => {
-      setSelection({ id: '', viewType: '' });
-      onEntityNameChange(name);
-    }} /></label> : <p style={{ color: T.fg2, fontFamily: T.font, fontSize: 12 }}>Preview entity: {entityName}</p>}
+    {allowEntityChange ? <label style={{ color: T.fg2, fontFamily: T.font, fontSize: 12 }}>Preview entity<TablePicker value={entityName} metadataService={metadataService} onChange={onEntityNameChange} /></label> : <p style={{ color: T.fg2, fontFamily: T.font, fontSize: 12 }}>Preview entity: {entityName}</p>}
     <ViewPicker entityName={entityName} value={selection.id} viewType={selection.viewType}
       metadataService={metadataService} onChange={view => setSelection({ id: view?.id ?? '', viewType: view?.viewType ?? '' })} />
-    <GridData key={`${entityName}/${selection.viewType}/${selection.id}`} {...props} viewId={selection.id} viewType={selection.viewType} />
+    <GridData key={JSON.stringify([entityName, selection.viewType, selection.id])} {...props} viewId={selection.id} viewType={selection.viewType} />
   </div>;
 }
 
@@ -63,9 +63,12 @@ function GridData({ config, validation, metadataService, entityName, viewId, vie
 }): React.ReactElement {
   const { isDark } = useTheme();
   const T = theme(isDark);
-  const [state, setState] = useState<State>({ status: 'idle' });
-  const [selectedRows, setSelectedRows] = useState<number[]>([]);
-  const [activeRow, setActiveRow] = useState<number | null>(null);
+  const dataKey = JSON.stringify(['grid-data', entityName, viewType, viewId]);
+  const selectionKey = JSON.stringify(['grid-rows', entityName, viewType, viewId]);
+  const [completed, setCompleted] = usePreviewSessionState<Extract<State, { status: 'loaded' }> | null>(dataKey, null);
+  const [state, setState] = useState<State>(() => completed ?? { status: 'idle' });
+  const [selectedRows, setSelectedRows] = usePreviewSessionState<number[]>(`${selectionKey}:checked`, []);
+  const [activeRow, setActiveRow] = usePreviewSessionState<number | null>(`${selectionKey}:active`, null);
   const onSelectionChange = (indices: number[]) => {
     setSelectedRows(indices);
     const onSelect = config.trigger.kind === 'MainGridOnSelect' || config.trigger.kind === 'SubgridOnSelect';
@@ -73,13 +76,11 @@ function GridData({ config, validation, metadataService, entityName, viewId, vie
   };
   const request = useRef(0);
   useEffect(() => {
-    setState({ status: 'idle' });
-    setSelectedRows([]);
-    setActiveRow(null);
     return () => { request.current += 1; };
   }, [metadataService]);
   const generate = async () => {
     const id = ++request.current;
+    setCompleted(null);
     setSelectedRows([]);
     setActiveRow(null);
     setState({ status: 'loading' });
@@ -97,7 +98,11 @@ function GridData({ config, validation, metadataService, entityName, viewId, vie
       if (!Array.isArray(response.value) || response.value.some(row => !row || typeof row !== 'object' || Array.isArray(row))) {
         throw new Error('The grid query returned an invalid response.');
       }
-      setState({ status: 'loaded', rows: response.value.slice(0, 10), viewName: view.name, columns });
+      const loaded: Extract<State, { status: 'loaded' }> = {
+        status: 'loaded', rows: response.value.slice(0, 10), viewName: view.name, columns,
+      };
+      setCompleted(loaded);
+      setState(loaded);
     } catch (error) {
       if (id !== request.current) return;
       setState({ status: 'error', reason: error instanceof Error ? error.message : 'Could not load grid rows.' });

@@ -4,6 +4,7 @@ import { createRoot, Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { capGridFetchXml, GridPreview } from '../components/GridPreview';
 import { PreviewPanel } from '../components/PreviewPanel';
+import { PreviewSessionProvider } from '../contexts/PreviewSessionContext';
 import { MetadataService } from '../services/MetadataService';
 import { gridCellText, resolveGridColumns } from '../services/GridViewModel';
 import { cfg, deferred, xrmStub } from './testHelpers';
@@ -262,5 +263,41 @@ describe('grid preview', () => {
       await render(panel(cfg({ trigger: { ...config.trigger, kind } })));
       expect(Array.from(host!.querySelectorAll('button')).some(b => b.textContent === 'Grid')).toBe(true);
     }
+  });
+
+  it('keeps a generated grid when switching to Mock and back', async () => {
+    const fetchXmlQuery = vi.fn().mockResolvedValue({ value: [{ name: 'Keep me' }] });
+    vi.stubGlobal('dataverseAPI', { fetchXmlQuery });
+    await render(<PreviewPanel config={config} validation={validation} metadataService={metadata()} xrm={xrmStub()} />);
+    await click('Grid');
+    await click('Generate grid preview');
+    await click('Mock');
+    await click('Grid');
+    expect(host!.textContent).toContain('Keep me');
+    expect(fetchXmlQuery).toHaveBeenCalledTimes(1);
+  });
+
+  it('restores the grid after panel unmount and clears it for a new session', async () => {
+    const fetchXmlQuery = vi.fn().mockResolvedValue({ value: [{ name: 'Session row' }] });
+    vi.stubGlobal('dataverseAPI', { fetchXmlQuery });
+    const service = metadata();
+    const xrm = xrmStub();
+    const panel = (visible: boolean, epoch = 0) => <PreviewSessionProvider key={epoch}>
+      {visible && <PreviewPanel config={config} validation={validation} metadataService={service} xrm={xrm} />}
+    </PreviewSessionProvider>;
+    await render(panel(true));
+    await click('Grid');
+    await click('Generate grid preview');
+    await act(async () => { host!.querySelector<HTMLInputElement>('input[aria-label="Select row 1"]')!.click(); });
+    await click('Preview command');
+    await render(panel(false));
+    await render(panel(true));
+    expect(host!.textContent).toContain('Session row');
+    expect(host!.textContent).toContain('SelectedRow: row 1');
+    expect(fetchXmlQuery).toHaveBeenCalledTimes(1);
+    await render(panel(true, 1));
+    await click('Grid');
+    expect(host!.textContent).not.toContain('Session row');
+    expect(fetchXmlQuery).toHaveBeenCalledTimes(1);
   });
 });

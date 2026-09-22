@@ -13,6 +13,7 @@ import { GridPreview } from './GridPreview';
 import { MockMDAShell } from './MockMDAShell';
 import { NativeMdaFrame } from './NativeMdaFrame';
 import { PreviewSizeProvider, usePreviewSize } from './previewSize';
+import { PreviewSessionBoundary, usePreviewSessionState } from '../contexts/PreviewSessionContext';
 
 export interface PreviewPanelProps {
   config: PaneDefinitionConfig;
@@ -33,7 +34,7 @@ type FormState =
   | { status: 'error'; reason: string }
   | { status: 'loaded'; model: FormModel };
 
-export const PreviewPanel = React.memo(function PreviewPanel({
+const PreviewPanelContent = React.memo(function PreviewPanelContent({
   config,
   validation,
   metadataService,
@@ -41,7 +42,7 @@ export const PreviewPanel = React.memo(function PreviewPanel({
 }: PreviewPanelProps): React.ReactElement {
   const { isDark } = useTheme();
   const T = theme(isDark);
-  const [mode, setMode] = useState<PreviewMode>('mock');
+  const [mode, setMode] = usePreviewSessionState<PreviewMode>('preview-mode', 'mock');
   const gridEligible = config.target.pageType === 'entitylist' ||
     config.trigger.kind === 'MainGridButton' || config.trigger.kind === 'SubgridButton' ||
     config.trigger.kind === 'MainGridOnSelect' || config.trigger.kind === 'SubgridOnSelect';
@@ -54,7 +55,8 @@ export const PreviewPanel = React.memo(function PreviewPanel({
   // pane itself targets. Initialized ONCE from the configured target (if any)
   // so the cold start isn't punitive — the user can resync on demand via the
   // FormSelector's "Use configured" affordance if config diverges later.
-  const [previewHostEntity, setPreviewHostEntity] = useState<string>(
+  const [previewHostEntity, setPreviewHostEntity] = usePreviewSessionState<string>(
+    'preview-host-entity',
     () =>
       (config.target.pageType === 'entityrecord' || config.target.pageType === 'entitylist')
         ? config.target.entityName
@@ -157,7 +159,9 @@ export const PreviewPanel = React.memo(function PreviewPanel({
 
         {/* Grid mode */}
         {mode === 'grid' && gridEligible && <GridPreview
-          key={JSON.stringify([gridEntity, config.target, config.trigger.kind])}
+          key={JSON.stringify([gridEntity,
+            config.target.pageType === 'entitylist' ? config.target.viewId : '',
+            config.target.pageType === 'entitylist' ? config.target.viewType : ''])}
           config={config} validation={validation} metadataService={metadataService}
           entityName={gridEntity} allowEntityChange={!configuredGridEntity} onEntityNameChange={setPreviewHostEntity}
         />}
@@ -239,6 +243,10 @@ export const PreviewPanel = React.memo(function PreviewPanel({
       </PreviewSizeProvider>
     </div>
   );
+});
+
+export const PreviewPanel = React.memo(function PreviewPanel(props: PreviewPanelProps): React.ReactElement {
+  return <PreviewSessionBoundary><PreviewPanelContent {...props} /></PreviewSessionBoundary>;
 });
 
 function PreviewMeta({ config }: { config: PaneDefinitionConfig }): React.ReactElement {

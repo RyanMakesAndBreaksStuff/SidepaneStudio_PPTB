@@ -31,6 +31,7 @@ function reportSettingsFailure(action: string, err: unknown): void {
 
 export function SidePaneBuilderWorkbench(): React.ReactElement {
   const [config, setConfig] = useState<PaneDefinitionConfig>(DEFAULT_CONFIG);
+  const [previewEpoch, setPreviewEpoch] = useState(0);
   const [layoutMode, setLayoutMode] = useState<'wide' | 'narrow'>(
     window.innerWidth >= 900 ? 'wide' : 'narrow'
   );
@@ -104,11 +105,13 @@ export function SidePaneBuilderWorkbench(): React.ReactElement {
         switch (payload?.event) {
           case 'connection:created':
           case 'connection:updated':
+            setPreviewEpoch(value => value + 1);
             adapterRef.current?.resetUserId();
             metaRef.current?.invalidate();
             setConnectionState({ status: 'ready' });
             break;
           case 'connection:deleted':
+            setPreviewEpoch(value => value + 1);
             adapterRef.current?.resetUserId();
             metaRef.current?.invalidate();
             setConnectionState({ status: 'error', message: 'Connection removed. Reconnect in PPTB.' });
@@ -181,6 +184,7 @@ export function SidePaneBuilderWorkbench(): React.ReactElement {
   const handleReset = useCallback(async () => {
     configDirtyRef.current = false;
     setConfig(DEFAULT_CONFIG);
+    setPreviewEpoch(value => value + 1);
     const toolbox = window.toolboxAPI;
     try {
       await toolbox?.settings?.set('lastConfig', null);
@@ -265,6 +269,7 @@ export function SidePaneBuilderWorkbench(): React.ReactElement {
       metadataFilterError={metadataFilterError}
       onSaveMetadataFilterConfig={handleSaveMetadataFilterConfig}
       onResetMetadataFilterConfig={handleResetMetadataFilterConfig}
+      previewEpoch={previewEpoch}
     />
   );
 }

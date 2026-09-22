@@ -12,6 +12,7 @@ import { CommandBar } from './CommandBar';
 import { ConfigurePanel } from './ConfigurePanel';
 import { PreviewPanel } from './PreviewPanel';
 import { OutputPanel } from './OutputPanel';
+import { PreviewSessionProvider } from '../contexts/PreviewSessionContext';
 
 export interface WorkbenchShellProps {
   config: PaneDefinitionConfig;
@@ -26,6 +27,7 @@ export interface WorkbenchShellProps {
   metadataFilterError?: string | null;
   onSaveMetadataFilterConfig: (config: MetadataFilterConfig) => Promise<void> | void;
   onResetMetadataFilterConfig: () => Promise<void> | void;
+  previewEpoch?: number;
 }
 
 type NarrowTab = 'configure' | 'preview' | 'output';
@@ -42,7 +44,7 @@ const NARROW_TABS: { id: NarrowTab; label: string }[] = [
   { id: 'output',    label: 'Output' },
 ];
 
-export function WorkbenchShell({
+function WorkbenchShellContent({
   config,
   onChange,
   onReset,
@@ -188,6 +190,12 @@ export function WorkbenchShell({
       )}
     </div>
   );
+}
+
+export function WorkbenchShell(props: WorkbenchShellProps): React.ReactElement {
+  return <PreviewSessionProvider key={props.previewEpoch ?? 0}>
+    <WorkbenchShellContent {...props} />
+  </PreviewSessionProvider>;
 }
 
 function RailToggle({
