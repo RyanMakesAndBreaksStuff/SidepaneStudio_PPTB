@@ -30,7 +30,7 @@ const DARK: TokenSet = {
   accentAlt: '#9DCB1F', // EnergyFill — progress arcs, gradient partner
   accentBg:  '#24290F', // AccentTint — selected nav, info banner
   fg1:       '#F2F0EA', // TextPrimary   15.6:1
-  fg2:       '#B4AFA3', // TextSecondary  8.1:1
+  fg2:       '#D8D3C8', // TextSecondary  8.1:1
   fg3:       '#8B857A', // TextTertiary   4.8:1
   stroke1:   '#2E2C28', // DividerStroke
   strokeAcc: '#3D3A34', // ControlStroke

@@ -6,7 +6,7 @@
   },
   "displayName": "Side Pane Studio",
   "description": "Side Pane Studio is a visual builder for Dynamics 365 and Power Platforrm model-driven app side panes",
-  "icon": "icon/icon.svg",
+  "icon": "icon/icon-2.svg",
   "main": "index.html",
   "author": "Ryan Rettinger",
   "keywords": [
@@ -41,21 +41,26 @@
     "debug": "vite build --mode development --watch"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=20.19.0"
+  },
+  "overrides": {
+    "eslint-plugin-react": {
+      "eslint": "^10.0.0"
+    }
   },
   "dependencies": {
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
-    "@eslint/js": "9.39.4",
-    "@microsoft/eslint-plugin-power-apps": "0.5.1",
+    "@eslint/js": "^10.0.1",
+    "@microsoft/eslint-plugin-power-apps": "0.6.0",
     "@pptb/types": "1.2.5",
     "@types/react": "^18.0.0",
     "@types/react-dom": "^18.0.0",
     "@vitejs/plugin-react": "^5.0.0",
     "@vitest/coverage-v8": "^4.1.11",
-    "eslint": "^9.0.0",
+    "eslint": "^10.11.0",
     "eslint-plugin-promise": "7.3.0",
     "eslint-plugin-react": "7.37.5",
     "globals": "17.6.0",

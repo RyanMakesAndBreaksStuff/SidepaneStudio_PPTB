@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="Frame Shift nested">
+  <rect x="16" y="16" width="68" height="68" rx="16" fill="none" stroke="#1C1B18" stroke-width="3"/>
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round" transform="translate(4,4)">
+    <rect x="30" y="28" width="40" height="48" rx="8" fill="none" stroke="#F2F0EA" stroke-width="3"/>
+    <path d="M42 34 V70" fill="none" stroke="#F2F0EA" stroke-width="5"/>
+    <path d="M42 36 H58 A9 9 0 0 1 58 54 H42" fill="none" stroke="#F2F0EA" stroke-width="4.5"/>
+  </g>
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round" transform="translate(-5,-5)">
+    <rect x="30" y="28" width="40" height="48" rx="8" fill="none" stroke="#BADD52" stroke-width="3"/>
+    <g transform="translate(-2,-2)">
+      <path d="M62 36 H42 A9 9 0 0 0 42 52 H56 A9 9 0 0 1 56 70 H38" fill="none" stroke="#BADD52" stroke-width="5.5"/>
+    </g>
+  </g>
+</svg>
