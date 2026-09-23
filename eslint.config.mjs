@@ -8,7 +8,11 @@ import typescriptEslint from "typescript-eslint";
 /** @type {import('eslint').Linter.Config[]} */
 export default [
   {
-    ignores: ["**/generated"],
+    ignores: [
+      "**/generated", "**/dist/**", "**/dist-runtime/**", "tasks/**",
+      "eslint.config.mjs", "vite.config.ts", "vite.runtime.config.ts",
+      "vitest.config.ts", "src/runtime/sidePaneHelper.d.ts",
+    ],
   },
   eslintjs.configs.recommended,
   ...typescriptEslint.configs.recommendedTypeChecked,

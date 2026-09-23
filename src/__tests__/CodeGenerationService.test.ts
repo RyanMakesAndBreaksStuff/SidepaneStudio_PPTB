@@ -494,8 +494,7 @@ describe('generateBasicScript — closeOthers', () => {
 });
 
 describe('buildPaneOptions — isSelected and canClose', () => {
-  it.each([generateBasicScript, generateLibraryScript])
-    ('normalizes unsafe width before generating source', generate => {
+  it.each([generateBasicScript, generateLibraryScript])('normalizes unsafe width before generating source', generate => {
       const code = generate(cfg({ pane: {
         ...cfg({}).pane, width: '480;globalThis.pwned=1',
       } as any }));
@@ -553,6 +552,7 @@ describe('buildPaneOptions — isSelected and canClose', () => {
   it('imageSrc already prefixed with WebResources/ is left alone', () => {
     const code = generateBasicScript(cfg({ pane: { imageSrc: 'WebResources/sps_/icons/myicon.svg' } as any }));
     expect(code).toContain('imageSrc: "WebResources/sps_/icons/myicon.svg"');
+    // eslint-disable-next-line @microsoft/power-apps/use-cached-webresource -- Asserts an absent malformed path, not a requested resource.
     expect(code).not.toContain('WebResources/WebResources/');
   });
 });

@@ -34,7 +34,7 @@ const MINIMAL_FORM_XML = `
   </tabs>
 </form>`.trim();
 
-function makeXrm(forms: object[] = [], formXml = MINIMAL_FORM_XML): IXrmContext {
+function makeXrm(forms: object[] = [], formXml = MINIMAL_FORM_XML) {
   return {
     ...xrmStub(),
     webApiGet: vi.fn().mockResolvedValue(forms),
@@ -145,10 +145,9 @@ describe('FormXmlService', () => {
     const queryData = vi.fn();
     vi.stubGlobal('dataverseAPI', { queryData });
 
-    const xrm = {
-      webApiGet: vi.fn().mockResolvedValue([{ formid: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee', name: 'Main' }]),
-      webApiGetEntity: vi.fn().mockResolvedValue({ formxml: MINIMAL_FORM_XML }),
-    } as unknown as IXrmContext;
+    const webApiGet = vi.fn().mockResolvedValue([{ formid: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee', name: 'Main' }]);
+    const webApiGetEntity = vi.fn().mockResolvedValue({ formxml: MINIMAL_FORM_XML });
+    const xrm = { webApiGet, webApiGetEntity } as unknown as IXrmContext;
 
     const svc = new FormXmlService(xrm);
 
@@ -158,8 +157,8 @@ describe('FormXmlService', () => {
     const model = await svc.getFormModelResult('aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee');
     expect(model.ok).toBe(true);
 
-    expect(xrm.webApiGet).toHaveBeenCalledTimes(1);
-    expect(xrm.webApiGetEntity).toHaveBeenCalledTimes(1);
+    expect(webApiGet).toHaveBeenCalledTimes(1);
+    expect(webApiGetEntity).toHaveBeenCalledTimes(1);
     expect(queryData).not.toHaveBeenCalled();
   });
 });

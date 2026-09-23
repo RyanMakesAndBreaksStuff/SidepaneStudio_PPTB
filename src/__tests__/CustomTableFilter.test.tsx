@@ -88,6 +88,7 @@ it('normalizes custom metadata without widening accessible-table rules', async (
 
 it('clears excluded values, restores choices, and reports full accessibility', async () => {
   const service = metadata();
+  const listAccessibleTables = vi.spyOn(service, 'listAccessibleTables');
   const accessible = vi.fn();
   function Picker() {
     const [value, setValue] = React.useState('account');
@@ -105,7 +106,7 @@ it('clears excluded values, restores choices, and reports full accessibility', a
   await click(filter());
   expect(host.querySelector('select')!.value).toBe('new_event');
   expect(choices()).toEqual(['account', 'new_event', 'new_unknown']);
-  expect(service.listAccessibleTables).toHaveBeenCalledTimes(1);
+  expect(listAccessibleTables).toHaveBeenCalledTimes(1);
 });
 
 it('keeps a selected custom table and handles an empty custom subset', async () => {
@@ -128,7 +129,7 @@ it('keeps a selected custom table and handles an empty custom subset', async () 
 
 it('disables filtering while metadata is pending and when read-only', async () => {
   const service = metadata();
-  vi.mocked(service.listAccessibleTables).mockReturnValue(new Promise(() => undefined));
+  vi.spyOn(service, 'listAccessibleTables').mockReturnValue(new Promise(() => undefined));
   await render(<TablePicker value="" onChange={vi.fn()} metadataService={service} />);
   expect(filter().disabled).toBe(true);
   await act(async () => {
