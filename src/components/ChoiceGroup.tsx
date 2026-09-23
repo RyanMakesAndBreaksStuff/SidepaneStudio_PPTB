@@ -103,7 +103,7 @@ export function ChoiceGroup({ name, options, value, onChange }: ChoiceGroupProps
         <div
           style={{
             fontSize: 11,
-            color: T.accentAlt,
+            color: T.fg2,
             lineHeight: 1.45,
             paddingLeft: 2,
           }}

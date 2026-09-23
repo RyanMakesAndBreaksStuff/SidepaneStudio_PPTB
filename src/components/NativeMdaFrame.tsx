@@ -444,7 +444,7 @@ export function NativeMdaFrame({ pane, hostTarget, paneTarget, validation, capti
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
-                color: T.accentAlt,
+                color: T.fg2,
               }}
             >
               {caption}

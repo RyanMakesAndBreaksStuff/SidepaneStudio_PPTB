@@ -5,7 +5,7 @@
     "access": "public"
   },
   "displayName": "Side Pane Studio",
-  "description": "Do you also think Side Panes are the bees knees but sorely under utilzied due to complicated implementation? With Side Pane Studio you can Build, Preview and Generate Code. Now you can give those Model Driven Forms some rizz",
+  "description": "Side Pane Studio is a visual builder for Dynamics 365 and Power Platforrm model-driven app side panes",
   "icon": "icon/icon.svg",
   "main": "index.html",
   "author": "Ryan Rettinger",
