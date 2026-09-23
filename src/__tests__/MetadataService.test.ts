@@ -207,6 +207,23 @@ describe('MetadataService', () => {
       expect(xrm.webApiGet).toHaveBeenCalledTimes(2);
     });
 
+    it('discards and retries tables fetched before invalidation', async () => {
+      let resolveOld!: (value: typeof ENTITY_ACCOUNT[]) => void;
+      const oldResponse = new Promise<typeof ENTITY_ACCOUNT[]>(resolve => { resolveOld = resolve; });
+      const webApiGet = vi.fn().mockReturnValueOnce(oldResponse).mockResolvedValueOnce([ENTITY_CUSTOM]);
+      const svc = new MetadataService({ webApiGet });
+      const pending = svc.listAccessibleTables();
+      svc.invalidate();
+      resolveOld([ENTITY_ACCOUNT]);
+      const result = await pending;
+      expect(result.status).toBe('ok');
+      if (result.status !== 'ok') return;
+      expect(result.tables.map(table => table.logicalName)).toEqual(['new_widget']);
+      expect(webApiGet).toHaveBeenCalledTimes(2);
+      await svc.listAccessibleTables();
+      expect(webApiGet).toHaveBeenCalledTimes(2);
+    });
+
     it('returns error status when webApiGet throws', async () => {
       const xrm: MetaXrm = {
         webApiGet: vi.fn().mockRejectedValue(new Error('Network error')),
@@ -383,6 +400,30 @@ describe('MetadataService', () => {
       svc.invalidate();
       await svc.listAccessibleDashboards();
       expect(xrm.webApiGet).toHaveBeenCalledTimes(4); // 2 per fetch × 2 fetches
+    });
+
+    it('discards and retries dashboards fetched before invalidation', async () => {
+      let resolveOldSystem!: (value: typeof SYS_DASH[]) => void;
+      let resolveOldUser!: (value: typeof USER_DASH[]) => void;
+      const oldSystem = new Promise<typeof SYS_DASH[]>(resolve => { resolveOldSystem = resolve; });
+      const oldUser = new Promise<typeof USER_DASH[]>(resolve => { resolveOldUser = resolve; });
+      const webApiGet = vi.fn()
+        .mockReturnValueOnce(oldSystem)
+        .mockReturnValueOnce(oldUser)
+        .mockResolvedValueOnce([{ name: 'Current Dashboard', formid: 'current' }])
+        .mockResolvedValueOnce([]);
+      const svc = new MetadataService({ webApiGet });
+      const pending = svc.listAccessibleDashboards();
+      svc.invalidate();
+      resolveOldSystem([SYS_DASH]);
+      resolveOldUser([USER_DASH]);
+      const result = await pending;
+      expect(result.status).toBe('ok');
+      if (result.status !== 'ok') return;
+      expect(result.dashboards.map(dashboard => dashboard.id)).toEqual(['current']);
+      expect(webApiGet).toHaveBeenCalledTimes(4);
+      await svc.listAccessibleDashboards();
+      expect(webApiGet).toHaveBeenCalledTimes(4);
     });
 
     it('returns error status when fetch throws', async () => {

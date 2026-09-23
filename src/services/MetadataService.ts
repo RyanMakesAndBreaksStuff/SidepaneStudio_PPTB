@@ -105,6 +105,7 @@ const CACHE_TTL_MS = 5 * 60 * 1000;
 export class MetadataService {
   private _tableCache = new Map<string, { tables: TableInfo[]; expiresAt: number }>();
   private _dashboardCache = new Map<string, { dashboards: DashboardInfo[]; expiresAt: number }>();
+  private _connectionGeneration = 0;
   private _filterConfig: MetadataFilterConfig;
   private _denyExact: Set<string>;
   private _allowedStandardTables: Set<string>;
@@ -134,10 +135,12 @@ export class MetadataService {
       if (cached && Date.now() < cached.expiresAt) {
         return { status: 'ok', tables: cached.tables };
       }
+      const generation = this._connectionGeneration;
       const response = await this.xrm.webApiGet<RawEntityMetadata[]>(
         buildEntityDefinitionsPath(),
         connectionTarget
       );
+      if (generation !== this._connectionGeneration) return this.listAccessibleTables(connectionTarget);
       const tables: TableInfo[] = response
         .filter(e => keepEntity(e, this._filterConfig, this._denyExact, this._allowedStandardTables))
         .map(e => ({
@@ -164,6 +167,7 @@ export class MetadataService {
       if (cached && Date.now() < cached.expiresAt) {
         return { status: 'ok', dashboards: cached.dashboards };
       }
+      const generation = this._connectionGeneration;
       const [sysResult, userResult] = await Promise.all([
         this.xrm.webApiGet<RawSystemDashboard[]>(
           buildSystemDashboardsPath(),
@@ -174,6 +178,7 @@ export class MetadataService {
           connectionTarget
         ),
       ]);
+      if (generation !== this._connectionGeneration) return this.listAccessibleDashboards(connectionTarget);
       const dashboards: DashboardInfo[] = [
         ...sysResult.map(d => ({ id: d.formid, name: d.name, isPersonal: false })),
         ...userResult.map(d => ({ id: d.userformid, name: d.name, isPersonal: true })),
@@ -219,6 +224,7 @@ export class MetadataService {
   }
 
   invalidate(): void {
+    this._connectionGeneration += 1;
     this._tableCache.clear();
     this._dashboardCache.clear();
   }
