@@ -49,6 +49,20 @@ describe('SidePaneHelper.open — createPane options (contract C4/C3)', () => {
       .toBeLessThan(f.pane.select.mock.invocationCallOrder[0]);
   });
 
+  it('shared helper closes other panes after reusing one', async () => {
+    const events: string[] = [];
+    const f = fakeXrm();
+    __setXrm(f.xrm as any);
+    f.xrm.App.sidePanes.getPane.mockReturnValue(f.pane);
+    f.pane.navigate.mockImplementation(async () => { events.push('navigate'); });
+    f.pane.select.mockImplementation(() => { events.push('select'); });
+    const other = { paneId: 'other', close: vi.fn(() => { events.push('closeOther'); }) };
+    f.xrm.App.sidePanes.getAllPanes.mockReturnValue([f.pane, other]);
+    await open({ paneId: 'p', pageType: 'custom', name: 'sps_Page', reuseExistingPane: true, closeOthers: true });
+    expect(events).toEqual(['navigate', 'select', 'closeOther']);
+    expect(f.xrm.App.sidePanes.createPane).not.toHaveBeenCalled();
+  });
+
   it('closes an existing pane when reuse is disabled', async () => {
     f.xrm.App.sidePanes.getPane.mockReturnValue(f.pane);
     await open({ paneId: 'p', pageType: 'custom', name: 'sps_Page', reuseExistingPane: false });

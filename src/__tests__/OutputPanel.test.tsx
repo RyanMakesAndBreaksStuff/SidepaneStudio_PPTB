@@ -55,6 +55,27 @@ async function clickRuntimeDownload() {
 }
 
 describe('runtime download', () => {
+  it('downloaded runtime closes other panes after reusing one', async () => {
+    const events: string[] = [];
+    const pane = { paneId: 'p',
+      navigate: vi.fn().mockImplementation(async () => { events.push('navigate'); }),
+      select: vi.fn(() => { events.push('select'); }),
+    };
+    const other = { paneId: 'other', close: vi.fn(() => { events.push('closeOther'); }) };
+    const xrm = { App: { sidePanes: {
+      getPane: vi.fn().mockReturnValue(pane),
+      createPane: vi.fn(),
+      getAllPanes: vi.fn().mockReturnValue([pane, other]),
+    } }, Navigation: { openErrorDialog: vi.fn() } };
+    const fakeGlobal = { Xrm: xrm };
+    const helper = new Function('globalThis', `${runtimeSource}\nreturn globalThis.SidePaneHelper;`)(fakeGlobal) as {
+      open: (options: Record<string, unknown>) => Promise<void>;
+    };
+    await helper.open({ paneId: 'p', pageType: 'custom', name: 'sps_Page', reuseExistingPane: true, closeOthers: true });
+    expect(events).toEqual(['navigate', 'select', 'closeOther']);
+    expect(xrm.App.sidePanes.createPane).not.toHaveBeenCalled();
+  });
+
   it('saves JavaScript through the native dialog', async () => {
     const saveFile = vi.fn().mockResolvedValue('C:/sidepane.runtime.js');
     vi.stubGlobal('toolboxAPI', { fileSystem: { saveFile } });

@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { generateBasicScript, generateLibraryScript } from '../services/CodeGenerationService';
 import { cfg } from './testHelpers';
 
@@ -101,14 +101,14 @@ describe('generateBasicScript — safe generated identifiers', () => {
 });
 
 describe('generateBasicScript — reuseExistingPane', () => {
-  it('reuseExistingPane: true selects AND navigates the existing pane before returning', () => {
+  it('reuseExistingPane: true selects AND navigates the existing pane', () => {
     const code = generateBasicScript(
       cfg({ trigger: { kind: 'FormButton' } as any, context: { reuseExistingPane: true } as any })
     );
     expect(isValidJS(code)).toBe(true);
     expect(code).toContain('existing.select();');
     expect(code).toContain('await existing.navigate(');
-    // navigation must happen before focus and the reuse branch must return afterward
+    // navigation must happen before focus in the reuse branch
     expect(code).not.toMatch(/existing\.select\(\);\s*await existing\.navigate/);
   });
 
@@ -116,6 +116,35 @@ describe('generateBasicScript — reuseExistingPane', () => {
     const code = generateBasicScript(cfg({ context: { ...cfg({}).context, reuseExistingPane: true } }));
     expect(code.indexOf('await existing.navigate(')).toBeGreaterThan(-1);
     expect(code.indexOf('existing.select()')).toBeGreaterThan(code.indexOf('await existing.navigate('));
+  });
+
+  it('generated FormButton closes other panes after reusing one', async () => {
+    const events: string[] = [];
+    const pane = {
+      paneId: 'p',
+      navigate: vi.fn().mockImplementation(async () => { events.push('navigate'); }),
+      select: vi.fn(() => { events.push('select'); }),
+    };
+    const other = { paneId: 'other', close: vi.fn(() => { events.push('closeOther'); }) };
+    const xrm = { App: { sidePanes: {
+      getPane: vi.fn().mockReturnValue(pane),
+      createPane: vi.fn(),
+      getAllPanes: vi.fn().mockReturnValue([pane, other]),
+    } }, Navigation: { openErrorDialog: vi.fn() } };
+    const config = cfg({
+      pane: { paneId: 'p' } as any,
+      trigger: { kind: 'FormButton', namespace: 'TestNs', functionName: 'open' } as any,
+      context: { mode: 'None', reuseExistingPane: true } as any,
+      behavior: { closeOthers: true } as any,
+    });
+    const fakeWindow = {};
+    const handler = new Function('window', 'Xrm',
+      `${generateBasicScript(config)}\nreturn TestNs.open;`
+    )(fakeWindow, xrm) as () => void;
+    handler();
+    await vi.waitFor(() => expect(other.close).toHaveBeenCalledOnce());
+    expect(events).toEqual(['navigate', 'select', 'closeOther']);
+    expect(xrm.App.sidePanes.createPane).not.toHaveBeenCalled();
   });
 
   it('reuseExistingPane: true navigates the existing pane with the same input as createPane', () => {

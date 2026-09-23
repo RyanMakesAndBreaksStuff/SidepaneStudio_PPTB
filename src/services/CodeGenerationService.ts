@@ -196,7 +196,7 @@ function buildGetOrCreateBody(config: PaneDefinitionConfig, indent = '  '): stri
   const stateAssign = buildStateAssignment(config);
   const paneIdJson = JSON.stringify(pane.paneId);
   const reuseCheck = context.reuseExistingPane
-    ? `${indent}var existing = Xrm.App.sidePanes.getPane(${paneIdJson});\n${indent}if (existing) { await existing.navigate(${navInput}); existing.select(); return; }\n`
+    ? `${indent}var existing = Xrm.App.sidePanes.getPane(${paneIdJson});\n${indent}if (existing) { await existing.navigate(${navInput}); existing.select(); } else {\n`
     : `${indent}var existing = Xrm.App.sidePanes.getPane(${paneIdJson});\n${indent}if (existing) { existing.close(); await Promise.resolve(); }\n`;
 
   const badgeAssign = pane.badgeValue
@@ -207,7 +207,8 @@ function buildGetOrCreateBody(config: PaneDefinitionConfig, indent = '  '): stri
     ? `${indent}var allPanes = Xrm.App.sidePanes.getAllPanes();\n${indent}allPanes.forEach(function(p) { if (p.paneId !== ${paneIdJson}) p.close(); });\n`
     : '';
 
-  return `${reuseCheck}${stateAssign}${indent}var pane = await Xrm.App.sidePanes.createPane(${paneOpts});\n${indent}await pane.navigate(${navInput});\n${badgeAssign}${closeOthersBlock}`;
+  const createBody = `${stateAssign}${indent}var pane = await Xrm.App.sidePanes.createPane(${paneOpts});\n${indent}await pane.navigate(${navInput});\n${badgeAssign}`;
+  return `${reuseCheck}${createBody}${context.reuseExistingPane ? `${indent}}\n` : ''}${closeOthersBlock}`;
 }
 
 function generateFormOnLoad(config: PaneDefinitionConfig): string {

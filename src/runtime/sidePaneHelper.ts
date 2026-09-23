@@ -124,24 +124,24 @@ export async function open(options: SidePaneHelperOptions): Promise<void> {
     const reuse = options.reuseExistingPane !== false;
 
     const existing = sidePanes.getPane(options.paneId);
-    if (existing) {
-      if (reuse) {
-        await existing.navigate(navInput);
-        existing.select();
-        if (options.badge) existing.badge = options.badge;
-        return;
+    if (existing && reuse) {
+      await existing.navigate(navInput);
+      existing.select();
+      if (options.badge) existing.badge = options.badge;
+    } else {
+      if (existing) {
+        existing.close();
+        await Promise.resolve();
       }
-      existing.close();
-      await Promise.resolve();
-    }
 
-    if (options.expandOnOpen !== false && options.isSelected !== false) {
-      sidePanes.state = 1;
-    }
+      if (options.expandOnOpen !== false && options.isSelected !== false) {
+        sidePanes.state = 1;
+      }
 
-    const pane = await sidePanes.createPane(buildPaneOptions(options));
-    await pane.navigate(navInput);
-    if (options.badge) pane.badge = options.badge;
+      const pane = await sidePanes.createPane(buildPaneOptions(options));
+      await pane.navigate(navInput);
+      if (options.badge) pane.badge = options.badge;
+    }
 
     if (options.closeOthers) {
       const all = sidePanes.getAllPanes() || [];
