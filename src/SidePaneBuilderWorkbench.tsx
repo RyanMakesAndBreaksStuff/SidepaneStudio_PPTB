@@ -37,12 +37,14 @@ export function SidePaneBuilderWorkbench(): React.ReactElement {
   );
   const [connectionState, setConnectionState] = useState<ConnectionState>({ status: 'loading' });
   const [settingsHydrated, setSettingsHydrated] = useState(false);
+  const [settingsRestoreError, setSettingsRestoreError] = useState<string | null>(null);
   const [metadataFilterConfig, setMetadataFilterConfig] = useState<MetadataFilterConfig>(
     DEFAULT_METADATA_FILTER_CONFIG
   );
   const [metadataFilterPersistenceAvailable, setMetadataFilterPersistenceAvailable] = useState(false);
   const [metadataFilterError, setMetadataFilterError] = useState<string | null>(null);
   const configDirtyRef = useRef(false);
+  const restoreAttemptRef = useRef(0);
 
   const adapterRef = useRef<PptbContextAdapter | null>(null);
   if (!adapterRef.current) adapterRef.current = new PptbContextAdapter();
@@ -138,29 +140,32 @@ export function SidePaneBuilderWorkbench(): React.ReactElement {
     return () => ro.disconnect();
   }, []);
 
+  const restoreConfig = useCallback(async () => {
+    const attempt = ++restoreAttemptRef.current;
+    const toolbox = window.toolboxAPI;
+    if (!toolbox) { setSettingsHydrated(true); return; }
+    setSettingsRestoreError(null);
+    try {
+      const raw = await toolbox.settings.get('lastConfig');
+      if (attempt !== restoreAttemptRef.current) return;
+      if (!configDirtyRef.current) {
+        const stored = parseStoredConfig(raw);
+        if (stored) setConfig(stored);
+        else if (raw) console.warn('SidePaneBuilderWorkbench: unusable stored config, using defaults');
+      }
+      setSettingsHydrated(true);
+    } catch (err) {
+      if (attempt !== restoreAttemptRef.current) return;
+      console.warn('SidePaneBuilderWorkbench: could not read stored config', err);
+      setSettingsRestoreError('Could not restore your saved configuration. Retry, or continue with defaults.');
+    }
+  }, []);
+
   // Restore last config from PPTB settings on mount
   useEffect(() => {
-    const toolbox = window.toolboxAPI;
-    if (!toolbox) {
-      setSettingsHydrated(true);
-      return;
-    }
-    let active = true;
-    toolbox.settings.get('lastConfig').then((raw: unknown) => {
-      if (!active || configDirtyRef.current) return;
-      const stored = parseStoredConfig(raw);
-      if (stored) {
-        setConfig(stored);
-      } else if (raw) {
-        console.warn('SidePaneBuilderWorkbench: unusable stored config, using defaults');
-      }
-    }).catch((err: unknown) => {
-      console.warn('SidePaneBuilderWorkbench: could not read stored config', err);
-    }).finally(() => {
-      if (active) setSettingsHydrated(true);
-    });
-    return () => { active = false; };
-  }, []);
+    void restoreConfig();
+    return () => { ++restoreAttemptRef.current; };
+  }, [restoreConfig]);
 
   // Persist config to PPTB settings, debounced 500ms
   useEffect(() => {
@@ -182,6 +187,9 @@ export function SidePaneBuilderWorkbench(): React.ReactElement {
   );
 
   const handleReset = useCallback(async () => {
+    ++restoreAttemptRef.current;
+    setSettingsRestoreError(null);
+    setSettingsHydrated(true);
     configDirtyRef.current = false;
     setConfig(DEFAULT_CONFIG);
     setPreviewEpoch(value => value + 1);
@@ -251,6 +259,25 @@ export function SidePaneBuilderWorkbench(): React.ReactElement {
         <div style={{ fontSize: 13, color: '#808080', maxWidth: 360, textAlign: 'center' }}>
           {connectionState.message}
         </div>
+      </div>
+    );
+  }
+
+  if (settingsRestoreError) {
+    return (
+      <div role="alert" style={{
+        display: 'flex', flexDirection: 'column', alignItems: 'center',
+        justifyContent: 'center', height: '100vh', gap: 12,
+        fontFamily: "'Segoe UI', system-ui, sans-serif",
+        background: '#1A1A1A', color: '#E8E8E8',
+      }}>
+        <div style={{ maxWidth: 360, textAlign: 'center' }}>{settingsRestoreError}</div>
+        <button type="button" onClick={() => { void restoreConfig(); }}>Retry restore</button>
+        <button type="button" onClick={() => {
+          configDirtyRef.current = true;
+          setSettingsRestoreError(null);
+          setSettingsHydrated(true);
+        }}>Continue with defaults</button>
       </div>
     );
   }

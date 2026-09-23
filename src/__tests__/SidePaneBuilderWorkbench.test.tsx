@@ -312,6 +312,76 @@ describe('SidePaneBuilderWorkbench', () => {
     );
   });
 
+  it('requires an explicit choice before saving after restore fails', async () => {
+    const settingsSet = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('toolboxAPI', {
+      connections: { getActiveConnection: vi.fn().mockResolvedValue({ id: 'conn-1' }) },
+      events: { on: vi.fn(), off: vi.fn() },
+      settings: { get: vi.fn().mockRejectedValue(new Error('offline')), set: settingsSet },
+    });
+    await render(<SidePaneBuilderWorkbench />);
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    expect(host?.querySelector('[role="alert"]')?.textContent).toContain('Could not restore');
+    expect(host?.textContent).toContain('Retry restore');
+    expect(host?.textContent).toContain('Continue with defaults');
+    await act(async () => { vi.advanceTimersByTime(600); await Promise.resolve(); });
+    expect(settingsSet).not.toHaveBeenCalled();
+    await act(async () => {
+      Array.from(host?.querySelectorAll('button') ?? [])
+        .find(button => button.textContent === 'Continue with defaults')?.click();
+    });
+    await act(async () => {
+      Array.from(host?.querySelectorAll('button') ?? [])
+        .find(button => button.textContent === 'Edit title')?.click();
+    });
+    await act(async () => { vi.advanceTimersByTime(600); await Promise.resolve(); });
+    expect(settingsSet).toHaveBeenCalledWith('lastConfig', expect.stringContaining('"title":"Edited Title"'));
+  });
+
+  it('retries a rejected restore without replacing saved config', async () => {
+    const restored = { ...DEFAULT_CONFIG, pane: { ...DEFAULT_CONFIG.pane, title: 'Restored Title' } };
+    const settingsGet = vi.fn()
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce(JSON.stringify(restored));
+    const settingsSet = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('toolboxAPI', {
+      connections: { getActiveConnection: vi.fn().mockResolvedValue({ id: 'conn-1' }) },
+      events: { on: vi.fn(), off: vi.fn() },
+      settings: { get: settingsGet, set: settingsSet },
+    });
+    await render(<SidePaneBuilderWorkbench />);
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    await act(async () => {
+      Array.from(host?.querySelectorAll('button') ?? [])
+        .find(button => button.textContent === 'Retry restore')?.click();
+      await Promise.resolve();
+    });
+    expect(host?.textContent).toContain('Restored Title');
+    expect(settingsGet).toHaveBeenCalledTimes(2);
+    expect(settingsSet).not.toHaveBeenCalled();
+  });
+
+  it('does not apply a pending restore after reset', async () => {
+    const pendingGet = deferred<string | null>();
+    const settingsSet = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('toolboxAPI', {
+      connections: { getActiveConnection: vi.fn().mockResolvedValue({ id: 'conn-1' }) },
+      events: { on: vi.fn(), off: vi.fn() },
+      settings: { get: vi.fn(() => pendingGet.promise), set: settingsSet },
+    });
+    await render(<SidePaneBuilderWorkbench />);
+    await act(async () => { await Promise.resolve(); });
+    await act(async () => {
+      const reset = workbenchShellState.props?.onReset as () => Promise<void>;
+      await reset();
+    });
+    const restored = { ...DEFAULT_CONFIG, pane: { ...DEFAULT_CONFIG.pane, title: 'Stale Title' } };
+    await act(async () => { pendingGet.resolve(JSON.stringify(restored)); await Promise.resolve(); });
+    expect(host?.querySelector('[data-testid="title"]')?.textContent).toBe(DEFAULT_CONFIG.pane.title);
+    expect(settingsSet).toHaveBeenCalledTimes(1);
+    expect(settingsSet).toHaveBeenNthCalledWith(1, 'lastConfig', null);
+  });
+
   it('surfaces a metadata filter save failure as an error instead of clearing it', async () => {
     const getAll = vi.fn().mockResolvedValue({ lastConfig: '{"pane":{}}' });
     const setAll = vi.fn().mockRejectedValue(new Error('metadata settings backend offline'));
