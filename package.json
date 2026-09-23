@@ -43,11 +43,6 @@
   "engines": {
     "node": ">=20.19.0"
   },
-  "overrides": {
-    "eslint-plugin-react": {
-      "eslint": "^10.0.0"
-    }
-  },
   "dependencies": {
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
@@ -62,7 +57,7 @@
     "@vitest/coverage-v8": "^4.1.11",
     "eslint": "^10.11.0",
     "eslint-plugin-promise": "7.3.0",
-    "eslint-plugin-react": "7.37.5",
+    "@eslint-react/eslint-plugin": "5.20.6",
     "globals": "17.6.0",
     "jsdom": "29.1.1",
     "typescript": "^5.8.3",

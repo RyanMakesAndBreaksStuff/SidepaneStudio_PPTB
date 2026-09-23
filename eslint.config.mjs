@@ -1,7 +1,7 @@
 import eslintjs from "@eslint/js";
+import eslintReact from "@eslint-react/eslint-plugin";
 import microsoftPowerApps from "@microsoft/eslint-plugin-power-apps";
 import pluginPromise from "eslint-plugin-promise";
-import reactPlugin from "eslint-plugin-react";
 import globals from "globals";
 import typescriptEslint from "typescript-eslint";
 
@@ -19,7 +19,7 @@ export default [
   ...typescriptEslint.configs.stylisticTypeChecked,
   pluginPromise.configs["flat/recommended"],
   microsoftPowerApps.configs.paCheckerHosted,
-  reactPlugin.configs.flat.recommended,
+  eslintReact.configs.recommended,
   {
     plugins: {
       "@microsoft/power-apps": microsoftPowerApps,
@@ -39,6 +39,12 @@ export default [
     },
 
     rules: {
+      "@eslint-react/dom-no-dangerously-set-innerhtml": "off",
+      "@eslint-react/exhaustive-deps": "off",
+      "@eslint-react/naming-convention-ref-name": "off",
+      "@eslint-react/no-array-index-key": "off",
+      "@eslint-react/set-state-in-effect": "off",
+      "@eslint-react/use-state": "off",
       "@typescript-eslint/array-type": "off",
       "@typescript-eslint/consistent-type-definitions": "off",
       "@typescript-eslint/no-base-to-string": "off",
@@ -64,12 +70,6 @@ export default [
       "promise/always-return": "off",
       "promise/catch-or-return": "off",
       "promise/param-names": "off",
-      "react/no-unescaped-entities": "off",
-    },
-    settings: {
-      react: {
-        version: "detect",
-      },
     },
   },
   {
