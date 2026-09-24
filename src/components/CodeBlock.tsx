@@ -5,6 +5,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { theme } from '../theme/tokens';
 import { Callout } from './Callout';
 import { escapeHtml } from './previewHelpers';
+import { copyText } from '../services/clipboard';
 
 export interface CodeBlockProps {
   code: string;
@@ -68,8 +69,13 @@ export function CodeBlock({ code, lang = 'js' }: CodeBlockProps): React.ReactEle
   const [wrap, setWrap] = useState(true);
 
   const copy = useCallback(() => {
-    navigator.clipboard.writeText(code)
-      .then(() => { setCopied(true); setTimeout(() => setCopied(false), 2200); })
+    setCopied(false);
+    copyText(code)
+      .then(() => {
+        setFallback(false);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2200);
+      })
       .catch(() => setFallback(true));
   }, [code]);
 

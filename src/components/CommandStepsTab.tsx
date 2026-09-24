@@ -7,6 +7,7 @@ import { PaneDefinitionConfig, TriggerKind } from '../types/PaneDefinitionConfig
 import { Field } from './Field';
 import { Callout } from './Callout';
 import { RUNTIME_WEB_RESOURCE_NAME } from '../constants';
+import { copyText } from '../services/clipboard';
 
 const TRIGGER_SUMMARIES: Record<TriggerKind, string> = {
   FormOnLoad:     'Opens automatically when a record form loads.',
@@ -88,7 +89,9 @@ export function CommandStepsTab({ config }: CommandStepsTabProps): React.ReactEl
   const isManual = config.trigger.kind === 'ManualJS';
 
   const copyFqn = () => {
-    navigator.clipboard.writeText(fqn).catch(() => setCopyFallback(true));
+    copyText(fqn)
+      .then(() => setCopyFallback(false))
+      .catch(() => setCopyFallback(true));
   };
 
   return (
