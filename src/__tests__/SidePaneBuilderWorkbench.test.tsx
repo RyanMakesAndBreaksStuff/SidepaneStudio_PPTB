@@ -461,7 +461,11 @@ describe('SidePaneBuilderWorkbench', () => {
     let handler: ((event: unknown, payload: ToolBoxAPI.ToolBoxEventPayload) => void) | undefined;
 
     vi.stubGlobal('toolboxAPI', {
-      connections: { getActiveConnection: vi.fn().mockResolvedValue({ id: 'conn-1' }) },
+      connections: {
+        getActiveConnection: vi.fn()
+          .mockResolvedValueOnce({ id: 'conn-1' })
+          .mockResolvedValue(null),
+      },
       events: {
         on: vi.fn((cb) => { handler = cb; }),
         off: vi.fn(),
@@ -483,8 +487,8 @@ describe('SidePaneBuilderWorkbench', () => {
       await Promise.resolve();
     });
 
-    // Reaching the error state proves the handler read payload.event rather than arg 0.
-    expect(host?.textContent).toContain('Connection removed');
+    // The deletion event rechecks the host and finds no active connection.
+    expect(host?.textContent).toContain('No active Dataverse connection');
   });
 
   it('does not throw when the host emits an unrelated event', async () => {

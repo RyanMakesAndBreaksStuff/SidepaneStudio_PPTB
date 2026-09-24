@@ -57,24 +57,6 @@ export function SidePaneBuilderWorkbench(): React.ReactElement {
     metadataFilterSettingsRef.current = new MetadataFilterSettingsService(window.toolboxAPI?.settings);
   }
 
-  // Verify active connection before allowing API calls
-  useEffect(() => {
-    const toolbox = window.toolboxAPI;
-    if (!toolbox) {
-      setConnectionState({ status: 'error', message: 'toolboxAPI unavailable — open inside PPTB.' });
-      return;
-    }
-    toolbox.connections.getActiveConnection().then((conn: unknown) => {
-      setConnectionState(conn ? { status: 'ready' } : {
-        status: 'error',
-        message: 'No active Dataverse connection. Connect an environment in PPTB and retry.',
-      });
-    }).catch((err: unknown) => {
-      const message = err instanceof Error ? err.message : 'Failed to check connection.';
-      setConnectionState({ status: 'error', message });
-    });
-  }, []);
-
   // Hydrate metadata table filters independently from pane definition config.
   useEffect(() => {
     let active = true;
@@ -95,28 +77,45 @@ export function SidePaneBuilderWorkbench(): React.ReactElement {
     return () => { active = false; };
   }, []);
 
-  // Subscribe to connection lifecycle events — invalidate caches on change.
-  // The event name is on payload.event; the first argument is the transport
-  // event object (see @pptb/types EventsAPI).
+  // Subscribe before the initial check; only the latest check can enable the UI.
   useEffect(() => {
     const toolbox = window.toolboxAPI;
-    if (!toolbox) return;
+    if (!toolbox) {
+      setConnectionState({ status: 'error', message: 'toolboxAPI unavailable — open inside PPTB.' });
+      return;
+    }
+
+    let active = true;
+    let checkGeneration = 0;
+
+    const refreshConnection = async () => {
+      const generation = ++checkGeneration;
+      setConnectionState({ status: 'loading' });
+      try {
+        const conn = await toolbox.connections.getActiveConnection();
+        if (!active || generation !== checkGeneration) return;
+        setConnectionState(conn ? { status: 'ready' } : {
+          status: 'error',
+          message: 'No active Dataverse connection. Connect an environment in PPTB and retry.',
+        });
+      } catch (err: unknown) {
+        if (!active || generation !== checkGeneration) return;
+        const message = err instanceof Error ? err.message : 'Failed to check connection.';
+        setConnectionState({ status: 'error', message });
+      }
+    };
 
     const handler = (_event: unknown, payload?: ToolBoxAPI.ToolBoxEventPayload) => {
+      if (!active) return;
       try {
         switch (payload?.event) {
           case 'connection:created':
           case 'connection:updated':
-            setPreviewEpoch(value => value + 1);
-            adapterRef.current?.resetUserId();
-            metaRef.current?.invalidate();
-            setConnectionState({ status: 'ready' });
-            break;
           case 'connection:deleted':
             setPreviewEpoch(value => value + 1);
             adapterRef.current?.resetUserId();
             metaRef.current?.invalidate();
-            setConnectionState({ status: 'error', message: 'Connection removed. Reconnect in PPTB.' });
+            void refreshConnection();
             break;
           default:
             break;
@@ -128,7 +127,12 @@ export function SidePaneBuilderWorkbench(): React.ReactElement {
     };
 
     toolbox.events.on(handler);
-    return () => { toolbox.events.off(handler); };
+    void refreshConnection();
+    return () => {
+      active = false;
+      ++checkGeneration;
+      toolbox.events.off(handler);
+    };
   }, []);
 
   // Responsive layout via ResizeObserver
