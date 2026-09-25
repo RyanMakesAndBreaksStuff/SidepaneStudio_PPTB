@@ -10,10 +10,10 @@ import { ViewPicker } from './ViewPicker';
 import { NativeMdaFrame } from './NativeMdaFrame';
 import { MockGrid } from './MockGrid';
 import type { GridColumn } from '../services/GridViewModel';
-import { resolveGridColumns } from '../services/GridViewModel';
+import { getRelatedLookup, relatedRecordOf, resolveGridColumns } from '../services/GridViewModel';
 import { usePreviewSessionState } from '../contexts/PreviewSessionContext';
 
-export function capGridFetchXml(source: string, entityName: string): string {
+export function capGridFetchXml(source: string, entityName: string, lookupAttribute = ''): string {
   const doc = new DOMParser().parseFromString(source, 'text/xml');
   const fetch = doc.documentElement;
   const entities = Array.from(fetch.children).filter(child => child.tagName === 'entity');
@@ -24,6 +24,13 @@ export function capGridFetchXml(source: string, entityName: string): string {
   const existing = fetch.getAttribute('top');
   if (existing !== null && (!/^\d+$/.test(existing) || Number(existing) < 1)) {
     throw new Error('This view has an invalid FetchXML row limit.');
+  }
+  // RelatedRecord previews read the lookup value even when the view does not display it.
+  if (lookupAttribute && !Array.from(entities[0].children).some(child => child.tagName === 'all-attributes' ||
+      (child.tagName === 'attribute' && child.getAttribute('name') === lookupAttribute))) {
+    const column = doc.createElement('attribute');
+    column.setAttribute('name', lookupAttribute);
+    entities[0].appendChild(column);
   }
   for (const attribute of ['page', 'count', 'paging-cookie', 'returntotalrecordcount']) fetch.removeAttribute(attribute);
   fetch.setAttribute('top', String(Math.min(10, existing === null ? 10 : Number(existing))));
@@ -43,6 +50,7 @@ export function GridPreview(props: Props): React.ReactElement {
   const { config, entityName, allowEntityChange, metadataService, onEntityNameChange } = props;
   const { isDark } = useTheme();
   const T = theme(isDark);
+  const relatedLookup = getRelatedLookup(config);
   const configured = config.target.pageType === 'entitylist' && config.target.entityName.trim() === entityName ? config.target : undefined;
   const selectionKey = JSON.stringify(['grid-view', entityName, configured?.viewId ?? '', configured?.viewType ?? '']);
   const [selection, setSelection] = usePreviewSessionState<{ id: string; viewType: '' | 'savedquery' | 'userquery' }>(
@@ -59,20 +67,21 @@ export function GridPreview(props: Props): React.ReactElement {
     ) : <p style={{ color: T.fg2, fontFamily: T.font, fontSize: 12 }}>Preview entity: {entityName}</p>}
     <ViewPicker entityName={entityName} value={selection.id} viewType={selection.viewType}
       metadataService={metadataService} onChange={view => setSelection({ id: view?.id ?? '', viewType: view?.viewType ?? '' })} />
-    <GridData key={JSON.stringify([entityName, selection.viewType, selection.id])} {...props} viewId={selection.id} viewType={selection.viewType} />
+    <GridData key={JSON.stringify([entityName, selection.viewType, selection.id, relatedLookup])} {...props}
+      viewId={selection.id} viewType={selection.viewType} relatedLookup={relatedLookup} />
   </div>;
 }
 
 type State = { status: 'idle' | 'loading' } | { status: 'error'; reason: string } |
   { status: 'loaded'; rows: Record<string, unknown>[]; viewName: string; columns: GridColumn[] };
 
-function GridData({ config, validation, metadataService, entityName, viewId, viewType }: Props & {
-  viewId: string; viewType: '' | 'savedquery' | 'userquery';
+function GridData({ config, validation, metadataService, entityName, viewId, viewType, relatedLookup }: Props & {
+  viewId: string; viewType: '' | 'savedquery' | 'userquery'; relatedLookup: string;
 }): React.ReactElement {
   const { isDark } = useTheme();
   const T = theme(isDark);
-  const dataKey = JSON.stringify(['grid-data', entityName, viewType, viewId]);
-  const selectionKey = JSON.stringify(['grid-rows', entityName, viewType, viewId]);
+  const dataKey = JSON.stringify(['grid-data', entityName, viewType, viewId, relatedLookup]);
+  const selectionKey = JSON.stringify(['grid-rows', entityName, viewType, viewId, relatedLookup]);
   const [completed, setCompleted] = usePreviewSessionState<Extract<State, { status: 'loaded' }> | null>(dataKey, null);
   const [state, setState] = useState<State>(() => completed ?? { status: 'idle' });
   const [selectedRows, setSelectedRows] = usePreviewSessionState<number[]>(`${selectionKey}:checked`, []);
@@ -98,7 +107,7 @@ function GridData({ config, validation, metadataService, entityName, viewId, vie
       if (result.status === 'error') throw new Error(result.reason);
       const view = result.views.find(item => item.id === viewId && item.viewType === viewType);
       if (!view) throw new Error('Select an accessible view.');
-      const xml = capGridFetchXml(view.fetchXml, entityName);
+      const xml = capGridFetchXml(view.fetchXml, entityName, relatedLookup);
       const columns = await resolveGridColumns(view, entityName, metadataService);
       if (id !== request.current) return;
       const response = await window.dataverseAPI.fetchXmlQuery(xml);
@@ -116,6 +125,10 @@ function GridData({ config, validation, metadataService, entityName, viewId, vie
       setState({ status: 'error', reason: error instanceof Error ? error.message : 'Could not load grid rows.' });
     }
   };
+  // RelatedRecord: the pane opens the selected row's lookup record and stays closed when the lookup is empty.
+  const related = relatedLookup !== '' && activeRow !== null && state.status === 'loaded'
+    ? relatedRecordOf(state.rows[activeRow], relatedLookup) : null;
+  const paneOpen = activeRow !== null && (relatedLookup === '' || related !== null);
   return <>
     <p style={{ color: T.accent, fontFamily: T.font, fontSize: 12 }}>Reads up to 10 rows from the selected view. Preview only.</p>
     <button
@@ -138,9 +151,12 @@ function GridData({ config, validation, metadataService, entityName, viewId, vie
     </button>
     {state.status === 'loading' && <p role="status" style={{ color: T.fg3, fontFamily: T.font, fontSize: 12 }}>Loading grid rows...</p>}
     {state.status === 'error' && <p role="alert" style={{ color: T.error, fontFamily: T.font, fontSize: 12 }}>{state.reason}</p>}
+    {relatedLookup !== '' && activeRow !== null && related === null && <p role="status" style={{ color: T.fg3, fontFamily: T.font, fontSize: 12 }}>
+      No {relatedLookup} value on row {activeRow + 1}, so the pane does not open.
+    </p>}
     {state.status === 'loaded' && <NativeMdaFrame
-      pane={{ ...config.pane, isSelected: activeRow !== null }}
-      hostTarget={{ pageType: 'entitylist', entityName, viewId, viewType }}
+      pane={{ ...config.pane, isSelected: paneOpen }}
+      hostTarget={{ pageType: 'entitylist', entityName, viewId, viewType }} paneRecord={related ?? undefined}
       paneTarget={config.target} validation={validation} caption={`${entityName} · ${state.viewName} · live data, simulated command`}>
       <MockGrid rows={state.rows} columns={state.columns} viewName={state.viewName}
         selectedRows={selectedRows} activeRow={activeRow} onSelectionChange={onSelectionChange}

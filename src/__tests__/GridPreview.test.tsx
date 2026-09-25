@@ -300,4 +300,50 @@ describe('grid preview', () => {
     expect(host!.textContent).not.toContain('Session row');
     expect(fetchXmlQuery).toHaveBeenCalledTimes(1);
   });
+
+  it('adds a RelatedRecord lookup column once, and never beside all-attributes', () => {
+    const attributes = (xml: string) => Array.from(new DOMParser().parseFromString(xml, 'text/xml')
+      .querySelectorAll('entity > attribute')).map(a => a.getAttribute('name'));
+    expect(attributes(capGridFetchXml('<fetch><entity name="account"><attribute name="name"/></entity></fetch>', 'account', 'primarycontactid')))
+      .toEqual(['name', 'primarycontactid']);
+    expect(attributes(capGridFetchXml('<fetch><entity name="account"><attribute name="primarycontactid"/></entity></fetch>', 'account', 'primarycontactid')))
+      .toEqual(['primarycontactid']);
+    expect(capGridFetchXml('<fetch><entity name="account"><all-attributes/></entity></fetch>', 'account', 'primarycontactid'))
+      .not.toContain('<attribute');
+  });
+
+  it('previews RelatedRecord on the source table and opens the selected row lookup record', async () => {
+    const nameOnly = { ...view,
+      fetchXml: '<fetch><entity name="account"><attribute name="name"/></entity></fetch>',
+      layoutXml: '<grid jump="name"><row id="accountid"><cell name="name" width="240"/></row></grid>',
+    };
+    const service = { ...metadata(), listViewsForEntity: vi.fn().mockResolvedValue({ status: 'ok', views: [nameOnly] }) } as unknown as MetadataService;
+    const fetchXmlQuery = vi.fn().mockResolvedValue({ value: [
+      { name: 'Acme', _primarycontactid_value: 'contact-id', '_primarycontactid_value@OData.Community.Display.V1.FormattedValue': 'Pat Lee' },
+      { name: 'Beta', _primarycontactid_value: null },
+    ] });
+    vi.stubGlobal('dataverseAPI', { fetchXmlQuery });
+    const related = cfg({
+      trigger: { kind: 'MainGridOnSelect' },
+      target: { pageType: 'entityrecord', entityName: 'contact', formId: '', tabName: '', data: '' },
+      context: { mode: 'RelatedRecord', entityName: 'account', lookupAttribute: 'primarycontactid' },
+    });
+    await render(<PreviewPanel config={related} validation={validation} metadataService={service} xrm={xrmStub()} />);
+    await click('Grid');
+    expect(host!.textContent).toContain('Preview entity: account');
+    const viewSelect = host!.querySelector<HTMLSelectElement>('select[aria-label="View"]')!;
+    await act(async () => {
+      viewSelect.value = `savedquery:${nameOnly.id}`;
+      viewSelect.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await click('Generate grid preview');
+    expect(fetchXmlQuery.mock.calls[0][0]).toContain('name="primarycontactid"');
+    const row = (n: number) => host!.querySelector<HTMLInputElement>(`input[aria-label="Select row ${n}"]`)!;
+    await act(async () => { row(1).click(); });
+    expect(host!.textContent).toContain('Pat Lee · contact-id');
+    await act(async () => { row(1).click(); });
+    await act(async () => { row(2).click(); });
+    expect(host!.textContent).toContain('No primarycontactid value on row 2, so the pane does not open.');
+    expect(host!.textContent).not.toContain(related.pane.title);
+  });
 });

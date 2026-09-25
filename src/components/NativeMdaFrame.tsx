@@ -5,6 +5,7 @@ import { FormModel } from '../services/FormXmlService';
 import { useTheme } from '../contexts/ThemeContext';
 import { theme } from '../theme/tokens';
 import { PaneOverlay } from './PaneOverlay';
+import type { PreviewRecord } from '../services/GridViewModel';
 import { usePreviewSize, PreviewSizeMode } from './previewSize';
 import { FL } from './flTokens';
 
@@ -18,6 +19,8 @@ interface NativeMdaFrameProps {
   hostTarget: TargetConfig;
   /** The side pane's target (PaneOverlay content). Comes from config. */
   paneTarget: TargetConfig;
+  /** RelatedRecord preview: the record the pane opens (PaneOverlay content). */
+  paneRecord?: PreviewRecord;
   validation: ValidationResult;
   /**
    * Optional caption shown in the simulation strip above the frame, e.g.
@@ -386,7 +389,7 @@ function FormHeader({ target, mode, formModel }: { target: TargetConfig; mode: P
   );
 }
 
-export function NativeMdaFrame({ pane, hostTarget, paneTarget, validation, caption, formModel, children }: NativeMdaFrameProps): React.ReactElement {
+export function NativeMdaFrame({ pane, hostTarget, paneTarget, paneRecord, validation, caption, formModel, children }: NativeMdaFrameProps): React.ReactElement {
   const { mode } = usePreviewSize();
   const { isDark } = useTheme();
   const T = theme(isDark);
@@ -491,12 +494,12 @@ export function NativeMdaFrame({ pane, hostTarget, paneTarget, validation, capti
                 {children}
                 {showOverlayStacked && (
                   <div style={{ marginTop: 10 }}>
-                    <PaneOverlay pane={pane} target={paneTarget} validation={validation} layout="stacked" />
+                    <PaneOverlay pane={pane} target={paneTarget} record={paneRecord} validation={validation} layout="stacked" />
                   </div>
                 )}
               </div>
               {showOverlayInline && (
-                <PaneOverlay pane={pane} target={paneTarget} validation={validation} layout="inline" />
+                <PaneOverlay pane={pane} target={paneTarget} record={paneRecord} validation={validation} layout="inline" />
               )}
             </div>
           </main>

@@ -1,4 +1,5 @@
 import type { MetadataService, ViewInfo } from './MetadataService';
+import type { PaneDefinitionConfig } from '../types/PaneDefinitionConfig';
 
 export interface GridColumn {
   key: string;
@@ -80,4 +81,23 @@ export function gridCellText(row: Record<string, unknown>, column: GridColumn): 
   const value = row[`${key}${FORMATTED}`] ?? row[key];
   if (value === null || value === undefined) return '';
   return typeof value === 'object' ? JSON.stringify(value) : String(value);
+}
+
+/** RelatedRecord lookup column the preview simulates; '' in every other context mode. */
+export function getRelatedLookup(config: PaneDefinitionConfig): string {
+  return config.context.mode === 'RelatedRecord' ? config.context.lookupAttribute.trim() : '';
+}
+
+/** The record a RelatedRecord pane opens, as a preview row's lookup value supplies it. */
+export interface PreviewRecord {
+  id: string;
+  name: string;
+}
+
+export function relatedRecordOf(row: Record<string, unknown>, lookupAttribute: string): PreviewRecord | null {
+  const key = `_${lookupAttribute}_value`;
+  const id = row[key];
+  if (typeof id !== 'string' || !id) return null;
+  const name = row[`${key}${FORMATTED}`];
+  return { id, name: typeof name === 'string' ? name : '' };
 }

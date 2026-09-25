@@ -34,6 +34,14 @@ type FormState =
   | { status: 'error'; reason: string }
   | { status: 'loaded'; model: FormModel };
 
+/** Table the preview host form or grid shows: the RelatedRecord source table, else the table the pane targets. */
+function getConfiguredHostEntity(config: PaneDefinitionConfig): string {
+  if (config.context.mode === 'RelatedRecord') return config.context.entityName.trim();
+  return config.target.pageType === 'entityrecord' || config.target.pageType === 'entitylist'
+    ? config.target.entityName.trim()
+    : '';
+}
+
 const PreviewPanelContent = React.memo(function PreviewPanelContent({
   config,
   validation,
@@ -50,17 +58,15 @@ const PreviewPanelContent = React.memo(function PreviewPanelContent({
     if (!gridEligible && mode === 'grid') setMode('mock');
   }, [gridEligible, mode]);
   const [formState, setFormState] = useState<FormState>({ status: 'idle' });
-  // Preview-local host entity. Independent of config.target.entityName so the
+  // Preview-local host entity. Independent of the configured host table so the
   // preview can mimic the pane sitting on a different table than the one the
-  // pane itself targets. Initialized ONCE from the configured target (if any)
+  // pane itself targets. Initialized ONCE from the configured host table (if any)
   // so the cold start isn't punitive — the user can resync on demand via the
   // FormSelector's "Use configured" affordance if config diverges later.
+  const configuredHostEntity = getConfiguredHostEntity(config);
   const [previewHostEntity, setPreviewHostEntity] = usePreviewSessionState<string>(
     'preview-host-entity',
-    () =>
-      (config.target.pageType === 'entityrecord' || config.target.pageType === 'entitylist')
-        ? config.target.entityName
-        : ''
+    () => configuredHostEntity
   );
   const formRequestIdRef = useRef(0);
   const mountedRef = useRef(true);
@@ -111,8 +117,7 @@ const PreviewPanelContent = React.memo(function PreviewPanelContent({
     }
   }, []);
 
-  const configuredGridEntity = 'entityName' in config.target ? config.target.entityName.trim() : '';
-  const gridEntity = configuredGridEntity || previewHostEntity;
+  const gridEntity = configuredHostEntity || previewHostEntity;
   const tabStyle = (active: boolean): React.CSSProperties => ({
     padding: '6px 14px',
     border: 'none',
@@ -163,7 +168,7 @@ const PreviewPanelContent = React.memo(function PreviewPanelContent({
             config.target.pageType === 'entitylist' ? config.target.viewId : '',
             config.target.pageType === 'entitylist' ? config.target.viewType : ''])}
           config={config} validation={validation} metadataService={metadataService}
-          entityName={gridEntity} allowEntityChange={!configuredGridEntity} onEntityNameChange={setPreviewHostEntity}
+          entityName={gridEntity} allowEntityChange={!configuredHostEntity} onEntityNameChange={setPreviewHostEntity}
         />}
 
         {/* Form mode */}
@@ -172,23 +177,10 @@ const PreviewPanelContent = React.memo(function PreviewPanelContent({
             <FormSelector
               entityName={previewHostEntity}
               onEntityNameChange={setPreviewHostEntity}
-              entityNameHint={
-                (config.target.pageType === 'entityrecord' || config.target.pageType === 'entitylist')
-                  ? config.target.entityName || undefined
-                  : undefined
-              }
-              configuredEntity={
-                (config.target.pageType === 'entityrecord' || config.target.pageType === 'entitylist')
-                  ? config.target.entityName || undefined
-                  : undefined
-              }
+              entityNameHint={configuredHostEntity || undefined}
+              configuredEntity={configuredHostEntity || undefined}
               onUseConfigured={() => {
-                if (
-                  (config.target.pageType === 'entityrecord' || config.target.pageType === 'entitylist') &&
-                  config.target.entityName
-                ) {
-                  setPreviewHostEntity(config.target.entityName);
-                }
+                if (configuredHostEntity) setPreviewHostEntity(configuredHostEntity);
               }}
               formXmlService={formXmlSvcRef.current}
               metadataService={metadataService}

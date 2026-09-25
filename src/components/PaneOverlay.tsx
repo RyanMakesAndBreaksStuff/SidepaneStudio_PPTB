@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { PaneConfig, TargetConfig } from '../types/PaneDefinitionConfig';
 import { ValidationResult } from '../services/ValidationService';
+import type { PreviewRecord } from '../services/GridViewModel';
 import { getPreviewPaneWidth, getSafePreviewImageSrc } from './previewHelpers';
 
 // Fluent Light tokens — hardcoded, isolated from app theme (same invariant as MockMDAShell)
@@ -18,6 +19,8 @@ const FL = {
 interface PaneOverlayProps {
   pane: PaneConfig;
   target: TargetConfig;
+  /** RelatedRecord preview: the record the pane opens. */
+  record?: PreviewRecord;
   validation: ValidationResult;
   /**
    * inline = sit to the right of the form, fixed/clamped width.
@@ -198,6 +201,7 @@ function PaneContentSkeleton({ target }: { target: TargetConfig }): React.ReactE
 export const PaneOverlay = React.memo(function PaneOverlay({
   pane,
   target,
+  record,
   validation,
   layout = 'inline',
 }: PaneOverlayProps): React.ReactElement | null {
@@ -283,6 +287,11 @@ export const PaneOverlay = React.memo(function PaneOverlay({
         {target.pageType === 'search' && target.searchText && (
           <div style={{ fontSize: 12, color: FL.fg, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             Search: {target.searchText}
+          </div>
+        )}
+        {record && (
+          <div title={record.id} style={{ fontSize: 11, color: FL.fgMuted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {record.name ? `${record.name} · ${record.id}` : record.id}
           </div>
         )}
         {/* Type-aware skeleton — hints at what the live pane will actually render */}
