@@ -3,6 +3,7 @@ import { act } from 'react';
 import { createRoot, Root } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { SidePaneBuilderWorkbench } from '../SidePaneBuilderWorkbench';
+import { DEFAULT_CONFIG, PaneDefinitionConfig } from '../types/PaneDefinitionConfig';
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -14,9 +15,14 @@ function deferred<T>() {
 vi.mock('../components/ConfigurePanel', async () => {
   const { TablePicker } = await import('../components/TablePicker');
   return {
-    ConfigurePanel: ({ metadataService }: {
+    ConfigurePanel: ({ metadataService, config }: {
       metadataService: React.ComponentProps<typeof TablePicker>['metadataService'];
-    }) => <TablePicker metadataService={metadataService} value="" onChange={() => {}} />,
+      config: PaneDefinitionConfig;
+    }) => <TablePicker
+      metadataService={metadataService}
+      value={config.target.pageType === 'entityrecord' ? config.target.entityName : ''}
+      onChange={() => {}}
+    />,
   };
 });
 vi.mock('../components/PreviewPanel', () => ({ PreviewPanel: () => null }));
@@ -95,6 +101,33 @@ it('replaces org A table choices after a connection update', async () => {
   expect(options()).toContain('new_b');
   expect(options()).not.toContain('new_a');
   expect(on).toHaveBeenCalledTimes(1);
+});
+
+function storeTargetTable(entityName: string) {
+  const settings = (window.toolboxAPI as unknown as { settings: { get: ReturnType<typeof vi.fn> } }).settings;
+  settings.get.mockImplementation(async (key: string) => key === 'lastConfig' ? JSON.stringify({
+    ...DEFAULT_CONFIG,
+    target: { pageType: 'entityrecord', entityName, formId: 'form-a', tabName: 'tab-a', data: '' },
+  }) : null);
+}
+
+it('clears the old org table selection when the connection switches orgs', async () => {
+  storeTargetTable('new_a');
+  await mount();
+  expect(host.querySelector('select')?.value).toBe('new_a');
+  org = 'b';
+  getActiveConnection.mockResolvedValue({ id: 'b' });
+  await emit('connection:updated');
+  expect(options()).toContain('new_b');
+  expect(options()).not.toContain('new_a');
+  expect(host.textContent).not.toContain('no longer accessible');
+});
+
+it('keeps the table selection when the same connection is updated', async () => {
+  storeTargetTable('new_a');
+  await mount();
+  await emit('connection:updated');
+  expect(host.querySelector('select')?.value).toBe('new_a');
 });
 
 it.each(['connection:created', 'connection:updated'] as const)(

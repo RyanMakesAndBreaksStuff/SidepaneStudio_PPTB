@@ -29,6 +29,20 @@ function reportSettingsFailure(action: string, err: unknown): void {
   ).catch(() => { /* notification is best-effort; never mask the original failure */ });
 }
 
+/** Table, form, view, dashboard, and record selections only exist in the org they were picked from. */
+function clearOrgSelections(config: PaneDefinitionConfig): PaneDefinitionConfig {
+  const { target } = config;
+  return {
+    ...config,
+    target:
+      target.pageType === 'entityrecord' ? { ...target, entityName: '', formId: '', tabName: '' } :
+      target.pageType === 'entitylist' ? { ...target, entityName: '', viewId: '', viewType: '' } :
+      target.pageType === 'dashboard' ? { ...target, dashboardId: '', dashboardName: '' } :
+      target,
+    context: { ...config.context, entityName: '', staticRecordId: '' },
+  };
+}
+
 export function SidePaneBuilderWorkbench(): React.ReactElement {
   const [config, setConfig] = useState<PaneDefinitionConfig>(DEFAULT_CONFIG);
   const [previewEpoch, setPreviewEpoch] = useState(0);
@@ -87,6 +101,8 @@ export function SidePaneBuilderWorkbench(): React.ReactElement {
 
     let active = true;
     let checkGeneration = 0;
+    // Last connected org; kept through disconnects so A → none → B still counts as a switch.
+    let connectionId: string | null = null;
 
     const refreshConnection = async () => {
       const generation = ++checkGeneration;
@@ -94,6 +110,13 @@ export function SidePaneBuilderWorkbench(): React.ReactElement {
       try {
         const conn = await toolbox.connections.getActiveConnection();
         if (!active || generation !== checkGeneration) return;
+        if (conn) {
+          if (connectionId !== null && connectionId !== conn.id) {
+            configDirtyRef.current = true;
+            setConfig(clearOrgSelections);
+          }
+          connectionId = conn.id;
+        }
         setConnectionState(conn ? { status: 'ready' } : {
           status: 'error',
           message: 'No active Dataverse connection. Connect an environment in PPTB and retry.',
