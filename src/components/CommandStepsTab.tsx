@@ -108,7 +108,7 @@ export function CommandStepsTab({ config }: CommandStepsTabProps): React.ReactEl
 
       <Field label="Your function name">
         <div style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          color:T.fg1, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           background: T.surface3, border: `1px solid ${T.stroke1}`, borderRadius: T.rM,
           padding: '8px 10px', fontFamily: T.mono, fontSize: 12, gap: 8,
         }}>

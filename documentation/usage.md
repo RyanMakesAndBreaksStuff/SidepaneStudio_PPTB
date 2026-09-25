@@ -1,7 +1,8 @@
 # Side Pane Studio Basic Usage Guide
 
 This guide walks through the common workflow for creating a model-driven app
-side pane with Side Pane Studio.
+side pane with Side Pane Studio. The full instruction manual, including setup
+and troubleshooting, is [user-manual.md](user-manual.md).
 
 ## 1. Open Side Pane Studio
 
@@ -83,8 +84,8 @@ Choose how the target receives record context:
 - **None** - opens the pane independently.
 
 Enable **Reuse open pane** when the same pane should stay loaded instead of
- being recreated. Reuse will navigate the existing pane to the new page, then
- select it. For a Lookup tag click targeting a custom page or table record,
+being recreated. Reuse will navigate the existing pane to the new page, then
+select it. For a Lookup tag click targeting a custom page or table record,
 the clicked tag supplies `tag.entityType` and `tag.id`, overriding Current
 record, Static, or None context at runtime. Use **Expand on open** when the
 pane should become visible immediately after the trigger runs.

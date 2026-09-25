@@ -5,6 +5,10 @@
   "publishConfig": {
     "access": "public"
   },
+  "features": {
+  "connectionRequirement": "required",
+  "minAPI": "1.2.0"
+},
   "displayName": "Side Pane Studio",
   "description": "Side Pane Studio is a visual builder for Dynamics 365 and Power Platforrm model-driven app side panes",
   "icon": "icon/icon.svg",
@@ -20,7 +24,7 @@
   ],
   "configurations": {
     "repository": "https://github.com/RyanMakesAndBreaksStuff/SidepaneStudio_PPTB",
-    "website": "https://github.com/RyanMakesAndBreaksStuff/SidepaneStudio_PPTB/blob/main/documentation/usage.md",
+    "website": "https://github.com/RyanMakesAndBreaksStuff/SidepaneStudio_PPTB/blob/main/documentation/user-manual.md",
     "readmeUrl": "https://raw.githubusercontent.com/RyanMakesAndBreaksStuff/SidepaneStudio_PPTB/main/README.md"
   },
   "contributors": [
