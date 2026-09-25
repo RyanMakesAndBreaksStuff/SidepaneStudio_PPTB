@@ -18,11 +18,14 @@ vi.mock('../components/ConfigurePanel', async () => {
     ConfigurePanel: ({ metadataService, config }: {
       metadataService: React.ComponentProps<typeof TablePicker>['metadataService'];
       config: PaneDefinitionConfig;
-    }) => <TablePicker
-      metadataService={metadataService}
-      value={config.target.pageType === 'entityrecord' ? config.target.entityName : ''}
-      onChange={() => {}}
-    />,
+    }) => <>
+      <TablePicker
+        metadataService={metadataService}
+        value={config.target.pageType === 'entityrecord' ? config.target.entityName : ''}
+        onChange={() => {}}
+      />
+      <output data-testid="lookup">{config.context.lookupAttribute}</output>
+    </>,
   };
 });
 vi.mock('../components/PreviewPanel', () => ({ PreviewPanel: () => null }));
@@ -128,6 +131,21 @@ it('keeps the table selection when the same connection is updated', async () => 
   await mount();
   await emit('connection:updated');
   expect(host.querySelector('select')?.value).toBe('new_a');
+});
+
+it('clears the related-record lookup column when the connection switches orgs', async () => {
+  const settings = (window.toolboxAPI as unknown as { settings: { get: ReturnType<typeof vi.fn> } }).settings;
+  settings.get.mockImplementation(async (key: string) => key === 'lastConfig' ? JSON.stringify({
+    ...DEFAULT_CONFIG,
+    context: { ...DEFAULT_CONFIG.context, mode: 'RelatedRecord', entityName: 'new_a', lookupAttribute: 'new_contactid' },
+  }) : null);
+  await mount();
+  const lookup = () => host.querySelector('[data-testid="lookup"]')?.textContent;
+  expect(lookup()).toBe('new_contactid');
+  org = 'b';
+  getActiveConnection.mockResolvedValue({ id: 'b' });
+  await emit('connection:updated');
+  expect(lookup()).toBe('');
 });
 
 it.each(['connection:created', 'connection:updated'] as const)(

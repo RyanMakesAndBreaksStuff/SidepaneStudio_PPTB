@@ -41,6 +41,14 @@ describe('parseStoredConfig', () => {
     expect(parsed?.behavior).toEqual(DEFAULT_CONFIG.behavior);
   });
 
+  it('round-trips related record context and back-fills lookupAttribute for older configs', () => {
+    const context = { ...DEFAULT_CONFIG.context, mode: 'RelatedRecord', entityName: 'account', lookupAttribute: 'primarycontactid' };
+    expect(parseStoredConfig(JSON.stringify({ ...DEFAULT_CONFIG, context }))?.context).toEqual(context);
+    const legacyContext: Record<string, unknown> = { ...DEFAULT_CONFIG.context };
+    delete legacyContext.lookupAttribute;
+    expect(parseStoredConfig(JSON.stringify({ ...DEFAULT_CONFIG, context: legacyContext }))?.context.lookupAttribute).toBe('');
+  });
+
   it.each([
     [299, 300],
     [1201, 1200],

@@ -8,9 +8,11 @@ export function deferred<T>() {
   return { promise, resolve };
 }
 
-export function cfg(
-  overrides: Partial<Omit<PaneDefinitionConfig, 'target'>> & { target?: TargetConfig } = {}
-): PaneDefinitionConfig {
+type SectionOverrides = {
+  [K in Exclude<keyof PaneDefinitionConfig, 'target'>]?: Partial<PaneDefinitionConfig[K]>;
+};
+
+export function cfg(overrides: SectionOverrides & { target?: TargetConfig } = {}): PaneDefinitionConfig {
   return {
     pane:     { ...DEFAULT_CONFIG.pane,     ...(overrides.pane     ?? {}) },
     target:   overrides.target ?? DEFAULT_CONFIG.target,

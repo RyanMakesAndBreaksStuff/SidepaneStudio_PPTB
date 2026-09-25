@@ -1,5 +1,5 @@
 import { PaneDefinitionConfig } from '../types/PaneDefinitionConfig';
-import { normalizeGuid } from './odataGuards';
+import { isValidLogicalName, normalizeGuid } from './odataGuards';
 import { parseFormData } from './formData';
 import { isConfigWidthValid } from './configGuards';
 import { MAX_CONFIG_WIDTH, MIN_CONFIG_WIDTH } from '../types/PaneDefinitionConfig';
@@ -143,6 +143,27 @@ export function validate(config: PaneDefinitionConfig, accessibleTables?: Set<st
       message:
         'Console / Manual scripts run outside a form or grid, so there is no current record. Use Static record ID or None.',
     });
+  }
+
+  // RelatedRecord reads a lookup from the triggering form or grid row, then opens that one record.
+  if (config.context.mode === 'RelatedRecord') {
+    if (config.trigger.kind === 'ManualJS' || config.trigger.kind === 'LookupTagClick') {
+      errors.push({
+        field: 'context.mode',
+        message: 'Related record context reads a lookup from the triggering form or grid row. Choose a form or grid trigger.',
+      });
+    } else if (!['custom', 'entityrecord', 'webresource'].includes(config.target.pageType)) {
+      errors.push({
+        field: 'context.mode',
+        message: 'Related record context opens one record. Choose a custom page, table record, or web resource target.',
+      });
+    }
+    if (!isValidLogicalName(config.context.entityName.trim())) {
+      errors.push({ field: 'context.entityName', message: 'Select the source table that holds the lookup column.' });
+    }
+    if (!isValidLogicalName(config.context.lookupAttribute.trim())) {
+      errors.push({ field: 'context.lookupAttribute', message: 'Select the lookup column whose record opens in the pane.' });
+    }
   }
 
   // Warning: SubgridButton + SelectedRow context (IN-001 — describe behavior, not a to-do)

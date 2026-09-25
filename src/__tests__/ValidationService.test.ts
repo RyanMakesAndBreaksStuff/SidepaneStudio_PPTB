@@ -305,3 +305,36 @@ describe('validate — subgrid row-guard warning (IN-001)', () => {
     expect(w!.message).toContain('first selected row');
   });
 });
+
+describe('validate — related record context', () => {
+  const context = { mode: 'RelatedRecord' as const, entityName: 'account', lookupAttribute: 'primarycontactid' };
+  const contactRecord = { pageType: 'entityrecord' as const, entityName: 'contact', formId: '', tabName: '', data: '' };
+
+  it.each(['MainGridOnSelect', 'SubgridOnSelect', 'MainGridButton', 'SubgridButton', 'FormOnLoad', 'FormButton', 'FormOnChange'] as const)(
+    'accepts %s with a source table and lookup column', kind => {
+      const result = validate(cfg({ trigger: { kind, fieldName: 'primarycontactid' }, context, target: contactRecord }));
+      expect(result.errors).toEqual([]);
+    });
+
+  it.each(['ManualJS', 'LookupTagClick'] as const)('blocks %s, which has no source record', kind => {
+    const result = validate(cfg({ trigger: { kind, fieldName: 'parentaccountid' }, context,
+      target: { pageType: 'custom', name: 'sps_Page' } }));
+    expect(result.errors.find(e => e.field === 'context.mode')?.message).toMatch(/form or grid trigger/);
+  });
+
+  it.each([
+    { pageType: 'entitylist', entityName: 'contact', viewId: '', viewType: '' },
+    { pageType: 'dashboard', dashboardId: 'dash', dashboardName: 'Dash' },
+    { pageType: 'search', searchText: '' },
+  ] as const)('blocks a $pageType target, which receives no record', target => {
+    const result = validate(cfg({ trigger: { kind: 'MainGridOnSelect' }, context, target }));
+    expect(result.errors.find(e => e.field === 'context.mode')?.message)
+      .toMatch(/custom page, table record, or web resource/);
+  });
+
+  it('requires a source table and a valid lookup column', () => {
+    const result = validate(cfg({ trigger: { kind: 'MainGridOnSelect' }, target: contactRecord,
+      context: { mode: 'RelatedRecord', entityName: '', lookupAttribute: "primarycontactid'" } }));
+    expect(result.errors.map(e => e.field)).toEqual(['context.entityName', 'context.lookupAttribute']);
+  });
+});

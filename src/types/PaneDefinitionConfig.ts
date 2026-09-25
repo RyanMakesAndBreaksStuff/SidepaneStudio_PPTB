@@ -2,7 +2,7 @@
 
 export type TriggerKind = 'FormOnLoad' | 'FormButton' | 'MainGridButton' | 'SubgridButton' | 'MainGridOnSelect' | 'SubgridOnSelect' | 'ManualJS' | 'FormOnChange' | 'LookupTagClick';
 export type PageType = 'custom' | 'entityrecord' | 'entitylist' | 'webresource' | 'dashboard' | 'search';
-export type ContextMode = 'CurrentRecord' | 'SelectedRow' | 'Static' | 'None';
+export type ContextMode = 'CurrentRecord' | 'SelectedRow' | 'Static' | 'RelatedRecord' | 'None';
 
 export interface PaneConfig {
   paneId: string;
@@ -37,8 +37,11 @@ export interface TriggerConfig {
 
 export interface ContextConfig {
   mode: ContextMode;
+  /** Record table. In RelatedRecord mode: the source table that holds lookupAttribute. */
   entityName: string;
   staticRecordId: string;
+  /** RelatedRecord only: lookup column on the source record whose value opens in the pane. */
+  lookupAttribute: string;
   reuseExistingPane: boolean;
 }
 
@@ -75,6 +78,6 @@ export const DEFAULT_CONFIG: PaneDefinitionConfig = {
   },
   target: { pageType: 'custom', name: 'sps_SidePaneBuilderPage' },
   trigger: { kind: 'FormButton', functionName: 'openRelatedRecordsPane', namespace: 'YourNamespace', fieldName: '' },
-  context: { mode: 'CurrentRecord', entityName: '', staticRecordId: '', reuseExistingPane: true },
+  context: { mode: 'CurrentRecord', entityName: '', staticRecordId: '', lookupAttribute: '', reuseExistingPane: true },
   behavior: { expandOnOpen: true, closeOthers: false },
 };

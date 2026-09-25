@@ -11,7 +11,7 @@ import {
 
 const PAGE_TYPES: PageType[] = ['custom', 'entityrecord', 'entitylist', 'webresource', 'dashboard', 'search'];
 const TRIGGER_KINDS: TriggerKind[] = ['FormOnLoad', 'FormButton', 'MainGridButton', 'SubgridButton', 'MainGridOnSelect', 'SubgridOnSelect', 'ManualJS', 'FormOnChange', 'LookupTagClick'];
-const CONTEXT_MODES: ContextMode[] = ['CurrentRecord', 'SelectedRow', 'Static', 'None'];
+const CONTEXT_MODES: ContextMode[] = ['CurrentRecord', 'SelectedRow', 'Static', 'RelatedRecord', 'None'];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -148,6 +148,7 @@ export function parseStoredConfig(raw: unknown): PaneDefinitionConfig | null {
       mode: normalizedMode,
       entityName: stringOr(contextRecord.entityName, DEFAULT_CONFIG.context.entityName),
       staticRecordId: normalizedStaticRecordId,
+      lookupAttribute: stringOr(contextRecord.lookupAttribute, DEFAULT_CONFIG.context.lookupAttribute),
       reuseExistingPane: booleanOr(contextRecord.reuseExistingPane, DEFAULT_CONFIG.context.reuseExistingPane),
     },
     behavior: {

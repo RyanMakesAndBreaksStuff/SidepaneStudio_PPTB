@@ -39,7 +39,7 @@ function clearOrgSelections(config: PaneDefinitionConfig): PaneDefinitionConfig 
       target.pageType === 'entitylist' ? { ...target, entityName: '', viewId: '', viewType: '' } :
       target.pageType === 'dashboard' ? { ...target, dashboardId: '', dashboardName: '' } :
       target,
-    context: { ...config.context, entityName: '', staticRecordId: '' },
+    context: { ...config.context, entityName: '', staticRecordId: '', lookupAttribute: '' },
   };
 }
 
