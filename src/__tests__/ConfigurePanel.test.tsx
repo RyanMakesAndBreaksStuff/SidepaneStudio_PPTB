@@ -442,25 +442,25 @@ describe('ConfigurePanel — record context table name (CR-001)', () => {
   it('offers a table name picker on the shipped default (custom + CurrentRecord)', async () => {
     await renderPanel(withMode('CurrentRecord') as any);
     expect(Array.from(host!.querySelectorAll('button'))
-      .some(button => button.textContent === 'Hide standard tables')).toBe(true);
+      .some(button => button.textContent === 'Only Custom Tables')).toBe(true);
   });
 
   it('offers a table name picker for SelectedRow', async () => {
     await renderPanel(withMode('SelectedRow') as any);
     expect(Array.from(host!.querySelectorAll('button'))
-      .some(button => button.textContent === 'Hide standard tables')).toBe(true);
+      .some(button => button.textContent === 'Only Custom Tables')).toBe(true);
   });
 
   it('offers a table name picker for Static', async () => {
     await renderPanel(withMode('Static') as any);
     expect(Array.from(host!.querySelectorAll('button'))
-      .some(button => button.textContent === 'Hide standard tables')).toBe(true);
+      .some(button => button.textContent === 'Only Custom Tables')).toBe(true);
   });
 
   it('hides the table name picker for None, which emits no record fields', async () => {
     await renderPanel(withMode('None') as any);
     expect(Array.from(host!.querySelectorAll('button'))
-      .some(button => button.textContent === 'Hide standard tables')).toBe(false);
+      .some(button => button.textContent === 'Only Custom Tables')).toBe(false);
   });
 
   it('shows the Record ID input only for Static', async () => {

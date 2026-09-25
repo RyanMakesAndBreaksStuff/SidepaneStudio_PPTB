@@ -36,7 +36,7 @@ async function render(element: React.ReactElement) {
 }
 function filter(index = 0) {
   const buttons = Array.from(host.querySelectorAll<HTMLButtonElement>('button'))
-    .filter(button => button.textContent === 'Hide standard tables');
+    .filter(button => button.textContent === 'Only Custom Tables');
   expect(buttons[index], 'custom-only button').toBeTruthy();
   return buttons[index];
 }

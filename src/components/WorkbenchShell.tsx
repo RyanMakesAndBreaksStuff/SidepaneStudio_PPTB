@@ -105,12 +105,14 @@ function WorkbenchShellContent({
               background: T.pageBg,
             }}
           >
-            <RailToggle
-              label={configPanelOpen ? 'Collapse config panel' : 'Expand config panel'}
-              expanded={configPanelOpen}
-              edge="left"
-              onClick={() => setConfigPanelOpen(open => !open)}
-            />
+            <PanelHeader title={configPanelOpen ? 'Configure' : undefined}>
+              <RailToggle
+                label={configPanelOpen ? 'Collapse config panel' : 'Expand config panel'}
+                expanded={configPanelOpen}
+                edge="left"
+                onClick={() => setConfigPanelOpen(open => !open)}
+              />
+            </PanelHeader>
             {configPanelOpen ? (
               <ConfigurePanel {...configurePanelProps} />
             ) : (
@@ -118,6 +120,7 @@ function WorkbenchShellContent({
             )}
           </aside>
           <section style={{ flex: 1, borderRight: `1px solid ${T.stroke1}`, minWidth: 300, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            <PanelHeader title="Preview" />
             <PreviewPanel {...previewPanelProps} />
           </section>
           <section
@@ -132,12 +135,14 @@ function WorkbenchShellContent({
               background: T.pageBg,
             }}
           >
-            <RailToggle
-              label={codePanelOpen ? 'Collapse code panel' : 'Expand code panel'}
-              expanded={codePanelOpen}
-              edge="right"
-              onClick={() => setCodePanelOpen(open => !open)}
-            />
+            <PanelHeader title={codePanelOpen ? 'Output' : undefined}>
+              <RailToggle
+                label={codePanelOpen ? 'Collapse code panel' : 'Expand code panel'}
+                expanded={codePanelOpen}
+                edge="right"
+                onClick={() => setCodePanelOpen(open => !open)}
+              />
+            </PanelHeader>
             {codePanelOpen ? (
               <OutputPanel {...outputPanelProps} />
             ) : (
@@ -225,7 +230,6 @@ function RailToggle({
         width: COLLAPSED_RAIL_WIDTH,
         height: COLLAPSED_RAIL_WIDTH,
         border: 'none',
-        borderBottom: `1px solid ${T.stroke1}`,
         background: T.surface2,
         color: T.fg1,
         cursor: 'pointer',
@@ -237,6 +241,37 @@ function RailToggle({
     >
       {expanded ? openGlyph : closedGlyph}
     </button>
+  );
+}
+
+/** Wide-layout counterpart of the narrow tab strip: keeps each panel's title visible. */
+function PanelHeader({ title, children }: { title?: string; children?: React.ReactNode }): React.ReactElement {
+  const { isDark } = useTheme();
+  const T = theme(isDark);
+
+  return (
+    <div style={{
+      display: 'flex',
+      alignItems: 'center',
+      minHeight: COLLAPSED_RAIL_WIDTH,
+      borderBottom: `1px solid ${T.stroke1}`,
+      background: T.surface2,
+      flexShrink: 0,
+    }}>
+      {children}
+      {title && (
+        <h2 style={{
+          margin: 0,
+          padding: children ? '0 12px 0 0' : '0 16px',
+          color: T.accent,
+          fontFamily: T.font,
+          fontSize: 13,
+          fontWeight: 600,
+        }}>
+          {title}
+        </h2>
+      )}
+    </div>
   );
 }
 

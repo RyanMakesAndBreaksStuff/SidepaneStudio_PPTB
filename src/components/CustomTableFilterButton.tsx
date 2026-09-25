@@ -16,7 +16,7 @@ export function CustomTableFilterButton({ pressed, disabled, onClick }: Props): 
     aria-pressed={pressed}
     disabled={disabled}
     onClick={onClick}
-    title="Hide standard tables; show them again by turning this off"
+    title="Custom tables;Show system tables again by turning this off"
     style={{
       alignSelf: 'flex-start',
       border: '1px solid ' + (pressed ? T.accent : T.stroke1),
@@ -29,5 +29,5 @@ export function CustomTableFilterButton({ pressed, disabled, onClick }: Props): 
       cursor: disabled ? 'default' : 'pointer',
       opacity: disabled ? 0.6 : 1,
     }}
-  >Hide standard tables</button>;
+  >Only Custom Tables</button>;
 }
