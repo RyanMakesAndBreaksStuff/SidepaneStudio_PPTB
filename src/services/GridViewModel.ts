@@ -1,4 +1,5 @@
 import type { MetadataService, ViewInfo } from './MetadataService';
+import { isValidLogicalName } from './odataGuards';
 import type { PaneDefinitionConfig } from '../types/PaneDefinitionConfig';
 
 export interface GridColumn {
@@ -100,4 +101,14 @@ export function relatedRecordOf(row: Record<string, unknown>, lookupAttribute: s
   if (typeof id !== 'string' || !id) return null;
   const name = row[`${key}${FORMATTED}`];
   return { id, name: typeof name === 'string' ? name : '' };
+}
+
+/** One source record whose lookup is set: the Form preview's RelatedRecord sample. */
+export function buildRelatedSampleFetchXml(entityName: string, lookupAttribute: string): string {
+  // Names are interpolated into XML, so both must be plain logical names.
+  if (!isValidLogicalName(entityName) || !isValidLogicalName(lookupAttribute)) {
+    throw new Error('Select a valid source table and lookup column.');
+  }
+  return `<fetch top="1"><entity name="${entityName}"><attribute name="${lookupAttribute}"/>` +
+    `<filter><condition attribute="${lookupAttribute}" operator="not-null"/></filter></entity></fetch>`;
 }

@@ -127,4 +127,17 @@ describe('FormSelector', () => {
     expect(select.value).toBe('');
     expect(getFormsForEntityResult).toHaveBeenCalledTimes(1);
   });
+
+  it('names the configured host table when the preview entity diverges', async () => {
+    const formXmlService = {
+      getFormsForEntityResult: vi.fn().mockResolvedValue({ ok: true, forms: [] }),
+    } as unknown as FormXmlService;
+    await render(
+      <FormSelector entityName="contact" onEntityNameChange={vi.fn()} configuredEntity="account"
+        formXmlService={formXmlService} metadataService={mockMetadataService} onFormSelected={vi.fn()} />
+    );
+    const chip = Array.from(host!.querySelectorAll('span[title]')).find(span => span.textContent === 'diverged');
+    expect(chip?.getAttribute('title'))
+      .toBe('Preview is showing a different entity than the configured host table (account).');
+  });
 });

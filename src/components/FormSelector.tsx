@@ -24,7 +24,7 @@ export interface FormSelectorProps {
   /** Optional placeholder shown in the entity input (e.g. the configured pane target). */
   entityNameHint?: string;
   /**
-   * The configured pane target entity, surfaced for the "Use configured"
+   * The configured host table (the pane's table, or the RelatedRecord source table), surfaced for the "Use configured"
    * re-sync affordance + divergence indicator. Independence is preserved —
    * the field never auto-syncs; the user re-syncs on demand.
    */
@@ -224,7 +224,7 @@ export function FormSelector({
               <span>Preview Entity</span>
               {configuredEntity && entityName && configuredEntity !== entityName && (
                 <span
-                  title={`Preview is showing a different entity than the configured pane target (${configuredEntity}).`}
+                  title={`Preview is showing a different entity than the configured host table (${configuredEntity}).`}
                   style={{
                     fontFamily: T.mono,
                     fontSize: 9,

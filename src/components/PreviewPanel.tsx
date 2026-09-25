@@ -14,6 +14,8 @@ import { MockMDAShell } from './MockMDAShell';
 import { NativeMdaFrame } from './NativeMdaFrame';
 import { PreviewSizeProvider, usePreviewSize } from './previewSize';
 import { PreviewSessionBoundary, usePreviewSessionState } from '../contexts/PreviewSessionContext';
+import { buildRelatedSampleFetchXml, getRelatedLookup, relatedRecordOf } from '../services/GridViewModel';
+import type { PreviewRecord } from '../services/GridViewModel';
 
 export interface PreviewPanelProps {
   config: PaneDefinitionConfig;
@@ -33,6 +35,11 @@ type FormState =
   | { status: 'loading' }
   | { status: 'error'; reason: string }
   | { status: 'loaded'; model: FormModel };
+
+type SampleState =
+  | { status: 'idle' | 'loading' }
+  | { status: 'error'; reason: string }
+  | { status: 'loaded'; record: PreviewRecord | null };
 
 /** Table the preview host form or grid shows: the RelatedRecord source table, else the table the pane targets. */
 function getConfiguredHostEntity(config: PaneDefinitionConfig): string {
@@ -68,6 +75,14 @@ const PreviewPanelContent = React.memo(function PreviewPanelContent({
     'preview-host-entity',
     () => configuredHostEntity
   );
+  // RelatedRecord Form preview: one sample source record supplies the lookup the pane opens.
+  // Keyed by host table + lookup so changing either discards the previous sample.
+  const relatedLookup = getRelatedLookup(config);
+  const showSample = relatedLookup !== '' && previewHostEntity === configuredHostEntity;
+  const sampleKey = JSON.stringify([previewHostEntity, relatedLookup]);
+  const [sample, setSample] = useState<{ key: string; state: SampleState }>({ key: '', state: { status: 'idle' } });
+  const sampleState: SampleState = sample.key === sampleKey ? sample.state : { status: 'idle' };
+  const sampleRequestRef = useRef(0);
   const formRequestIdRef = useRef(0);
   const mountedRef = useRef(true);
 
@@ -116,6 +131,22 @@ const PreviewPanelContent = React.memo(function PreviewPanelContent({
       setFormState({ status: 'loaded', model: result.model });
     }
   }, []);
+
+  const loadSample = async () => {
+    const requestId = ++sampleRequestRef.current;
+    setSample({ key: sampleKey, state: { status: 'loading' } });
+    try {
+      const response = await window.dataverseAPI.fetchXmlQuery(buildRelatedSampleFetchXml(previewHostEntity, relatedLookup));
+      if (!mountedRef.current || sampleRequestRef.current !== requestId) return;
+      const row = Array.isArray(response.value) ? response.value[0] : undefined;
+      setSample({ key: sampleKey, state: { status: 'loaded',
+        record: row && typeof row === 'object' ? relatedRecordOf(row, relatedLookup) : null } });
+    } catch (error) {
+      if (!mountedRef.current || sampleRequestRef.current !== requestId) return;
+      setSample({ key: sampleKey, state: { status: 'error',
+        reason: error instanceof Error ? error.message : 'Could not load a sample record.' } });
+    }
+  };
 
   const gridEntity = configuredHostEntity || previewHostEntity;
   const tabStyle = (active: boolean): React.CSSProperties => ({
@@ -214,9 +245,25 @@ const PreviewPanelContent = React.memo(function PreviewPanelContent({
                 </div>
               )}
 
+              {formState.status === 'loaded' && showSample && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 8, fontFamily: T.font, fontSize: 12 }}>
+                  <button type="button" disabled={sampleState.status === 'loading'} onClick={() => void loadSample()}
+                    style={{ border: `1px solid ${T.accent}`, borderRadius: T.rS, background: T.accentBg, color: T.accent,
+                      fontFamily: T.font, fontSize: 12, fontWeight: 600, padding: '6px 10px', cursor: 'pointer' }}>
+                    Load sample {previewHostEntity} record
+                  </button>
+                  {sampleState.status === 'loading' && <span role="status" style={{ color: T.fg3 }}>Loading sample record...</span>}
+                  {sampleState.status === 'error' && <span role="alert" style={{ color: T.error }}>{sampleState.reason}</span>}
+                  {sampleState.status === 'loaded' && sampleState.record === null && <span role="status" style={{ color: T.fg3 }}>
+                    No {previewHostEntity} record has a {relatedLookup} value, so the pane does not open.
+                  </span>}
+                </div>
+              )}
+
               {formState.status === 'loaded' && (
                 <NativeMdaFrame
-                  pane={config.pane}
+                  pane={sampleState.status === 'loaded' ? { ...config.pane, isSelected: sampleState.record !== null } : config.pane}
+                  paneRecord={sampleState.status === 'loaded' ? sampleState.record ?? undefined : undefined}
                   hostTarget={{
                     pageType: 'entityrecord',
                     entityName: previewHostEntity,
