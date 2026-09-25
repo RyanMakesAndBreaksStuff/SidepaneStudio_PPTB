@@ -72,7 +72,15 @@ function buildPaneOptions(config: PaneDefinitionConfig): string {
 
 interface RecordContext {
   idExpr: string | null;
-  entityName: string;
+  /** JS expression for the record's table; null when the table is unknown. */
+  entityExpr: string | null;
+}
+
+/** Form object whose record identity and attributes form triggers read. */
+function formObjectExpr(kind: TriggerKind): string | null {
+  if (kind === 'FormOnLoad' || kind === 'FormOnChange') return 'formContext';
+  if (kind === 'FormButton') return 'primaryControl';
+  return null;
 }
 
 /** CR-001 / plan contract C1 — the single owner of record-context resolution. */
@@ -81,10 +89,11 @@ function buildRecordContext(config: PaneDefinitionConfig): RecordContext {
   const targetEntityName =
     target.pageType === 'entityrecord' || target.pageType === 'entitylist' ? target.entityName : '';
   const entityName = context.entityName || targetEntityName || '';
+  const form = formObjectExpr(trigger.kind);
 
   if (trigger.kind === 'LookupTagClick' &&
       (target.pageType === 'custom' || target.pageType === 'entityrecord')) {
-    return { idExpr: 'tag.id', entityName: 'tag.entityType' };
+    return { idExpr: 'tag.id', entityExpr: 'tag.entityType' };
   }
 
   let idExpr: string | null = null;
@@ -108,11 +117,46 @@ function buildRecordContext(config: PaneDefinitionConfig): RecordContext {
       idExpr = normalized ? JSON.stringify(normalized) : null;
       break;
     }
+    case 'RelatedRecord':
+      // buildRelatedRecordPreamble declares relatedRecord before navigation.
+      return form || GRID_KINDS.includes(trigger.kind)
+        ? { idExpr: 'relatedRecord.id', entityExpr: 'relatedRecord.entityType' }
+        : { idExpr: null, entityExpr: null };
     case 'None':
       break;
   }
 
-  return { idExpr, entityName };
+  return { idExpr, entityExpr: entityName ? JSON.stringify(entityName) : null };
+}
+
+/**
+ * RelatedRecord — declares `relatedRecord` ({ id, entityType }) from the source record's lookup,
+ * or returns before any pane opens when the lookup is empty. Form triggers read the form value
+ * (unsaved edits included); grid rows expose only view columns, so grids read the saved record.
+ */
+function buildRelatedRecordPreamble(config: PaneDefinitionConfig, indent: string, formContextExpr = 'formContext'): string {
+  const { context, trigger } = config;
+  if (context.mode !== 'RelatedRecord') return '';
+  const lookup = context.lookupAttribute.trim();
+  const kindForm = formObjectExpr(trigger.kind);
+  const form = kindForm === 'formContext' ? formContextExpr : kindForm;
+  if (form) {
+    return (
+      `${indent}var relatedAttribute = ${form}.getAttribute(${JSON.stringify(lookup)});\n` +
+      `${indent}if (!relatedAttribute) throw new Error(${JSON.stringify(`The lookup column ${lookup} is not on this form.`)});\n` +
+      `${indent}var relatedRecord = (relatedAttribute.getValue() || [])[0];\n` +
+      `${indent}if (!relatedRecord) return;\n`
+    );
+  }
+  if (!GRID_KINDS.includes(trigger.kind)) return '';
+  const valueKey = `_${lookup}_value`;
+  return (
+    `${indent}var relatedSource = await Xrm.WebApi.retrieveRecord(${JSON.stringify(context.entityName.trim())}, ` +
+    `selectedRecordId.replace(/[{}]/g, ''), ${JSON.stringify(`?$select=${valueKey}`)});\n` +
+    `${indent}if (!relatedSource[${JSON.stringify(valueKey)}]) return;\n` +
+    `${indent}var relatedRecord = { id: relatedSource[${JSON.stringify(valueKey)}], ` +
+    `entityType: relatedSource[${JSON.stringify(`${valueKey}@Microsoft.Dynamics.CRM.lookuplogicalname`)}] };\n`
+  );
 }
 
 function buildTargetParameterParts(target: PaneDefinitionConfig['target']): string[] {
@@ -139,8 +183,8 @@ function buildNavigateInput(config: PaneDefinitionConfig): string {
         `pageType: ${JSON.stringify(target.pageType)}`,
         `name: ${JSON.stringify(target.name)}`,
       ];
-      if (rc.idExpr && rc.entityName) {
-        parts.push(`entityName: ${rc.idExpr === 'tag.id' ? rc.entityName : JSON.stringify(rc.entityName)}`);
+      if (rc.idExpr && rc.entityExpr) {
+        parts.push(`entityName: ${rc.entityExpr}`);
         parts.push(`recordId: ${rc.idExpr}`);
       }
       return `{ ${parts.join(', ')} }`;
@@ -149,7 +193,7 @@ function buildNavigateInput(config: PaneDefinitionConfig): string {
       const entityIdExpr = rc.idExpr ?? buildConfiguredRecordIdExpression(config);
       return `{ ${[
         `pageType: ${JSON.stringify(target.pageType)}`,
-        `entityName: ${rc.idExpr === 'tag.id' ? rc.entityName : JSON.stringify(rc.entityName)}`,
+        `entityName: ${rc.entityExpr ?? '""'}`,
         `entityId: ${entityIdExpr}`,
         ...buildTargetParameterParts(target),
       ].join(', ')} }`;
@@ -157,7 +201,7 @@ function buildNavigateInput(config: PaneDefinitionConfig): string {
     case 'entitylist':
       return `{ ${[
         `pageType: ${JSON.stringify(target.pageType)}`,
-        `entityName: ${JSON.stringify(rc.entityName)}`,
+        `entityName: ${rc.entityExpr ?? '""'}`,
         ...buildTargetParameterParts(target),
       ].join(', ')} }`;
     case 'webresource': {
@@ -165,9 +209,9 @@ function buildNavigateInput(config: PaneDefinitionConfig): string {
         `pageType: ${JSON.stringify(target.pageType)}`,
         `webresourceName: ${JSON.stringify(target.name)}`,
       ];
-      if (rc.idExpr && rc.entityName) {
+      if (rc.idExpr && rc.entityExpr) {
         parts.push(
-          `data: encodeURIComponent(JSON.stringify({ entityName: ${JSON.stringify(rc.entityName)}, recordId: ${rc.idExpr} }))`
+          `data: encodeURIComponent(JSON.stringify({ entityName: ${rc.entityExpr}, recordId: ${rc.idExpr} }))`
         );
       }
       return `{ ${parts.join(', ')} }`;
@@ -208,7 +252,7 @@ function buildGetOrCreateBody(config: PaneDefinitionConfig, indent = '  '): stri
     : '';
 
   const createBody = `${stateAssign}${indent}var pane = await Xrm.App.sidePanes.createPane(${paneOpts});\n${indent}await pane.navigate(${navInput});\n${badgeAssign}`;
-  return `${reuseCheck}${createBody}${context.reuseExistingPane ? `${indent}}\n` : ''}${closeOthersBlock}`;
+  return `${buildRelatedRecordPreamble(config, indent)}${reuseCheck}${createBody}${context.reuseExistingPane ? `${indent}}\n` : ''}${closeOthersBlock}`;
 }
 
 function generateFormOnLoad(config: PaneDefinitionConfig): string {
@@ -391,27 +435,26 @@ export function generateLibraryScript(config: PaneDefinitionConfig): string {
 
   // Guard formContext expressions inside a library wrapper that receives executionContext.
   const libIdExpr = rc.idExpr?.replace(/^formContext\./, 'executionContext.getFormContext().') ?? null;
-  const libEntityName = rc.idExpr === 'tag.id' ? rc.entityName : JSON.stringify(rc.entityName);
 
   // Target keys — contract C4. name and webresourceName are mutually exclusive (WR-007).
   if (target.pageType === 'custom') {
     optLines.push(`    name: ${JSON.stringify(target.name)}`);
-    if (libIdExpr && rc.entityName) {
-      optLines.push(`    entityName: ${libEntityName}`);
+    if (libIdExpr && rc.entityExpr) {
+      optLines.push(`    entityName: ${rc.entityExpr}`);
       optLines.push(`    recordId: ${libIdExpr}`);
     }
   } else if (target.pageType === 'webresource') {
     optLines.push(`    webresourceName: ${JSON.stringify(target.name)}`);
-    if (libIdExpr && rc.entityName) {
+    if (libIdExpr && rc.entityExpr) {
       optLines.push(
-        `    data: encodeURIComponent(JSON.stringify({ entityName: ${JSON.stringify(rc.entityName)}, recordId: ${libIdExpr} }))`
+        `    data: encodeURIComponent(JSON.stringify({ entityName: ${rc.entityExpr}, recordId: ${libIdExpr} }))`
       );
     }
   } else if (target.pageType === 'entityrecord') {
-    optLines.push(`    entityName: ${libEntityName}`);
+    optLines.push(`    entityName: ${rc.entityExpr ?? '""'}`);
     optLines.push(`    entityId: ${libIdExpr ?? buildConfiguredRecordIdExpression(config)}`);
   } else if (target.pageType === 'entitylist') {
-    optLines.push(`    entityName: ${JSON.stringify(rc.entityName)}`);
+    optLines.push(`    entityName: ${rc.entityExpr ?? '""'}`);
   } else if (target.pageType === 'dashboard') {
     optLines.push(`    dashboardId: ${JSON.stringify(target.dashboardId)}`);
   } else if (target.pageType === 'search' && target.searchText) {
@@ -455,10 +498,15 @@ export function generateLibraryScript(config: PaneDefinitionConfig): string {
     ? `\n// Register from form OnLoad:\n// formContext.getControl(${JSON.stringify(trigger.fieldName || '')}).addOnLookupTagClick(${ns}.${fn});`
     : '';
 
+  const openCall = `  SidePaneHelper.open({\n${optLines.join(',\n')}\n  });\n`;
+  const relatedPreamble = buildRelatedRecordPreamble(config, '      ', 'executionContext.getFormContext()');
+  // RelatedRecord awaits the lookup, so the open call moves into an async block with the standard catch.
+  const body = relatedPreamble
+    ? `  (async function() {\n    try {\n${relatedPreamble}${openCall.replace(/^(?=.)/gm, '    ')}` +
+      `    } catch(e) {\n${buildCatchBody(`${ns}.${fn}`, '      ')}\n    }\n  })();\n`
+    : openCall;
+
   return `var ${ns} = ${ns} || {};
 ${ns}.${fn} = function(${param}) {
-${lookupPreamble}${gridContext}  SidePaneHelper.open({
-${optLines.join(',\n')}
-  });
-};${lookupRegistration}`;
+${lookupPreamble}${gridContext}${body}};${lookupRegistration}`;
 }

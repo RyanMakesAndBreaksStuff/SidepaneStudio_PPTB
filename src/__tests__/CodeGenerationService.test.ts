@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { generateBasicScript, generateLibraryScript } from '../services/CodeGenerationService';
 import { cfg } from './testHelpers';
+import type { PaneDefinitionConfig, TriggerKind } from '../types/PaneDefinitionConfig';
 
 function isValidJS(code: string): boolean {
   try {
@@ -756,4 +757,91 @@ describe('generateBasicScript — error surfacing (WR-005)', () => {
       expect(code).toContain('Xrm.Navigation.openErrorDialog({ message: e.message })');
     });
   }
+});
+
+describe('generated scripts — RelatedRecord context', () => {
+  const related = (kind: TriggerKind) => cfg({
+    pane: { paneId: 'p' },
+    trigger: { kind, namespace: 'TestNs', functionName: 'open' },
+    target: { pageType: 'entityrecord', entityName: 'contact', formId: '', tabName: '', data: '' },
+    context: { mode: 'RelatedRecord', entityName: 'account', lookupAttribute: 'primarycontactid' },
+  });
+  const gridRow = { getEventSource: () => ({ getId: () => '{A1}' }) };
+  const accountRow = {
+    _primarycontactid_value: 'c1',
+    '_primarycontactid_value@Microsoft.Dynamics.CRM.lookuplogicalname': 'contact',
+  };
+
+  function load(config: PaneDefinitionConfig, retrieveRecord = vi.fn()) {
+    const pane = { navigate: vi.fn().mockResolvedValue(undefined) };
+    const xrm = {
+      App: { sidePanes: {
+        getPane: vi.fn().mockReturnValue(null),
+        createPane: vi.fn().mockResolvedValue(pane),
+        getAllPanes: vi.fn().mockReturnValue([]),
+      } },
+      Navigation: { openErrorDialog: vi.fn() },
+      WebApi: { retrieveRecord },
+    };
+    const win: { __spstudio_pendingPanes?: Record<string, number> } = {};
+    const open = new Function('window', 'Xrm',
+      `${generateBasicScript(config)}\nreturn TestNs.open;`)(win, xrm) as (arg: unknown) => void;
+    return { open, pane, xrm, win };
+  }
+
+  it('retrieves the selected grid row lookup and opens that record', async () => {
+    const { open, pane, xrm } = load(related('MainGridOnSelect'), vi.fn().mockResolvedValue(accountRow));
+    open(gridRow);
+    await vi.waitFor(() => expect(pane.navigate).toHaveBeenCalled());
+    expect(xrm.WebApi.retrieveRecord).toHaveBeenCalledWith('account', 'A1', '?$select=_primarycontactid_value');
+    expect(pane.navigate).toHaveBeenCalledWith({ pageType: 'entityrecord', entityName: 'contact', entityId: 'c1' });
+  });
+
+  it('opens no pane when the selected row has no lookup value', async () => {
+    const { open, xrm, win } = load(related('MainGridOnSelect'), vi.fn().mockResolvedValue({ _primarycontactid_value: null }));
+    open(gridRow);
+    await vi.waitFor(() => expect(win.__spstudio_pendingPanes).toEqual({}));
+    expect(xrm.WebApi.retrieveRecord).toHaveBeenCalledOnce();
+    expect(xrm.App.sidePanes.createPane).not.toHaveBeenCalled();
+    expect(xrm.Navigation.openErrorDialog).not.toHaveBeenCalled();
+  });
+
+  it('reads form triggers from the form attribute, including unsaved values', async () => {
+    const { open, pane, xrm } = load(related('FormButton'));
+    const getAttribute = vi.fn().mockReturnValue({ getValue: () => [{ id: '{C2}', entityType: 'contact', name: 'Pat' }] });
+    open({ getAttribute });
+    await vi.waitFor(() => expect(pane.navigate).toHaveBeenCalled());
+    expect(getAttribute).toHaveBeenCalledWith('primarycontactid');
+    expect(pane.navigate).toHaveBeenCalledWith({ pageType: 'entityrecord', entityName: 'contact', entityId: '{C2}' });
+    expect(xrm.WebApi.retrieveRecord).not.toHaveBeenCalled();
+  });
+
+  it('reports a lookup column that is missing from the form', async () => {
+    const { open, xrm } = load(related('FormButton'));
+    open({ getAttribute: () => null });
+    await vi.waitFor(() => expect(xrm.Navigation.openErrorDialog)
+      .toHaveBeenCalledWith({ message: 'The lookup column primarycontactid is not on this form.' }));
+  });
+
+  it('resolves the grid lookup before SidePaneHelper.open in Shared Library output', async () => {
+    const open = vi.fn();
+    const retrieveRecord = vi.fn().mockResolvedValue(accountRow);
+    const handler = new Function('Xrm', 'SidePaneHelper',
+      `${generateLibraryScript(related('MainGridOnSelect'))}\nreturn TestNs.open;`)(
+      { WebApi: { retrieveRecord }, Navigation: { openErrorDialog: vi.fn() } }, { open }) as (arg: unknown) => void;
+    handler(gridRow);
+    await vi.waitFor(() => expect(open).toHaveBeenCalled());
+    expect(open.mock.calls[0][0]).toMatchObject({ pageType: 'entityrecord', entityName: 'contact', entityId: 'c1' });
+  });
+
+  it('reads the form lookup through executionContext in Shared Library output', async () => {
+    const open = vi.fn();
+    const getAttribute = vi.fn().mockReturnValue({ getValue: () => [{ id: '{C2}', entityType: 'contact' }] });
+    const handler = new Function('Xrm', 'SidePaneHelper',
+      `${generateLibraryScript(related('FormOnLoad'))}\nreturn TestNs.open;`)(
+      { Navigation: { openErrorDialog: vi.fn() } }, { open }) as (arg: unknown) => void;
+    handler({ getFormContext: () => ({ getAttribute }) });
+    await vi.waitFor(() => expect(open).toHaveBeenCalled());
+    expect(open.mock.calls[0][0]).toMatchObject({ entityName: 'contact', entityId: '{C2}' });
+  });
 });
