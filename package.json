@@ -6,7 +6,7 @@
   },
   "displayName": "Side Pane Studio",
   "description": "Side Pane Studio is a visual builder for Dynamics 365 and Power Platforrm model-driven app side panes",
-  "icon": "icon/icon-2.svg",
+  "icon": "icon/icon.svg",
   "main": "index.html",
   "author": "Ryan Rettinger",
   "keywords": [
