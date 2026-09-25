@@ -143,6 +143,17 @@ describe('WorkbenchShell', () => {
     expect(host?.querySelector('section[aria-label="Code rail"]')).toBeTruthy();
   });
 
+  it('titles all three panels in wide layout', async () => {
+    await render(shell());
+
+    const titles = () => Array.from(host?.querySelectorAll('h2') ?? []).map(h => h.textContent);
+    expect(titles()).toEqual(['Configure', 'Preview', 'Output']);
+    await act(async () => {
+      button('Collapse config panel')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(titles()).toEqual(['Preview', 'Output']);
+  });
+
   it('keeps narrow mode on the existing tab layout', async () => {
     await render(shell('narrow'));
 
