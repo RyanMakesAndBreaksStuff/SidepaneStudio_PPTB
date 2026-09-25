@@ -8,6 +8,7 @@ import {
 import {
   buildEntityDefinitionsPath,
   buildAttributeLabelsPath,
+  buildLookupAttributesPath,
   buildSystemDashboardsPath,
   buildUserDashboardsPath,
   buildViewsForEntityPath,
@@ -219,6 +220,16 @@ export class MetadataService {
     connectionTarget?: 'primary' | 'secondary'
   ): Promise<AttributeLabel[]> {
     const path = buildAttributeLabelsPath(entityLogicalName);
+    if (!path) throw new Error('Invalid table logical name.');
+    return this.xrm.webApiGet<AttributeLabel[]>(path, connectionTarget);
+  }
+
+  /** Lookup, customer, and owner columns — the columns whose value names a related record. */
+  async listLookupAttributes(
+    entityLogicalName: string,
+    connectionTarget?: 'primary' | 'secondary'
+  ): Promise<AttributeLabel[]> {
+    const path = buildLookupAttributesPath(entityLogicalName);
     if (!path) throw new Error('Invalid table logical name.');
     return this.xrm.webApiGet<AttributeLabel[]>(path, connectionTarget);
   }

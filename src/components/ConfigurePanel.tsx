@@ -16,6 +16,7 @@ import { TablePicker } from './TablePicker';
 import { DashboardPicker } from './DashboardPicker';
 import { FormSelector } from './FormSelector';
 import { ViewPicker } from './ViewPicker';
+import { LookupPicker } from './LookupPicker';
 import { Toggle } from './Toggle';
 import { ChoiceGroup } from './ChoiceGroup';
 import { Callout } from './Callout';
@@ -89,6 +90,7 @@ const CONTEXT_OPTIONS = [
   { value: 'CurrentRecord', label: 'Current record (from trigger)' },
   { value: 'SelectedRow',   label: 'Selected row (subgrid)' },
   { value: 'Static',        label: 'Static record ID' },
+  { value: 'RelatedRecord', label: 'Related record (lookup on source record)' },
   { value: 'None',          label: 'None — pane opens independently' },
 ];
 
@@ -367,7 +369,7 @@ export function ConfigurePanel({
 
       {/* 4 · Record context */}
       <Section title="Record context" icon="🗂" defaultOpen={false}>
-        <Field label="Context mode">
+        <Field label="Context mode" error={vErrors['context.mode']}>
           <Select
             value={context.mode}
             onChange={v => patch('context', 'mode', v as PaneDefinitionConfig['context']['mode'])}
@@ -383,8 +385,10 @@ export function ConfigurePanel({
 
         {context.mode !== 'None' && (
           <Field
-            label="Table name"
-            hint="Logical name of the record's table — required before a custom page or web resource receives record context"
+            label={context.mode === 'RelatedRecord' ? 'Source table' : 'Table name'}
+            hint={context.mode === 'RelatedRecord'
+              ? 'Table of the form record or grid row that holds the lookup column'
+              : "Logical name of the record's table — required before a custom page or web resource receives record context"}
             error={vErrors['context.entityName']}
         >
             <TablePicker
@@ -392,7 +396,7 @@ export function ConfigurePanel({
               onChange={entityName => onChange(prev =>
                 prev.context.entityName === entityName ? prev : {
                   ...prev,
-                  context: { ...prev.context, entityName, staticRecordId: '' },
+                  context: { ...prev.context, entityName, staticRecordId: '', lookupAttribute: '' },
                 })}
               metadataService={metadataService}
               error={!!vErrors['context.entityName']}
@@ -401,7 +405,20 @@ export function ConfigurePanel({
           </Field>
         )}
 
-        {context.mode !== 'None' &&
+        {context.mode === 'RelatedRecord' && (
+          <Field label="Lookup column" required hint="Lookup on the source record whose value opens in the pane" error={vErrors['context.lookupAttribute']}>
+            <LookupPicker
+              entityName={context.entityName}
+              value={context.lookupAttribute}
+              onChange={v => patch('context', 'lookupAttribute', v)}
+              metadataService={metadataService}
+              error={!!vErrors['context.lookupAttribute']}
+              disabled={readOnly}
+            />
+          </Field>
+        )}
+
+        {context.mode !== 'None' && context.mode !== 'RelatedRecord' &&
           !context.entityName.trim() &&
           (target.pageType === 'custom' || target.pageType === 'webresource') && (
             <Callout type="info" icon="ℹ">

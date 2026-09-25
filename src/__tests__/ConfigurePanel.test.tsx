@@ -484,6 +484,35 @@ describe('ConfigurePanel — record context table name (CR-001)', () => {
   });
 });
 
+describe('ConfigurePanel — related record context', () => {
+  it('lists the source table lookup columns and stores the chosen column', async () => {
+    const listLookupAttributes = vi.fn().mockResolvedValue([
+      { LogicalName: 'primarycontactid', DisplayName: { UserLocalizedLabel: { Label: 'Primary Contact' } } },
+    ]);
+    const onChange = vi.fn();
+    const config: PaneDefinitionConfig = {
+      ...DEFAULT_CONFIG,
+      trigger: { ...DEFAULT_CONFIG.trigger, kind: 'MainGridOnSelect' },
+      context: { ...DEFAULT_CONFIG.context, mode: 'RelatedRecord', entityName: 'account' },
+    };
+    await render(<ConfigurePanel config={config} onChange={onChange} validation={validate(config)}
+      metadataService={makeMetadataService({ listLookupAttributes })} />);
+    await expandSection('Record context');
+    expect(host!.textContent).toContain('Source table');
+    expect(host!.textContent).toContain('Select the lookup column whose record opens in the pane.');
+    expect(listLookupAttributes).toHaveBeenCalledWith('account');
+    const select = host!.querySelector<HTMLSelectElement>('select[aria-label="Lookup column"]')!;
+    expect(Array.from(select.options).map(option => option.textContent)).toContain('Primary Contact (primarycontactid)');
+    await act(async () => {
+      select.value = 'primarycontactid';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    const updater = onChange.mock.calls[onChange.mock.calls.length - 1][0] as
+      (prev: PaneDefinitionConfig) => PaneDefinitionConfig;
+    expect(updater(config).context.lookupAttribute).toBe('primarycontactid');
+  });
+});
+
 describe('ConfigurePanel — form data guidance', () => {
   const entityRecordConfig = {
     ...DEFAULT_CONFIG,
