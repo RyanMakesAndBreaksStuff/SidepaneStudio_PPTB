@@ -6,8 +6,8 @@
     "access": "public"
   },
   "features": {
-  "connectionRequirement": "required",
-  "minAPI": "1.2.0"
+  "minAPI": "1.2.0",
+  "multiConnection": "none"
 },
   "displayName": "Side Pane Studio",
   "description": "Side Pane Studio is a visual builder for Dynamics 365 and Power Platforrm model-driven app side panes",
@@ -38,6 +38,7 @@
     "build": "tsc && vite build",
     "build:runtime": "vite build --config vite.runtime.config.ts",
     "test": "vitest run",
+
     "lint": "eslint .",
     "preview": "vite preview",
     "watch": "vite build --watch",
