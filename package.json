@@ -1,13 +1,13 @@
 {
   "name": "@ryanmakes/side-pane-studio",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "publishConfig": {
     "access": "public"
   },
   "features": {
-  "minAPI": "1.2.0",
-  "multiConnection": "none"
-},
+    "minAPI": "1.2.0",
+    "multiConnection": "none"
+  },
   "displayName": "Side Pane Studio",
   "description": "Side Pane Studio is a visual builder for Dynamics 365 and Power Platforrm model-driven app side panes",
   "icon": "icon/icon.svg",
