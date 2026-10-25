@@ -103,6 +103,14 @@ describe('SidePaneHelper.open — createPane options (contract C4/C3)', () => {
     expect(f.xrm.App.sidePanes.createPane).not.toHaveBeenCalled();
     expect(f.xrm.Navigation.openErrorDialog).toHaveBeenCalled();
   });
+  it('warns and opens nothing when side panes are unavailable', async () => {
+    vi.stubGlobal('Xrm', { Navigation: f.xrm.Navigation });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    await open({ paneId: 'p', pageType: 'custom', name: 'sps_Page' });
+    expect(warn).toHaveBeenCalledWith('SidePaneHelper.open: side panes are not available in this client.');
+    expect(f.xrm.Navigation.openErrorDialog).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
 });
 
 describe('SidePaneHelper — global attachment', () => {
