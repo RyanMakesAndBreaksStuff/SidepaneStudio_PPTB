@@ -74,6 +74,11 @@ const PAGE_TYPE_OPTIONS = [
   { value: 'search',       label: 'Search',          desc: 'Global search results — not documented by navigateTo' },
 ];
 
+const RECORD_MODE_OPTIONS = [
+  { value: 'open',   label: 'Open existing record', desc: 'Opens the record the trigger, Record ID, or clicked tag supplies' },
+  { value: 'create', label: 'Create new record',    desc: 'Opens a blank form; Form data pre-fills its columns' },
+];
+
 const TRIGGER_OPTIONS = [
   { value: 'FormOnLoad',     label: 'Form on load',                 desc: 'Opens when a record form loads' },
   { value: 'FormButton',     label: 'Command bar button (form)',     desc: 'Wired to a button in the form command bar' },
@@ -124,6 +129,7 @@ export function ConfigurePanel({
   }, [onChange]);
 
   const { pane, target, trigger, context, behavior } = config;
+  const creating = target.pageType === 'entityrecord' && target.createNew === true;
   const vErrors: Record<string, string> = Object.fromEntries(
     validation.errors.map(e => [e.field, e.message])
   );
@@ -191,6 +197,11 @@ export function ConfigurePanel({
             })} />
         </Field>}
         {target.pageType === 'entityrecord' && <>
+          <Field label="Record" error={vErrors['target.createNew']}>
+            <ChoiceGroup name="entityRecordMode" options={RECORD_MODE_OPTIONS} value={creating ? 'create' : 'open'}
+              onChange={v => onChange(prev => prev.target.pageType !== 'entityrecord' ? prev : { ...prev, target: { ...prev.target, createNew: v === 'create' } })} />
+          </Field>
+          {vWarnings['target.createNew'] && <Callout type="warn" icon="⚠">{vWarnings['target.createNew']}</Callout>}
           {formXmlService && <Field label="Form" error={vErrors['target.formId']}>
             <FormSelector entityName={target.entityName} onEntityNameChange={() => undefined}
               selectedFormId={target.formId} hideEntityPicker disabled={readOnly}
@@ -220,7 +231,9 @@ export function ConfigurePanel({
               </span>
             </div>
             <Callout type="info" icon="ℹ">
-              This tool always navigates to an existing record (entityId is always emitted), so column default values only apply to create-mode forms this configuration never opens. Only pre-registered custom params take effect here — and any invalid key fails the navigate at runtime.
+              {creating
+                ? 'In create mode these values pre-fill columns on the new record.'
+                : 'Open existing record ignores column default values. Only pre-registered custom params take effect, and any invalid key fails the navigate at runtime. Choose Create new record to pre-fill columns.'}
             </Callout>
           </Field>
         </>}
@@ -377,7 +390,7 @@ export function ConfigurePanel({
           />
         </Field>
 
-        {trigger.kind === 'LookupTagClick' && LOOKUP_TAG_TARGETS.includes(target.pageType) && (
+        {trigger.kind === 'LookupTagClick' && !creating && LOOKUP_TAG_TARGETS.includes(target.pageType) && (
           <Callout type="info" icon="ℹ">
             The clicked tag supplies the record identity for custom pages and entity records, overriding Current record, Static, or None context at runtime. The selected context mode is not changed automatically.
           </Callout>
@@ -426,7 +439,7 @@ export function ConfigurePanel({
             </Callout>
           )}
 
-        {(context.mode === 'Static' ||
+        {!creating && (context.mode === 'Static' ||
           (target.pageType === 'entityrecord' &&
             (context.mode === 'None' || trigger.kind === 'ManualJS') && trigger.kind !== 'LookupTagClick')) && (
           <>

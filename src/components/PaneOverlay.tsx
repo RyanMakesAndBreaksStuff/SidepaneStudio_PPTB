@@ -275,7 +275,7 @@ export const PaneOverlay = React.memo(function PaneOverlay({
         </div>
         {(target.pageType === 'entityrecord' || target.pageType === 'entitylist') && target.entityName && (
           <div style={{ fontSize: 12, color: FL.fg, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {target.entityName}
+            {target.pageType === 'entityrecord' && target.createNew ? `New ${target.entityName}` : target.entityName}
           </div>
         )}
         {target.pageType === 'dashboard' && target.dashboardName && (

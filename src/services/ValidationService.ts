@@ -206,11 +206,23 @@ export function validate(config: PaneDefinitionConfig, accessibleTables?: Set<st
     }
   }
 
+  // Create mode opens a blank form, so nothing may name a record to open.
+  if (config.target.pageType === 'entityrecord' && config.target.createNew) {
+    if (config.trigger.kind === 'LookupTagClick') {
+      errors.push({ field: 'target.createNew', message: 'Create mode opens a blank form, so it cannot open the clicked lookup record. Choose Open existing record or another trigger.' });
+    } else if (config.context.mode === 'RelatedRecord') {
+      errors.push({ field: 'target.createNew', message: 'Create mode opens a blank form, so it cannot open a related record. Choose Open existing record or another context mode.' });
+    } else if (config.context.mode !== 'None') {
+      warnings.push({ field: 'target.createNew', message: 'Create mode ignores record context.' });
+    }
+  }
+
   // Error: entityrecord navigation that resolves its ID from configuration rather than
   // from the trigger. Mirrors buildConfiguredRecordIdExpression in CodeGenerationService —
   // without a normalizable GUID the generated script's only effect is to throw.
   if (
     config.target.pageType === 'entityrecord' &&
+    !config.target.createNew &&
     (config.context.mode === 'Static' || config.context.mode === 'None' || config.trigger.kind === 'ManualJS') &&
     config.trigger.kind !== 'LookupTagClick'
   ) {

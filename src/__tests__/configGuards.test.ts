@@ -3,6 +3,13 @@ import { parseStoredConfig } from '../services/configGuards';
 import { DEFAULT_CONFIG } from '../types/PaneDefinitionConfig';
 
 describe('parseStoredConfig', () => {
+  it('loads entity record create mode and back-fills it as off for older configs', () => {
+    const target = { pageType: 'entityrecord', entityName: 'contact', formId: '', tabName: '', data: '' };
+    const load = (t: object) => parseStoredConfig(JSON.stringify({ ...DEFAULT_CONFIG, target: t }))?.target;
+    expect(load(target)).toEqual({ ...target, createNew: false, createFromCurrent: false });
+    expect(load({ ...target, createNew: true, createFromCurrent: true })).toEqual({ ...target, createNew: true, createFromCurrent: true });
+    expect(load({ ...target, createNew: 'yes', createFromCurrent: 1 })).toEqual({ ...target, createNew: false, createFromCurrent: false });
+  });
   it('rejects malformed JSON', () => {
     expect(parseStoredConfig('{not json')).toBeNull();
   });

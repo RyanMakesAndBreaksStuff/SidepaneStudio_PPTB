@@ -189,6 +189,14 @@ function buildNavigateInput(config: PaneDefinitionConfig): string {
       return `{ ${parts.join(', ')} }`;
     }
     case 'entityrecord': {
+      // Create mode: no entityId, and the configured table wins over the context table.
+      if (target.createNew) {
+        return `{ ${[
+          `pageType: ${JSON.stringify(target.pageType)}`,
+          `entityName: ${JSON.stringify(target.entityName)}`,
+          ...buildTargetParameterParts(target),
+        ].join(', ')} }`;
+      }
       const entityIdExpr = rc.idExpr ?? buildConfiguredRecordIdExpression(config);
       return `{ ${[
         `pageType: ${JSON.stringify(target.pageType)}`,
@@ -450,8 +458,12 @@ export function generateLibraryScript(config: PaneDefinitionConfig): string {
       );
     }
   } else if (target.pageType === 'entityrecord') {
-    optLines.push(`    entityName: ${rc.entityExpr ?? '""'}`);
-    optLines.push(`    entityId: ${libIdExpr ?? buildConfiguredRecordIdExpression(config)}`);
+    if (target.createNew) {
+      optLines.push(`    entityName: ${JSON.stringify(target.entityName)}`);
+    } else {
+      optLines.push(`    entityName: ${rc.entityExpr ?? '""'}`);
+      optLines.push(`    entityId: ${libIdExpr ?? buildConfiguredRecordIdExpression(config)}`);
+    }
   } else if (target.pageType === 'entitylist') {
     optLines.push(`    entityName: ${rc.entityExpr ?? '""'}`);
   } else if (target.pageType === 'dashboard') {
