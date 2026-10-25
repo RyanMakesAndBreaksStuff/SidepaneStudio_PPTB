@@ -9,7 +9,7 @@ import { copyText } from '../services/clipboard';
 
 export interface CodeBlockProps {
   code: string;
-  lang?: 'js' | 'json';
+  lang?: 'js' | 'json' | 'text';
 }
 
 type HlSpan = { start: number; end: number; color: string; italic?: boolean };
@@ -44,6 +44,7 @@ function renderSpans(safe: string, spans: HlSpan[]): string {
 
 function highlight(code: string, lang: string): string {
   const safe = escapeHtml(code);
+  if (lang === 'text') return safe;
   if (lang === 'json') {
     return renderSpans(safe, collectSpans(safe, [
       { re: /&quot;(?:[^&]|&(?!quot;))*&quot;(?=\s*:)/g, color: '#9CDCFE' },
@@ -89,7 +90,7 @@ export function CodeBlock({ code, lang = 'js' }: CodeBlockProps): React.ReactEle
           padding: '6px 12px', background: '#252526', borderBottom: '1px solid #3E3E42',
         }}>
           <span style={{ fontFamily: T.mono, fontSize: 10, color: '#9CDCFE', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.6px' }}>
-            {lang === 'json' ? 'JSON' : 'JavaScript'}
+            {lang === 'json' ? 'JSON' : lang === 'text' ? 'Text' : 'JavaScript'}
           </span>
           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
             <button

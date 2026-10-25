@@ -154,6 +154,13 @@ function buildRecordContext(config: PaneDefinitionConfig): RecordContext {
   return { idExpr, entityExpr: entityName ? JSON.stringify(entityName) : null };
 }
 
+/** Table the script sends with a record: its logical name, '' when the table is only known at runtime, or null when no record is sent. */
+export function recordContextTable(config: PaneDefinitionConfig): string | null {
+  const { idExpr, entityExpr } = buildRecordContext(config);
+  if (!idExpr || !entityExpr) return null;
+  return entityExpr.startsWith('"') ? (JSON.parse(entityExpr) as string) : '';
+}
+
 /** Item 3 — createFromEntity copies mapped columns from the triggering record. Null when no record triggers the script. */
 function buildCreateFromEntityExpr(config: PaneDefinitionConfig): string | null {
   const { target, trigger, context } = config;

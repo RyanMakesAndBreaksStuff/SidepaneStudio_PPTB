@@ -6,6 +6,7 @@ import { theme } from '../theme/tokens';
 import { PaneDefinitionConfig } from '../types/PaneDefinitionConfig';
 import { ValidationResult } from '../services/ValidationService';
 import { generateBasicScript, generateLibraryScript } from '../services/CodeGenerationService';
+import { buildGenerativePagePrompt } from '../services/GenerativePagePromptService';
 import { IXrmContext } from '../adapters/PptbContextAdapter';
 import { CodeBlock } from './CodeBlock';
 import { SummaryCard } from './SummaryCard';
@@ -32,6 +33,7 @@ const TABS = [
   { id: 'library', label: 'Shared Library' },
   { id: 'command', label: 'Command Steps' },
 ];
+const PROMPT_TAB = { id: 'prompt', label: 'Page prompt' };
 
 export const OutputPanel = React.memo(function OutputPanel({ config, xrm, validation }: OutputPanelProps): React.ReactElement {
   const { isDark } = useTheme();
@@ -47,6 +49,10 @@ export const OutputPanel = React.memo(function OutputPanel({ config, xrm, valida
   const basicCode   = useMemo(() => generateBasicScript(config), [config]);
   const libCode     = useMemo(() => generateLibraryScript(config), [config]);
   const rawCode     = useMemo(() => generateRawConfig(config), [config]);
+  const pagePrompt  = useMemo(() => buildGenerativePagePrompt(config), [config]);
+  const tabs = config.target.pageType === 'generative' ? [...TABS, PROMPT_TAB] : TABS;
+  // Changing the target can remove the tab that was open.
+  const currentTab = tabs.some(tab => tab.id === activeTab) ? activeTab : 'basic';
 
   const downloadRuntime = async () => {
     setDownloadError(null);
@@ -89,18 +95,18 @@ export const OutputPanel = React.memo(function OutputPanel({ config, xrm, valida
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       {/* Tab strip */}
       <div style={{ display: 'flex', borderBottom: `1px solid ${T.stroke1}`, padding: '0 6px', background: T.pageBg, flexShrink: 0 }}>
-        {TABS.map(tab => (
+        {tabs.map(tab => (
           <button
             key={tab.id}
             role="tab"
-            aria-selected={activeTab === tab.id}
+            aria-selected={currentTab === tab.id}
             onClick={() => setActiveTab(tab.id)}
             style={{
               display: 'flex', alignItems: 'center', gap: 5,
               padding: '9px 12px 8px', border: 'none', background: 'transparent',
               fontFamily: T.font, fontSize: 12, fontWeight: 500,
-              color: activeTab === tab.id ? T.accent : T.fg3,
-              borderBottom: `2px solid ${activeTab === tab.id ? T.accent : 'transparent'}`,
+              color: currentTab === tab.id ? T.accent : T.fg3,
+              borderBottom: `2px solid ${currentTab === tab.id ? T.accent : 'transparent'}`,
               cursor: 'pointer', whiteSpace: 'nowrap',
               transition: 'color 80ms, border-color 80ms',
             }}
@@ -114,7 +120,7 @@ export const OutputPanel = React.memo(function OutputPanel({ config, xrm, valida
       <div style={{ flex: 1, overflowY: 'auto', padding: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
 
         {/* Basic Script */}
-        {activeTab === 'basic' && (
+        {currentTab === 'basic' && (
           <>
             <SummaryCard
               title="📋 What this script does"
@@ -136,7 +142,7 @@ export const OutputPanel = React.memo(function OutputPanel({ config, xrm, valida
         )}
 
         {/* Shared Library */}
-        {activeTab === 'library' && (
+        {currentTab === 'library' && (
           <>
             <button type="button" onClick={downloadRuntime} disabled={savingRuntime}
               style={{ padding: '8px 12px', alignSelf: 'flex-start', fontFamily: T.font,
@@ -173,8 +179,21 @@ export const OutputPanel = React.memo(function OutputPanel({ config, xrm, valida
         )}
 
         {/* Command Steps */}
-        {activeTab === 'command' && (
+        {currentTab === 'command' && (
           <CommandStepsTab config={config} />
+        )}
+
+        {/* Page prompt — generative targets only */}
+        {currentTab === 'prompt' && (
+          <>
+            <SummaryCard
+              title="✨ Generative page prompt"
+              body="Add this to the page's prompt in the app agent so the page accepts what this script sends. The agent is not deterministic: test the page after it regenerates."
+            />
+            {pagePrompt
+              ? <CodeBlock code={pagePrompt} lang="text" />
+              : <Callout type="info" icon="ℹ">This script sends no input parameters, so the page needs no prompt changes for them.</Callout>}
+          </>
         )}
 
         {/* Advanced expander — Raw Config.

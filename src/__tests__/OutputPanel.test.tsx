@@ -329,4 +329,17 @@ describe('OutputPanel', () => {
     // both it and the raw-config expander's <pre>.
     expect(host?.querySelectorAll('pre').length).toBe(2);
   });
+
+  it('shows the Page prompt tab for a generative target', async () => {
+    const config = { ...DEFAULT_CONFIG, target: { pageType: 'generative' as const, pageId: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee', data: '{"status":"open"}' } };
+    await render(<OutputPanel config={config} xrm={xrmStub()} validation={{ isValid: true, errors: [], warnings: [] }} />);
+    const tab = Array.from(host!.querySelectorAll('[role="tab"]')).find(t => t.textContent === 'Page prompt') as HTMLButtonElement;
+    await act(async () => { tab.click(); });
+    expect(host!.textContent).toContain('accept a data object with the keys status');
+  });
+
+  it('shows no Page prompt tab for other targets', async () => {
+    await render(<OutputPanel config={DEFAULT_CONFIG} xrm={xrmStub()} validation={{ isValid: true, errors: [], warnings: [] }} />);
+    expect(Array.from(host!.querySelectorAll('[role="tab"]')).map(t => t.textContent)).not.toContain('Page prompt');
+  });
 });
