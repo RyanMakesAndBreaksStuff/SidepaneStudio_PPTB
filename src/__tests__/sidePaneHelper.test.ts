@@ -111,6 +111,13 @@ describe('SidePaneHelper.open — createPane options (contract C4/C3)', () => {
     expect(f.xrm.Navigation.openErrorDialog).not.toHaveBeenCalled();
     warn.mockRestore();
   });
+  it('closes the selected, expanded pane when toggleIfOpen is set', async () => {
+    const selected = { paneId: 'p', close: vi.fn() };
+    Object.assign(f.xrm.App.sidePanes, { state: 1, getSelectedPane: vi.fn().mockReturnValue(selected) });
+    await open({ paneId: 'p', pageType: 'custom', name: 'sps_Page', toggleIfOpen: true });
+    expect(selected.close).toHaveBeenCalled();
+    expect(f.pane.navigate).not.toHaveBeenCalled();
+  });
 });
 
 describe('SidePaneHelper — global attachment', () => {

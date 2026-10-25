@@ -12,7 +12,7 @@ export interface PaneConfig {
   hideHeader: boolean;
   isSelected: boolean;
   width: number;
-  /** @deprecated Never consumed by any consumer. Preserved for backward compatibility with stored configs. */
+  /** @deprecated Valid createPane option, deliberately unsupported: a hidden pane has no tab, so users cannot reach it. Kept so stored configs load; never emitted. */
   hidden: boolean;
   alwaysRender: boolean;
   keepBadgeOnSelect: boolean;
@@ -37,6 +37,8 @@ export type TargetConfig =
 export const LOOKUP_TAG_TARGETS: readonly PageType[] = ['custom', 'entityrecord', 'generative'];
 /** Targets that can open the one record a RelatedRecord lookup resolves to. */
 export const RELATED_RECORD_TARGETS: readonly PageType[] = ['custom', 'entityrecord', 'webresource', 'generative'];
+/** Command-bar triggers: a user clicks them, so they may expand the rail, alert, or close their own pane. */
+export const COMMAND_TRIGGERS: readonly TriggerKind[] = ['FormButton', 'MainGridButton', 'SubgridButton'];
 
 export interface TriggerConfig {
   kind: TriggerKind;
@@ -58,6 +60,8 @@ export interface ContextConfig {
 export interface BehaviorConfig {
   expandOnOpen: boolean;
   closeOthers: boolean;
+  /** Command-bar triggers only: close the pane when it is already selected and expanded. */
+  toggleIfOpen: boolean;
 }
 
 export interface PaneDefinitionConfig {
@@ -89,5 +93,5 @@ export const DEFAULT_CONFIG: PaneDefinitionConfig = {
   target: { pageType: 'custom', name: 'sps_SidePaneBuilderPage' },
   trigger: { kind: 'FormButton', functionName: 'openRelatedRecordsPane', namespace: 'YourNamespace', fieldName: '' },
   context: { mode: 'CurrentRecord', entityName: '', staticRecordId: '', lookupAttribute: '', reuseExistingPane: true },
-  behavior: { expandOnOpen: true, closeOthers: false },
+  behavior: { expandOnOpen: true, closeOthers: false, toggleIfOpen: false },
 };

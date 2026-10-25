@@ -31,4 +31,5 @@ export interface SidePaneHelperOptions {
   reuseExistingPane?: boolean;
   expandOnOpen?: boolean;
   closeOthers?: boolean;
+  toggleIfOpen?: boolean;
 }

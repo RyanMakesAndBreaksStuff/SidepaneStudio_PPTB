@@ -73,6 +73,13 @@
         return;
       }
       const sidePanes = xrm.App.sidePanes;
+      if (options.toggleIfOpen) {
+        const selected = sidePanes.getSelectedPane();
+        if (selected && selected.paneId === options.paneId && sidePanes.state === 1) {
+          selected.close();
+          return;
+        }
+      }
       const navInput = buildNavigateInput(options);
       const reuse = options.reuseExistingPane !== false;
       const existing = sidePanes.getPane(options.paneId);

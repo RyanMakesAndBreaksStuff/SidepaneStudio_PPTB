@@ -436,3 +436,17 @@ describe('validate — generative page', () => {
     expect(result.errors).toEqual([]);
   });
 });
+
+describe('validate — close if already open', () => {
+  it.each(['FormOnLoad', 'FormOnChange', 'MainGridOnSelect', 'SubgridOnSelect', 'LookupTagClick', 'ManualJS'] as const)(
+    'blocks %s, which would close its own pane', kind => {
+      const result = validate(cfg({ trigger: { kind, fieldName: 'parentcustomerid' }, context: { mode: 'None' }, behavior: { toggleIfOpen: true } }));
+      expect(result.errors.map(e => e.field)).toContain('behavior.toggleIfOpen');
+    });
+
+  it('warns when the pane has no close button', () => {
+    const result = validate(cfg({ pane: { canClose: false }, behavior: { toggleIfOpen: true } }));
+    expect(result.isValid).toBe(true);
+    expect(result.warnings.map(w => w.field)).toContain('behavior.toggleIfOpen');
+  });
+});
