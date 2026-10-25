@@ -3,6 +3,12 @@ import { parseLookupFieldNames, parseStoredConfig } from '../services/configGuar
 import { DEFAULT_CONFIG } from '../types/PaneDefinitionConfig';
 
 describe('parseStoredConfig', () => {
+  it('round-trips a generative page target and defaults wrong-typed fields', () => {
+    const target = { pageType: 'generative', pageId: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee', data: '{"a":1}' };
+    expect(parseStoredConfig(JSON.stringify({ ...DEFAULT_CONFIG, target }))?.target).toEqual(target);
+    expect(parseStoredConfig(JSON.stringify({ ...DEFAULT_CONFIG, target: { pageType: 'generative', pageId: 7 } }))?.target)
+      .toEqual({ pageType: 'generative', pageId: '', data: '' });
+  });
   it('loads entity record create mode and back-fills it as off for older configs', () => {
     const target = { pageType: 'entityrecord', entityName: 'contact', formId: '', tabName: '', data: '' };
     const load = (t: object) => parseStoredConfig(JSON.stringify({ ...DEFAULT_CONFIG, target: t }))?.target;

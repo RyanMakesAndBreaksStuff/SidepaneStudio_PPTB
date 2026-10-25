@@ -9,8 +9,8 @@ import {
   ContextMode,
 } from '../types/PaneDefinitionConfig';
 
-const PAGE_TYPES: PageType[] = ['custom', 'entityrecord', 'entitylist', 'webresource', 'dashboard', 'search'];
-const TRIGGER_KINDS: TriggerKind[] = ['FormOnLoad', 'FormButton', 'MainGridButton', 'SubgridButton', 'MainGridOnSelect', 'SubgridOnSelect', 'ManualJS', 'FormOnChange', 'LookupTagClick'];
+const PAGE_TYPES: PageType[] = ['custom', 'entityrecord', 'entitylist', 'webresource', 'dashboard', 'search', 'generative'];
+export const TRIGGER_KINDS: TriggerKind[] = ['FormOnLoad', 'FormButton', 'MainGridButton', 'SubgridButton', 'MainGridOnSelect', 'SubgridOnSelect', 'ManualJS', 'FormOnChange', 'LookupTagClick'];
 const CONTEXT_MODES: ContextMode[] = ['CurrentRecord', 'SelectedRow', 'Static', 'RelatedRecord', 'None'];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -111,6 +111,8 @@ export function parseStoredConfig(raw: unknown): PaneDefinitionConfig | null {
       dashboardId: stringOr(target.dashboardId, ''),
       dashboardName: stringOr(target.dashboardName, ''),
     };
+  } else if (target.pageType === 'generative') {
+    normalizedTarget = { pageType: 'generative', pageId: stringOr(target.pageId, ''), data: stringOr(target.data, '') };
   } else {
     normalizedTarget = { pageType: 'search', searchText: stringOr(target.searchText, '') };
   }

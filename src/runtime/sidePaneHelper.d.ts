@@ -1,6 +1,6 @@
 /** C4: generateLibraryScript emits these options; sidepane.runtime.js reads them. */
 export type SidePaneHelperPageType =
-  | 'custom' | 'entityrecord' | 'entitylist' | 'webresource' | 'dashboard' | 'search';
+  | 'custom' | 'entityrecord' | 'entitylist' | 'webresource' | 'dashboard' | 'search' | 'generative';
 
 export interface SidePaneHelperOptions {
   paneId: string;
@@ -14,6 +14,7 @@ export interface SidePaneHelperOptions {
   imageSrc?: string;
   pageType: SidePaneHelperPageType;
   name?: string;
+  pageId?: string;
   webresourceName?: string;
   entityName?: string;
   entityId?: string;

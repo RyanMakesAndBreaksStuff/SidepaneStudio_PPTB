@@ -131,3 +131,22 @@ describe('page parameter contract', () => {
     expect(await navigate(c, true)).toEqual(expected);
   });
 });
+
+describe('generative page contract', () => {
+  const generative = { pageType: 'generative', pageId: `{${otherId}}`, data: '{"status":"open"}' };
+
+  it('sends pageId, the record pair, and data through both outputs', async () => {
+    const c = config(generative);
+    c.context.entityName = 'account';
+    const expected = { pageType: 'generative', pageId: otherId, entityName: 'account', recordId: id, data: { status: 'open' } };
+    expect(await navigate(c, false)).toEqual(expected);
+    expect(await navigate(c, true)).toEqual(expected);
+  });
+
+  it('sends neither record field when the table is unknown', async () => {
+    const c = config({ ...generative, data: '' });
+    const expected = { pageType: 'generative', pageId: otherId };
+    expect(await navigate(c, false)).toEqual(expected);
+    expect(await navigate(c, true)).toEqual(expected);
+  });
+});

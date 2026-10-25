@@ -302,6 +302,7 @@ function PreviewMeta({ config }: { config: PaneDefinitionConfig }): React.ReactE
     if (target.pageType === 'entitylist' && target.viewId) rows.push(['View', target.viewId]);
     if (target.pageType === 'entityrecord' && target.formId) rows.push(['Form', target.formId]);
     if (target.pageType === 'entityrecord' && target.tabName.trim()) rows.push(['Tab', target.tabName.trim()]);
+    if (target.pageType === 'generative' && target.pageId.trim()) rows.push(['Page ID', target.pageId.trim()]);
     return rows;
   }, [config.pane.width, config.pane.hideHeader, config.pane.canClose, config.target]);
 

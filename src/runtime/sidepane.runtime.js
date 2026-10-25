@@ -50,6 +50,14 @@
       case 'search':
         if (o.searchText) nav.searchText = o.searchText;
         break;
+      case 'generative':
+        nav.pageId = o.pageId;
+        if (o.entityName && o.recordId) {
+          nav.entityName = o.entityName;
+          nav.recordId = o.recordId;
+        }
+        if (o.data !== undefined) nav.data = o.data;
+        break;
     }
     return nav;
   }

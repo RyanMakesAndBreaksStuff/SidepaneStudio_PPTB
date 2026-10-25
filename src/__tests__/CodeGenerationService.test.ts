@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { generateBasicScript, generateLibraryScript } from '../services/CodeGenerationService';
 import { cfg } from './testHelpers';
+import { TRIGGER_KINDS } from '../services/configGuards';
 import type { PaneDefinitionConfig, TriggerKind } from '../types/PaneDefinitionConfig';
 
 function isValidJS(code: string): boolean {
@@ -963,5 +964,33 @@ describe('lookup tag registrar', () => {
     expect(handlers.get('primarycontactid')).toContain(ns.openTag);
     ns.openTag(tagClick('{C1}', 'contact'));
     expect(open.mock.calls[0][0]).toMatchObject({ entityName: 'contact', entityId: '{C1}' });
+  });
+});
+
+describe('generative page target', () => {
+  const generative = (kind: TriggerKind) => cfg({
+    pane: { paneId: 'p' },
+    trigger: { kind, namespace: 'TestNs', functionName: 'open', fieldName: 'parentcustomerid' },
+    target: { pageType: 'generative', pageId: '{AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE}', data: '' },
+    context: { mode: kind === 'ManualJS' ? 'None' : 'CurrentRecord', entityName: 'account' },
+  });
+
+  for (const kind of TRIGGER_KINDS) {
+    for (const [label, generate] of [['Basic', generateBasicScript], ['Library', generateLibraryScript]] as const) {
+      it(`${kind} ${label} output is valid JS with the normalized page ID`, () => {
+        const code = generate(generative(kind));
+        expect(isValidJS(code)).toBe(true);
+        expect(code).toContain('pageId: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"');
+      });
+    }
+  }
+
+  it('strips braces from the clicked tag ID before it reaches the page', async () => {
+    const pane = { navigate: vi.fn().mockResolvedValue(undefined) };
+    const xrm = { App: { sidePanes: { state: 0, getPane: vi.fn(), createPane: vi.fn().mockResolvedValue(pane), getAllPanes: vi.fn().mockReturnValue([]) } },
+      Navigation: { openErrorDialog: vi.fn(), openAlertDialog: vi.fn() } };
+    const ns = new Function('Xrm', `${generateBasicScript(generative('LookupTagClick'))}\nreturn TestNs;`)(xrm) as Record<string, (arg: unknown) => Promise<void>>;
+    await ns.open({ getEventArgs: () => ({ preventDefault: vi.fn(), getTagValue: () => ({ id: '{C1}', entityType: 'contact' }) }) });
+    expect(pane.navigate).toHaveBeenCalledWith({ pageType: 'generative', pageId: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee', entityName: 'contact', recordId: 'C1' });
   });
 });

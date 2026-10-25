@@ -37,6 +37,7 @@ const PAGE_TYPE_LABELS: Record<PageType, string> = {
   custom: 'Custom Page',
   dashboard: 'Dashboard',
   search: 'Search',
+  generative: 'Generative Page',
 };
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -186,6 +187,27 @@ function SearchSkeleton(): React.ReactElement {
   );
 }
 
+function GenerativePageSkeleton(): React.ReactElement {
+  // Agent-built page: KPI cards over a bar chart.
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
+        {[0, 1, 2].map(i => (
+          <div key={i} style={{ padding: 6, background: '#FFFFFF', border: `1px solid ${FL.stroke}`, borderRadius: 4, display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <Bar w={60} h={5} />
+            <Bar w={40} h={10} />
+          </div>
+        ))}
+      </div>
+      <div style={{ height: 48, display: 'flex', alignItems: 'flex-end', gap: 4, padding: 6, border: `1px solid ${FL.stroke}`, borderRadius: 4 }}>
+        {[20, 35, 28, 42, 30, 38].map((h, i) => (
+          <div key={i} style={{ flex: 1, height: h, background: FL.stroke, borderRadius: 1 }} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function PaneContentSkeleton({ target }: { target: TargetConfig }): React.ReactElement {
   switch (target.pageType) {
     case 'entityrecord': return <EntityRecordSkeleton />;
@@ -194,6 +216,7 @@ function PaneContentSkeleton({ target }: { target: TargetConfig }): React.ReactE
     case 'webresource':  return <WebResourceSkeleton name={target.name} />;
     case 'dashboard':    return <DashboardSkeleton />;
     case 'search':       return <SearchSkeleton />;
+    case 'generative':   return <GenerativePageSkeleton />;
   }
 }
 
@@ -286,6 +309,11 @@ export const PaneOverlay = React.memo(function PaneOverlay({
         {target.pageType === 'search' && target.searchText && (
           <div style={{ fontSize: 12, color: FL.fg, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             Search: {target.searchText}
+          </div>
+        )}
+        {target.pageType === 'generative' && target.pageId.trim() && (
+          <div title={target.pageId} style={{ fontSize: 12, color: FL.fg, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            …{target.pageId.trim().slice(-8)}
           </div>
         )}
         {record && (
