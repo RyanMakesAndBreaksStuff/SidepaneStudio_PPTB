@@ -28,6 +28,11 @@ export type TargetConfig =
   | { pageType: 'dashboard';    dashboardId: string; dashboardName: string }
   | { pageType: 'search';       searchText: string };
 
+/** Targets whose record context comes from the clicked lookup tag (tag.id, tag.entityType). */
+export const LOOKUP_TAG_TARGETS: readonly PageType[] = ['custom', 'entityrecord'];
+/** Targets that can open the one record a RelatedRecord lookup resolves to. */
+export const RELATED_RECORD_TARGETS: readonly PageType[] = ['custom', 'entityrecord', 'webresource'];
+
 export interface TriggerConfig {
   kind: TriggerKind;
   functionName: string;

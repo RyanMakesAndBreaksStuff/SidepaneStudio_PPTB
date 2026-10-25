@@ -1,4 +1,4 @@
-import { PaneDefinitionConfig, TriggerKind, DEFAULT_CONFIG } from '../types/PaneDefinitionConfig';
+import { PaneDefinitionConfig, TriggerKind, DEFAULT_CONFIG, LOOKUP_TAG_TARGETS } from '../types/PaneDefinitionConfig';
 import { normalizeGuid } from './odataGuards';
 import { normalizeConfigWidth } from './configGuards';
 
@@ -91,8 +91,7 @@ function buildRecordContext(config: PaneDefinitionConfig): RecordContext {
   const entityName = context.entityName || targetEntityName || '';
   const form = formObjectExpr(trigger.kind);
 
-  if (trigger.kind === 'LookupTagClick' &&
-      (target.pageType === 'custom' || target.pageType === 'entityrecord')) {
+  if (trigger.kind === 'LookupTagClick' && LOOKUP_TAG_TARGETS.includes(target.pageType)) {
     return { idExpr: 'tag.id', entityExpr: 'tag.entityType' };
   }
 

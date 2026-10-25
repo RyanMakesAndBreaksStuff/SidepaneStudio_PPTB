@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { PaneConfig, TargetConfig } from '../types/PaneDefinitionConfig';
+import { PageType, PaneConfig, TargetConfig } from '../types/PaneDefinitionConfig';
 import { ValidationResult } from '../services/ValidationService';
 import type { PreviewRecord } from '../services/GridViewModel';
 import { getPreviewPaneWidth, getSafePreviewImageSrc } from './previewHelpers';
@@ -30,7 +30,7 @@ interface PaneOverlayProps {
   layout?: 'inline' | 'stacked';
 }
 
-const PAGE_TYPE_LABELS: Record<string, string> = {
+const PAGE_TYPE_LABELS: Record<PageType, string> = {
   entityrecord: 'Entity Record',
   entitylist: 'Entity List',
   webresource: 'Web Resource',
@@ -194,7 +194,6 @@ function PaneContentSkeleton({ target }: { target: TargetConfig }): React.ReactE
     case 'webresource':  return <WebResourceSkeleton name={target.name} />;
     case 'dashboard':    return <DashboardSkeleton />;
     case 'search':       return <SearchSkeleton />;
-    default:             return <EntityRecordSkeleton />;
   }
 }
 
@@ -272,7 +271,7 @@ export const PaneOverlay = React.memo(function PaneOverlay({
       {/* Content */}
       <div style={{ flex: 1, padding: '12px 10px', display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0, overflow: 'hidden' }}>
         <div style={{ fontSize: 10, color: FL.fgMuted, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-          {PAGE_TYPE_LABELS[target.pageType] ?? target.pageType}
+          {PAGE_TYPE_LABELS[target.pageType]}
         </div>
         {(target.pageType === 'entityrecord' || target.pageType === 'entitylist') && target.entityName && (
           <div style={{ fontSize: 12, color: FL.fg, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>

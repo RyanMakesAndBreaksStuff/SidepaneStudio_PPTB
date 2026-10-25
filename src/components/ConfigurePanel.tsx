@@ -3,7 +3,7 @@ import * as React from 'react';
 import { useCallback } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 import { theme } from '../theme/tokens';
-import { PaneDefinitionConfig, TargetConfig, PageType } from '../types/PaneDefinitionConfig';
+import { PaneDefinitionConfig, TargetConfig, PageType, LOOKUP_TAG_TARGETS } from '../types/PaneDefinitionConfig';
 import { MetadataFilterConfig } from '../types/MetadataFilterConfig';
 import { ValidationResult } from '../services/ValidationService';
 import { MetadataService } from '../services/MetadataService';
@@ -377,7 +377,7 @@ export function ConfigurePanel({
           />
         </Field>
 
-        {trigger.kind === 'LookupTagClick' && (target.pageType === 'custom' || target.pageType === 'entityrecord') && (
+        {trigger.kind === 'LookupTagClick' && LOOKUP_TAG_TARGETS.includes(target.pageType) && (
           <Callout type="info" icon="ℹ">
             The clicked tag supplies the record identity for custom pages and entity records, overriding Current record, Static, or None context at runtime. The selected context mode is not changed automatically.
           </Callout>
