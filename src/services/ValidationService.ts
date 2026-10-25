@@ -155,7 +155,7 @@ export function validate(config: PaneDefinitionConfig, accessibleTables?: Set<st
     } else if (!RELATED_RECORD_TARGETS.includes(config.target.pageType)) {
       errors.push({
         field: 'context.mode',
-        message: 'Related record context opens one record. Choose a custom page, table record, or web resource target.',
+        message: 'Related record context opens one record. Choose a custom page, table record, web resource, or generative page target.',
       });
     }
     if (!isValidLogicalName(config.context.entityName.trim())) {
@@ -203,6 +203,27 @@ export function validate(config: PaneDefinitionConfig, accessibleTables?: Set<st
       parseFormData(config.target.data);
     } catch {
       errors.push({ field: 'target.data', message: 'Form data must be a JSON object.' });
+    }
+  }
+  if (config.target.pageType === 'generative') {
+    if (!normalizeGuid(config.target.pageId)) {
+      errors.push({ field: 'target.pageId', message: 'Page ID must be the GUID of a generative page.' });
+    }
+    try {
+      parseFormData(config.target.data);
+    } catch {
+      errors.push({ field: 'target.data', message: 'Page data must be a JSON object.' });
+    }
+    // The page receives recordId only together with entityName.
+    if (config.context.mode === 'Static') {
+      if (!normalizeGuid(config.context.staticRecordId)) {
+        errors.push({ field: 'context.staticRecordId', message: 'A valid record ID (GUID) is required for Static record context.' });
+      } else if (!config.context.entityName.trim()) {
+        errors.push({ field: 'context.entityName', message: "Select the record's table: a generative page receives recordId only together with entityName." });
+      }
+    }
+    if (config.trigger.kind === 'LookupTagClick' || config.context.mode !== 'None' || config.target.data.trim()) {
+      warnings.push({ field: 'target.pageType', message: 'recordId, entityName and data reach the page only if its prompt sets it up to accept input parameters.' });
     }
   }
 

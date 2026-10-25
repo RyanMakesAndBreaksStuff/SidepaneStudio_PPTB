@@ -36,7 +36,7 @@ export type TargetConfig =
 /** Targets whose record context comes from the clicked lookup tag (tag.id, tag.entityType). */
 export const LOOKUP_TAG_TARGETS: readonly PageType[] = ['custom', 'entityrecord', 'generative'];
 /** Targets that can open the one record a RelatedRecord lookup resolves to. */
-export const RELATED_RECORD_TARGETS: readonly PageType[] = ['custom', 'entityrecord', 'webresource'];
+export const RELATED_RECORD_TARGETS: readonly PageType[] = ['custom', 'entityrecord', 'webresource', 'generative'];
 
 export interface TriggerConfig {
   kind: TriggerKind;
