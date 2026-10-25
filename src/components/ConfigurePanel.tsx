@@ -202,6 +202,13 @@ export function ConfigurePanel({
               onChange={v => onChange(prev => prev.target.pageType !== 'entityrecord' ? prev : { ...prev, target: { ...prev.target, createNew: v === 'create' } })} />
           </Field>
           {vWarnings['target.createNew'] && <Callout type="warn" icon="⚠">{vWarnings['target.createNew']}</Callout>}
+          {creating && trigger.kind !== 'ManualJS' && trigger.kind !== 'LookupTagClick' && <>
+            <Toggle label="Pre-fill from current record" desc="Copies mapped columns from the form record or selected row (createFromEntity)"
+              checked={target.createFromCurrent === true}
+              onChange={v => onChange(prev => prev.target.pageType !== 'entityrecord' ? prev : { ...prev, target: { ...prev.target, createFromCurrent: v } })} />
+            {vErrors['target.createFromCurrent'] && <Callout type="err" icon="✕">{vErrors['target.createFromCurrent']}</Callout>}
+            {vWarnings['target.createFromCurrent'] && <Callout type="warn" icon="⚠">{vWarnings['target.createFromCurrent']}</Callout>}
+          </>}
           {formXmlService && <Field label="Form" error={vErrors['target.formId']}>
             <FormSelector entityName={target.entityName} onEntityNameChange={() => undefined}
               selectedFormId={target.formId} hideEntityPicker disabled={readOnly}

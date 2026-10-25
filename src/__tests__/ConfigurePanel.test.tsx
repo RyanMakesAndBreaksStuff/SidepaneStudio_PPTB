@@ -570,4 +570,23 @@ describe('ConfigurePanel — entity record create mode', () => {
     expect(findInputByPlaceholder('00000000-0000-0000-0000-000000000000')).toBeUndefined();
     expect(host!.textContent).toContain('In create mode these values pre-fill columns on the new record.');
   });
+
+  const createRecord: PaneDefinitionConfig = {
+    ...openRecord,
+    target: { pageType: 'entityrecord', entityName: 'contact', formId: '', tabName: '', data: '', createNew: true },
+  };
+
+  it('stores Pre-fill from current record for a form trigger', async () => {
+    let current = createRecord;
+    await renderPanel({ config: current, onChange: updater => { current = updater(current); } });
+    await expandSection('What opens in the pane');
+    await act(async () => { findToggleByLabel('Pre-fill from current record')!.click(); });
+    expect(current.target).toMatchObject({ createFromCurrent: true });
+  });
+
+  it('hides Pre-fill from current record for a console script', async () => {
+    await renderPanel({ config: { ...createRecord, trigger: { ...DEFAULT_CONFIG.trigger, kind: 'ManualJS' } }, onChange: vi.fn() });
+    await expandSection('What opens in the pane');
+    expect(findToggleByLabel('Pre-fill from current record')).toBeUndefined();
+  });
 });

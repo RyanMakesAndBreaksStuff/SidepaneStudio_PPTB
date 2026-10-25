@@ -35,6 +35,7 @@
         if (o.formId) nav.formId = o.formId;
         if (o.tabName) nav.tabName = o.tabName;
         if (o.data !== undefined) nav.data = o.data;
+        if (o.createFromEntity) nav.createFromEntity = o.createFromEntity;
         break;
       case 'entitylist':
         nav.entityName = o.entityName;

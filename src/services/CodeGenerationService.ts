@@ -128,6 +128,17 @@ function buildRecordContext(config: PaneDefinitionConfig): RecordContext {
   return { idExpr, entityExpr: entityName ? JSON.stringify(entityName) : null };
 }
 
+/** Item 3 — createFromEntity copies mapped columns from the triggering record. Null when no record triggers the script. */
+function buildCreateFromEntityExpr(config: PaneDefinitionConfig): string | null {
+  const { target, trigger, context } = config;
+  if (target.pageType !== 'entityrecord' || !target.createNew || !target.createFromCurrent) return null;
+  const form = formObjectExpr(trigger.kind);
+  if (form) return `{ entityType: ${form}.data.entity.getEntityName(), id: ${form}.data.entity.getId() }`;
+  return GRID_KINDS.includes(trigger.kind)
+    ? `{ entityType: ${JSON.stringify(context.entityName.trim())}, id: selectedRecordId }`
+    : null;
+}
+
 /**
  * RelatedRecord — declares `relatedRecord` ({ id, entityType }) from the source record's lookup,
  * or returns before any pane opens when the lookup is empty. Form triggers read the form value
@@ -191,10 +202,12 @@ function buildNavigateInput(config: PaneDefinitionConfig): string {
     case 'entityrecord': {
       // Create mode: no entityId, and the configured table wins over the context table.
       if (target.createNew) {
+        const createFrom = buildCreateFromEntityExpr(config);
         return `{ ${[
           `pageType: ${JSON.stringify(target.pageType)}`,
           `entityName: ${JSON.stringify(target.entityName)}`,
           ...buildTargetParameterParts(target),
+          ...(createFrom ? [`createFromEntity: ${createFrom}`] : []),
         ].join(', ')} }`;
       }
       const entityIdExpr = rc.idExpr ?? buildConfiguredRecordIdExpression(config);
@@ -460,6 +473,8 @@ export function generateLibraryScript(config: PaneDefinitionConfig): string {
   } else if (target.pageType === 'entityrecord') {
     if (target.createNew) {
       optLines.push(`    entityName: ${JSON.stringify(target.entityName)}`);
+      const createFrom = buildCreateFromEntityExpr(config);
+      if (createFrom) optLines.push(`    createFromEntity: ${createFrom.replace(/formContext./g, 'executionContext.getFormContext().')}`);
     } else {
       optLines.push(`    entityName: ${rc.entityExpr ?? '""'}`);
       optLines.push(`    entityId: ${libIdExpr ?? buildConfiguredRecordIdExpression(config)}`);

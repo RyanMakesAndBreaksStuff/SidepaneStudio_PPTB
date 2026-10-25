@@ -868,3 +868,38 @@ describe('entityrecord create mode', () => {
     expect(code).not.toContain('"account"');
   });
 });
+
+describe('entityrecord create mode — createFromEntity', () => {
+  const prefill = cfg({
+    pane: { paneId: 'p' },
+    trigger: { kind: 'FormButton', namespace: 'TestNs', functionName: 'open' },
+    target: { pageType: 'entityrecord', entityName: 'contact', formId: '', tabName: '', data: '', createNew: true, createFromCurrent: true },
+    context: { mode: 'CurrentRecord', entityName: 'account' },
+  });
+  const formRecord = { data: { entity: { getEntityName: () => 'account', getId: () => '{A1}' } } };
+
+  it('passes the form record as createFromEntity in Basic output', async () => {
+    const pane = { navigate: vi.fn().mockResolvedValue(undefined) };
+    const xrm = { App: { sidePanes: { state: 0, getPane: vi.fn(), createPane: vi.fn().mockResolvedValue(pane), getAllPanes: vi.fn().mockReturnValue([]) } },
+      Navigation: { openErrorDialog: vi.fn(), openAlertDialog: vi.fn() } };
+    const open = new Function('window', 'Xrm', `${generateBasicScript(prefill)}
+return TestNs.open;`)({}, xrm) as (arg: unknown) => void;
+    open(formRecord);
+    await vi.waitFor(() => expect(pane.navigate).toHaveBeenCalled());
+    expect(pane.navigate).toHaveBeenCalledWith({ pageType: 'entityrecord', entityName: 'contact', createFromEntity: { entityType: 'account', id: '{A1}' } });
+  });
+
+  it('passes the form record as createFromEntity in Shared Library output', () => {
+    const open = vi.fn();
+    const onLoad = { ...prefill, trigger: { ...prefill.trigger, kind: 'FormOnLoad' as const } };
+    const handler = new Function('Xrm', 'SidePaneHelper', `${generateLibraryScript(onLoad)}
+return TestNs.open;`)({}, { open }) as (arg: unknown) => void;
+    handler({ getFormContext: () => formRecord });
+    expect(open.mock.calls[0][0]).toMatchObject({ entityName: 'contact', createFromEntity: { entityType: 'account', id: '{A1}' } });
+    expect(open.mock.calls[0][0]).not.toHaveProperty('entityId');
+  });
+
+  it('ignores pre-fill on a console script, which has no current record', () => {
+    expect(generateBasicScript({ ...prefill, trigger: { ...prefill.trigger, kind: 'ManualJS' } })).not.toContain('createFromEntity');
+  });
+});

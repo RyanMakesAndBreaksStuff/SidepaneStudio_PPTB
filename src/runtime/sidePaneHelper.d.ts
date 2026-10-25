@@ -25,6 +25,7 @@ export interface SidePaneHelperOptions {
   formId?: string;
   tabName?: string;
   data?: string | Record<string, unknown>;
+  createFromEntity?: { entityType: string; id: string; name?: string };
   badge?: number;
   reuseExistingPane?: boolean;
   expandOnOpen?: boolean;

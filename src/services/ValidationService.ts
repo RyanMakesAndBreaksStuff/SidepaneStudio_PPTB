@@ -212,8 +212,16 @@ export function validate(config: PaneDefinitionConfig, accessibleTables?: Set<st
       errors.push({ field: 'target.createNew', message: 'Create mode opens a blank form, so it cannot open the clicked lookup record. Choose Open existing record or another trigger.' });
     } else if (config.context.mode === 'RelatedRecord') {
       errors.push({ field: 'target.createNew', message: 'Create mode opens a blank form, so it cannot open a related record. Choose Open existing record or another context mode.' });
-    } else if (config.context.mode !== 'None') {
+    } else if (config.context.mode !== 'None' && !config.target.createFromCurrent) {
       warnings.push({ field: 'target.createNew', message: 'Create mode ignores record context.' });
+    }
+    // The generator ignores pre-fill on console and lookup triggers, and the panel hides it there.
+    if (config.target.createFromCurrent && config.trigger.kind !== 'ManualJS' && config.trigger.kind !== 'LookupTagClick') {
+      if (GRID_TRIGGERS.includes(config.trigger.kind) && !isValidLogicalName(config.context.entityName.trim())) {
+        errors.push({ field: 'target.createFromCurrent', message: "Pre-fill from a grid row needs the row's table. Set Context mode to Selected row and choose the table." });
+      } else {
+        warnings.push({ field: 'target.createFromCurrent', message: 'Pre-fill copies only the columns that a relationship mapping between the two tables defines.' });
+      }
     }
   }
 
