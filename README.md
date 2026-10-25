@@ -11,6 +11,7 @@ command bar button, field change, or manual script.
 Side panes can target:
 
 - Custom pages
+- Generative pages built by the app agent in the app designer
 - Dataverse table records
 - Dataverse table lists
 - HTML or JavaScript web resources
@@ -22,10 +23,12 @@ The generated configuration includes pane presentation, target content,
 trigger wiring, context handling, and behavior options such as pane reuse,
 expansion, and closing other panes.
 
-Table-record targets support a form, tab, and JSON form data. Table-list
-targets support system and personal views. Metadata pickers include custom
+Table-record targets support a form, tab, and JSON form data, and can open a
+blank form in create mode, optionally pre-filled from the triggering record.
+Table-list targets support system and personal views. Generative-page targets
+take a page ID and optional JSON page data. Metadata pickers include custom
 table quick filters, and record context can come from the current record,
-a selected row, a static record ID, or a clicked lookup tag.
+a selected row, a static record ID, a related record, or a clicked lookup tag.
 
 ## Preview and Generate
 
@@ -48,6 +51,21 @@ a manual-copy fallback.
 
 Previews do not open a live side pane inside PPTB. Publish and test the
 generated script in the target model-driven app before shipping it.
+
+## Not supported by design
+
+Side Pane Studio generates side-pane scripts only. It does not generate
+`Xrm.Navigation.navigateTo` dialog or inline navigation.
+
+- The `createPane` option `hidden`: a hidden pane has no tab, so users cannot
+  reach it.
+- Collapsing the side pane rail. Scripts only expand it when they open a pane.
+- The `entityrecord` page inputs `relationship`, `processId`,
+  `processInstanceId`, `selectedStageId`, `isCrossEntityNavigate`, and
+  `isOfflineSyncError`.
+- Clients without side panes. Side panes run in the web browser only and not
+  on-premises; there, generated scripts exit with a console warning, or an
+  alert for command bar buttons.
 
 ## Usage Guide
 

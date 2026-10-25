@@ -1,5 +1,30 @@
 # Change Log
 
+## Unreleased
+
+### Added
+
+- Generative page target: page ID, optional JSON page data, record context
+  sent as `entityName` + `recordId` (braces stripped), Shared Library support,
+  a generative-page preview, and an Output **Page prompt** tab that writes the
+  setup prompt for the page's inputs.
+- Table record **Create new record** mode with Form data pre-fill and optional
+  **Pre-fill from current record** (`createFromEntity`).
+- Lookup tag click generates a form OnLoad registration function for one or
+  more comma-separated lookup controls; repeat OnLoad runs do not register
+  twice. Command Steps list the corrected wiring.
+- **Close if already open** for command bar buttons.
+
+### Changed
+
+- Generated scripts and the runtime exit when side panes are unavailable
+  (native players, on-premises): command buttons alert, other triggers warn.
+- The shared runtime is only the hand-written
+  `src/runtime/sidepane.runtime.js`; the `build:runtime` script and the
+  TypeScript copy are removed.
+- Documented unsupported options: `createPane.hidden`, collapsing the rail,
+  six `entityrecord` page inputs, and `navigateTo` dialogs.
+
 ## v1.1.1
 
 ### Added

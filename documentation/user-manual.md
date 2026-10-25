@@ -100,11 +100,12 @@ Expected output: no red validation callout on **Basic Script**. The script block
 
 - `YOUR_CUSTOM_PAGE` is the logical name from the solution, for example `contoso_relatedrecords`. An empty name cannot generate a usable script.
 - Other content types replace these fields. Use them when the pane should show Dataverse data or another host page:
-  - **Table record** — a record form. Optional form id, tab name, and a JSON object in **Form data**.
+  - **Table record** — a record form. Choose **Open existing record** (the trigger or **Record ID** supplies the record) or **Create new record** (a blank form; **Form data** pre-fills its columns, and **Pre-fill from current record** copies mapped columns from the form record or selected row). Optional form id and tab name.
   - **Table list** — a view. Optional view and view type (`savedquery` or `userquery`).
   - **Web resource** — an HTML or JavaScript web resource. The page inside the pane cannot use `Xrm` or `parent.Xrm`.
   - **Dashboard** — a system or personal dashboard you pick from the environment.
   - **Search** — global search, with optional search text. The studio warns that search is not a documented `navigateTo` page type.
+  - **Generative page** — a page the app agent built in the app designer. Paste its **Page ID**: in the app designer, select the page; the properties pane shows the ID in the **Generative page** field. Optional **Page data** is a JSON object. The page receives `entityName`, `recordId`, and `data` only if its prompt sets it up to accept input parameters; **Output → Page prompt** writes that wording. To show the form's own record, you can instead add the generative page to the form as a component, which passes `recordId` automatically. Microsoft does not say whether the page ID stays the same after a solution import, so check it after you import.
 
 **Verification**:
 
@@ -164,7 +165,7 @@ Expected output: **Output** does not report `Pane width must be between 300 and 
 | Row select (subgrid)         | One row is selected in a subgrid              | Power Apps grid control |
 | Console / Manual             | You paste the script into the browser console | No namespace field      |
 | Field on change              | A form field changes                          | **Field name**          |
-| Lookup tag click             | A lookup tag is clicked                       | **Lookup control name** |
+| Lookup tag click             | A lookup tag is clicked                       | **Lookup control names** (comma-separated) |
 
 **Verification**:
 
@@ -191,7 +192,7 @@ Expected output: **Basic Script** is still visible, and there is no `Pane ID is 
 - **Static record ID** embeds a GUID. That GUID belongs to one environment. Reconfigure it after you import the setup somewhere else.
 - **None — pane opens independently** sends no record.
 - **Reuse open pane** navigates the existing pane to the new page and then selects it. Turning it off closes and recreates the pane when it is already open.
-- **Lookup tag click** is special: for a custom page or table record, the clicked tag supplies `entityType` and `id` at runtime. The context mode you picked stays selected in the form, and the tag identity wins when the script runs.
+- **Lookup tag click** is special: for a custom page, table record, or generative page, the clicked tag supplies `entityType` and `id` at runtime. The context mode you picked stays selected in the form, and the tag identity wins when the script runs.
 
 **Verification**:
 
@@ -209,9 +210,10 @@ Expected output: **Basic Script** remains available. Context errors, if any, nam
 2. Leave **Open in foreground (isSelected)** on.
 3. Leave **Expand pane on open** on.
 4. Leave **Close other side panes** off for this first pane.
-5. Leave **Initial badge value** at `0`.
-6. Return to the center preview. Stay on **Mock**.
-7. If you configured a table, you can also open **Form** to preview with environment metadata. **Grid** appears when the target is a table list.
+5. Leave **Close if already open** off. Turn it on when a command bar button should also close the pane it opened.
+6. Leave **Initial badge value** at `0`.
+7. Return to the center preview. Stay on **Mock**.
+8. If you configured a table, you can also open **Form** to preview with environment metadata. **Grid** appears when the target is a table list.
 
 **Explanation**:
 
@@ -285,6 +287,15 @@ Expected output: the clipboard holds the full Basic Script, and Command Steps sh
 Click the new command. The side pane opens with your title and your custom page.
 
 Expected output: one pane, about the width you set, titled with your pane title. A second click reuses that pane. If the button does nothing, compare the published function name with Command Steps before you change the script.
+
+## Not supported by design
+
+Side Pane Studio generates side-pane scripts only. It does not generate `Xrm.Navigation.navigateTo` dialog or inline navigation.
+
+- The `createPane` option `hidden`: a hidden pane has no tab, so users cannot reach it. Stored configurations keep the value; scripts never emit it.
+- Collapsing the side pane rail. Scripts only expand it when they open a pane.
+- The `entityrecord` page inputs `relationship`, `processId`, `processInstanceId`, `selectedStageId`, `isCrossEntityNavigate`, and `isOfflineSyncError`. **Create new record** with **Pre-fill from current record** covers `createFromEntity`.
+- Clients without side panes. Side panes run in the web browser only and not on-premises. There, generated scripts exit: command bar buttons show `Side panes are not available in this client.`, and other triggers log it to the console.
 
 ## Troubleshooting
 
@@ -421,7 +432,7 @@ Full error message:
 A valid record ID (GUID) is required — this trigger and context supply no record at runtime.
 ```
 
-Cause: the target is **Table record**, and the trigger or context does not supply a record. That happens for **Static record ID**, **None**, or **Console / Manual** when **Record ID** is empty or is not a GUID. **Lookup tag click** is the exception: the tag carries the id.
+Cause: the target is **Table record**, and the trigger or context does not supply a record. That happens for **Static record ID**, **None**, or **Console / Manual** when **Record ID** is empty or is not a GUID. **Lookup tag click** is the exception: the tag carries the id. **Create new record** needs no record ID.
 
 Solution:
 
@@ -482,15 +493,27 @@ Recommended resources:
 
 **Direction 2: Lookup tag click** | Difficulty: Intermediate
 
-**Lookup tag click** cancels the lookup’s default navigation and opens the pane for the tag that was clicked. Set **Lookup control name** to the control logical name, such as `parentaccountid`. Put the generated script in a web resource, then register it from the form **OnLoad** handler. The generated script includes the registration line:
+**Lookup tag click** cancels the lookup’s default navigation and opens the pane for the tag that was clicked. Set **Lookup control names** to one or more control logical names separated by commas, such as `parentaccountid, primarycontactid`. The script adds a registration function named `register` plus the function name with its first letter capitalized:
 
 ```javascript
-formContext
-  .getControl("parentaccountid")
-  .addOnLookupTagClick(Contoso.openRelatedRecordsPane);
+Contoso.registerOpenRelatedRecordsPane = function(executionContext) {
+  var formContext = executionContext.getFormContext();
+  ["parentaccountid","primarycontactid"].forEach(function(name) {
+    var control = formContext.getControl(name);
+    if (!control) { console.warn("Contoso.registerOpenRelatedRecordsPane: no lookup control " + name); return; }
+    control.removeOnLookupTagClick(Contoso.openRelatedRecordsPane);
+    control.addOnLookupTagClick(Contoso.openRelatedRecordsPane);
+  });
+};
 ```
 
-Use `getControl`, not `getAttribute`. The lookup event passes execution context. The handler calls `preventDefault()` and reads the tag with `getTagValue()`. For a custom page or table record, the tag’s type and id override **Current record**, **Static record ID**, and **None** when the script runs. An empty control name produces `Lookup control name is required for LookupTagClick triggers.`
+Wire it on the form:
+
+1. Add the script web resource under **Form libraries**. With Shared Library output, add the runtime library to the same form too.
+2. In **Events → OnLoad**, add the registration function, keep it enabled, and turn on **Pass execution context as first parameter**.
+3. In the classic form editor, add each lookup column on that handler’s **Dependencies** tab. The new form designer lists column dependencies for On Save events only, so skip this step there.
+
+The function removes the handler before adding it, so another OnLoad run does not register it twice. A control that is not on the form logs a warning and is skipped. The handler calls `preventDefault()` and reads the tag with `getTagValue()`. For a custom page, table record, or generative page, the tag’s type and id override **Current record**, **Static record ID**, and **None** when the script runs. An empty list produces `Lookup control name is required for LookupTagClick triggers.`
 
 Recommended resources:
 
@@ -591,12 +614,11 @@ Command Designer first action parameter:
 primaryControl    Primary Control
 ```
 
-Lookup tag registration, placed on the form OnLoad handler. Replace the control name and the function:
+Lookup tag registration: add the generated `register…` function to form OnLoad with execution context. For each listed control it runs:
 
 ```javascript
-formContext
-  .getControl("parentaccountid")
-  .addOnLookupTagClick(Contoso.openRelatedRecordsPane);
+control.removeOnLookupTagClick(Contoso.openRelatedRecordsPane);
+control.addOnLookupTagClick(Contoso.openRelatedRecordsPane);
 ```
 
 Form data for a **Table record** target. One JSON object:

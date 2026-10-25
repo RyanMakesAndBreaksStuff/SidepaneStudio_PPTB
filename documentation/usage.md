@@ -20,6 +20,7 @@ in PPTB and retry.
 In the Configure panel, choose what the side pane should open:
 
 - **Custom page** - opens a custom page from the current solution.
+- **Generative page** - opens a page built by the app agent, by page ID.
 - **Table record** - opens a Dataverse record.
 - **Table list** - opens a Dataverse table list.
 - **Web resource** - opens an HTML or JavaScript web resource.
@@ -33,6 +34,10 @@ Table lists can include a configured `viewId` and `viewType` (`savedquery` or
 `userquery`). Table records can include a `formId`, `tabName`, and JSON-object
 `data` value. Custom-page `entityName` and `recordId` values come from Record
 context at runtime rather than from the custom-page target itself.
+Table records open an existing record, or a blank form in create mode that
+`data` pre-fills. Generative pages take a page ID and optional JSON page data;
+they receive record context and data only if the page's prompt accepts them
+(see **Output → Page prompt**).
 
 ## 3. Configure Pane Settings
 
@@ -67,11 +72,11 @@ Choose how the generated code will be called:
 For command and event triggers, set the generated function namespace and
 function name to match your solution naming conventions.
 
-For Lookup tag click, set the lookup control's logical name. Register the
-generated handler from form OnLoad with
-`formContext.getControl('lookuplogicalname').addOnLookupTagClick(...)`.
-The control event automatically passes execution context. The generated
-handler calls `preventDefault()` synchronously and reads the clicked tag with
+For Lookup tag click, set one or more lookup control logical names, separated
+by commas. Add the generated `register…` function to form OnLoad with **Pass
+execution context as first parameter** on; it registers the handler on each
+listed control and is safe to run more than once. The generated handler calls
+`preventDefault()` synchronously and reads the clicked tag with
 `getTagValue()`.
 
 ## 5. Set Context Behavior
@@ -85,7 +90,7 @@ Choose how the target receives record context:
 
 Enable **Reuse open pane** when the same pane should stay loaded instead of
 being recreated. Reuse will navigate the existing pane to the new page, then
-select it. For a Lookup tag click targeting a custom page or table record,
+select it. For a Lookup tag click targeting a custom page, table record, or generative page,
 the clicked tag supplies `tag.entityType` and `tag.id`, overriding Current
 record, Static, or None context at runtime. Use **Expand on open** when the
 pane should become visible immediately after the trigger runs.
@@ -128,7 +133,8 @@ open.
 - **Wrong record opens** - review the selected context mode and the trigger source.
 - **Code validation fails** - complete all required fields shown in the Configure
   panel before copying output.
-- **Lookup tag does not register** - use `getControl`, not `getAttribute`,
-  and register `addOnLookupTagClick` from form OnLoad with execution context.
+- **Lookup tag does not register** - add the generated `register…` function
+  to form OnLoad with execution context, and check the browser console for a
+  missing-control warning.
 - **Preview differs from the app** - local tests and preview do not replace a
   target model-driven-app test in a connected Dataverse environment.
