@@ -590,3 +590,30 @@ describe('ConfigurePanel — entity record create mode', () => {
     expect(findToggleByLabel('Pre-fill from current record')).toBeUndefined();
   });
 });
+
+describe('ConfigurePanel — generative page', () => {
+  it('offers the content type with Page ID, Page data, and the input-parameters link', async () => {
+    await render(<StatefulConfigurePanel initialConfig={DEFAULT_CONFIG} metadataService={makeMetadataService()} />);
+    await expandSection('What opens in the pane');
+    await act(async () => { getChoiceButton('Generative page')!.click(); });
+    expect(findInputByPlaceholder('xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx')).toBeTruthy();
+    expect(host!.querySelector('textarea[aria-label="Page data"]')).not.toBeNull();
+    expect(host!.textContent).toContain('Page ID must be the GUID of a generative page.');
+    const links = Array.from(host!.querySelectorAll('a')).map(a => a.href);
+    expect(links.some(h => h.includes('generative-pages#set-up-a-page-to-accept-input-parameters'))).toBe(true);
+  });
+
+  it('writes the page ID into the target', async () => {
+    const onChange = vi.fn();
+    const config: PaneDefinitionConfig = { ...DEFAULT_CONFIG, target: { pageType: 'generative', pageId: '', data: '' } };
+    await render(<ConfigurePanel config={config} onChange={onChange} validation={validate(config)} metadataService={makeMetadataService()} />);
+    await expandSection('What opens in the pane');
+    const input = findInputByPlaceholder('xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx')!;
+    const setValue = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set?.bind(input);
+    await act(async () => {
+      setValue?.('aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee');
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    expect(onChange.mock.calls[0][0](config).target).toEqual({ pageType: 'generative', pageId: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee', data: '' });
+  });
+});

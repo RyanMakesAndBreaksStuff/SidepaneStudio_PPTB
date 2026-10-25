@@ -20,6 +20,7 @@ import { LookupPicker } from './LookupPicker';
 import { Toggle } from './Toggle';
 import { ChoiceGroup } from './ChoiceGroup';
 import { Callout } from './Callout';
+import { JsonDataField } from './JsonDataField';
 import { WidthPicker } from './WidthPicker';
 import { MIN_CONFIG_WIDTH, MAX_CONFIG_WIDTH } from './previewHelpers';
 import { MetadataFilterConfigEditor } from './config/MetadataFilterConfigEditor';
@@ -45,6 +46,7 @@ const FORM_DATA_EXAMPLE = `{
   "description": "Opened from the side pane.",
   "donotemail": 1
 }`;
+const GENERATIVE_INPUTS_DOC = 'https://learn.microsoft.com/en-us/power-apps/maker/model-driven-apps/generative-pages#set-up-a-page-to-accept-input-parameters';
 
 // The PPTB host blocks target="_blank" navigation; route through the host's browser API when present.
 function openDocsLink(event: React.MouseEvent<HTMLAnchorElement>): void {
@@ -68,6 +70,7 @@ function resetTarget(pageType: PageType): TargetConfig {
 
 const PAGE_TYPE_OPTIONS = [
   { value: 'custom',       label: 'Custom page',    desc: 'A canvas app page in your solution' },
+  { value: 'generative',   label: 'Generative page', desc: 'A page the app agent built in the app designer' },
   { value: 'entityrecord', label: 'Table record',    desc: 'Open a specific or context-driven record' },
   { value: 'entitylist',   label: 'Table list',      desc: 'Show a view of table records' },
   { value: 'webresource',  label: 'Web resource',    desc: 'Embed an HTML/JS web resource' },
@@ -221,11 +224,9 @@ export function ConfigurePanel({
           <Field label="Tab name" hint="Logical name of the form tab to focus">
             <Input value={target.tabName} disabled={readOnly} onChange={tabName => onChange(prev => prev.target.pageType !== 'entityrecord' ? prev : { ...prev, target: { ...prev.target, tabName } })} />
           </Field>
-          <Field label="Form data" hint="Optional JSON object of extra form parameters. Keys are column logical names (e.g. name) or pre-registered custom params. Lookups need a pair/triple: primarycontactid + primarycontactidname, or parentcustomerid + parentcustomeridname + parentcustomeridtype (account|contact|systemuser|team)." error={vErrors['target.data']}>
-            <textarea aria-label="Form data" value={target.data} disabled={readOnly} rows={4}
-              placeholder={FORM_DATA_EXAMPLE}
-              style={{ width: '100%', boxSizing: 'border-box', color: T.fg1, background: T.surface1, border: `1px solid ${T.stroke1}`, borderRadius: T.rS, fontFamily: T.mono, fontSize: 12 }}
-              onChange={event => { const data = event.target.value; onChange(prev => prev.target.pageType !== 'entityrecord' ? prev : { ...prev, target: { ...prev.target, data } }); }} />
+          <JsonDataField label="Form data" value={target.data} disabled={readOnly} placeholder={FORM_DATA_EXAMPLE} error={vErrors['target.data']}
+            hint="Optional JSON object of extra form parameters. Keys are column logical names (e.g. name) or pre-registered custom params. Lookups need a pair/triple: primarycontactid + primarycontactidname, or parentcustomerid + parentcustomeridname + parentcustomeridtype (account|contact|systemuser|team)."
+            onChange={data => onChange(prev => prev.target.pageType !== 'entityrecord' ? prev : { ...prev, target: { ...prev.target, data } })}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
               <button type="button" disabled={readOnly}
                 style={{ fontSize: 12, padding: '4px 10px', borderRadius: T.rM, border: `1px solid ${T.stroke1}`, background: T.surface2, color: T.fg1, fontFamily: T.font, cursor: readOnly ? 'default' : 'pointer' }}
@@ -243,7 +244,22 @@ export function ConfigurePanel({
                 ? 'In create mode these values pre-fill columns on the new record.'
                 : 'Open existing record ignores column default values. Only pre-registered custom params take effect, and any invalid key fails the navigate at runtime. Choose Create new record to pre-fill columns.'}
             </Callout>
+          </JsonDataField>
+        </>}
+
+        {target.pageType === 'generative' && <>
+          <Field label="Page ID" required hint="In the app designer, select the page; the properties pane shows the ID in the Generative page field" error={vErrors['target.pageId']}>
+            <Input value={target.pageId} disabled={readOnly} placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" error={!!vErrors['target.pageId']}
+              onChange={pageId => onChange(prev => prev.target.pageType !== 'generative' ? prev : { ...prev, target: { ...prev.target, pageId } })} />
           </Field>
+          <JsonDataField label="Page data" hint="Optional JSON object the page reads as pageInput.data" value={target.data} disabled={readOnly} error={vErrors['target.data']}
+            onChange={data => onChange(prev => prev.target.pageType !== 'generative' ? prev : { ...prev, target: { ...prev.target, data } })} />
+          {vWarnings['target.pageType'] && (
+            <Callout type="warn" icon="⚠">
+              {vWarnings['target.pageType']}{' '}
+              <a href={GENERATIVE_INPUTS_DOC} target="_blank" rel="noreferrer" onClick={openDocsLink} style={{ color: T.accent }}>Set up a page to accept input parameters</a>
+            </Callout>
+          )}
         </>}
 
         {target.pageType === 'webresource' && (
@@ -400,7 +416,7 @@ export function ConfigurePanel({
 
         {trigger.kind === 'LookupTagClick' && !creating && LOOKUP_TAG_TARGETS.includes(target.pageType) && (
           <Callout type="info" icon="ℹ">
-            The clicked tag supplies the record identity for custom pages and entity records, overriding Current record, Static, or None context at runtime. The selected context mode is not changed automatically.
+            The clicked tag supplies the record identity for this content type, overriding Current record, Static, or None context at runtime. The selected context mode is not changed automatically.
           </Callout>
         )}
 
@@ -441,7 +457,7 @@ export function ConfigurePanel({
 
         {context.mode !== 'None' && context.mode !== 'RelatedRecord' &&
           !context.entityName.trim() &&
-          (target.pageType === 'custom' || target.pageType === 'webresource') && (
+          (target.pageType === 'custom' || target.pageType === 'webresource' || target.pageType === 'generative') && (
             <Callout type="info" icon="ℹ">
               Without a table name the generated script omits record context entirely — the pane opens with no record.
             </Callout>

@@ -345,7 +345,7 @@ describe('validate — related record context', () => {
   ] as const)('blocks a $pageType target, which receives no record', target => {
     const result = validate(cfg({ trigger: { kind: 'MainGridOnSelect' }, context, target }));
     expect(result.errors.find(e => e.field === 'context.mode')?.message)
-      .toMatch(/custom page, table record, or web resource/);
+      .toMatch(/custom page, table record, web resource, or generative page/);
   });
 
   it('requires a source table and a valid lookup column', () => {
@@ -394,5 +394,45 @@ describe('validate — entity record create mode', () => {
   it('needs the grid table to pre-fill from a grid row', () => {
     const result = validate(create({ kind: 'MainGridButton' }, { mode: 'None', entityName: '' }, { createFromCurrent: true }));
     expect(result.errors.map(e => e.field)).toContain('target.createFromCurrent');
+  });
+});
+
+describe('validate — generative page', () => {
+  const page = (overrides: { pageId?: string; data?: string } = {}, context: Partial<PaneDefinitionConfig['context']> = { mode: 'None' }) =>
+    cfg({ target: { pageType: 'generative', pageId: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee', data: '', ...overrides }, context });
+
+  it('accepts a page ID with no inputs and does not warn about inputs', () => {
+    const result = validate(page());
+    expect(result.errors).toEqual([]);
+    expect(result.warnings.map(w => w.field)).not.toContain('target.pageType');
+  });
+
+  it.each(['', 'not-a-guid'])('blocks page ID %p', pageId => {
+    expect(validate(page({ pageId })).errors).toContainEqual({ field: 'target.pageId', message: 'Page ID must be the GUID of a generative page.' });
+  });
+
+  it('blocks page data that is not a JSON object', () => {
+    expect(validate(page({ data: '[1]' })).errors).toContainEqual({ field: 'target.data', message: 'Page data must be a JSON object.' });
+  });
+
+  it('blocks a static record without its table', () => {
+    const result = validate(page({}, { mode: 'Static', staticRecordId: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee', entityName: '' }));
+    expect(result.errors.map(e => e.field)).toContain('context.entityName');
+  });
+
+  it('blocks a static record without a valid ID', () => {
+    const result = validate(page({}, { mode: 'Static', staticRecordId: '', entityName: 'account' }));
+    expect(result.errors.map(e => e.field)).toContain('context.staticRecordId');
+  });
+
+  it('warns that inputs reach the page only when it accepts them', () => {
+    expect(validate(page({ data: '{"a":1}' })).warnings.map(w => w.field)).toContain('target.pageType');
+  });
+
+  it('allows related record context', () => {
+    const result = validate(cfg({ trigger: { kind: 'MainGridOnSelect' },
+      target: { pageType: 'generative', pageId: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee', data: '' },
+      context: { mode: 'RelatedRecord', entityName: 'account', lookupAttribute: 'primarycontactid' } }));
+    expect(result.errors).toEqual([]);
   });
 });
