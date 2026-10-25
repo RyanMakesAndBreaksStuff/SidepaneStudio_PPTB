@@ -68,6 +68,11 @@ function buildConfiguredRecordIdExpression(config: PaneDefinitionConfig): string
   return `(function() { throw new Error('A valid static record ID is required for entityrecord navigation.'); })()`;
 }
 
+/** Generative pages read recordId as a bare GUID; form, grid and tag IDs arrive as {GUID}. Static IDs are already normalized literals. */
+function bareGuidExpr(idExpr: string): string {
+  return idExpr.startsWith('"') ? idExpr : `${idExpr}.replace(/[{}]/g, '')`;
+}
+
 function buildPaneOptions(config: PaneDefinitionConfig): string {
   const { pane } = config;
   const width = normalizeConfigWidth(pane.width);
@@ -199,7 +204,12 @@ function buildTargetParameterParts(target: PaneDefinitionConfig['target']): stri
   if (target.pageType === 'entityrecord') {
     if (target.formId.trim()) parts.push(`formId: ${JSON.stringify(normalizeGuid(target.formId) ?? target.formId)}`);
     if (target.tabName.trim()) parts.push(`tabName: ${JSON.stringify(target.tabName.trim())}`);
-    if (target.data.trim()) parts.push(`data: JSON.parse(${JSON.stringify(target.data)})`);
+  }
+  if (target.pageType === 'generative') {
+    parts.push(`pageId: ${JSON.stringify(normalizeGuid(target.pageId) ?? target.pageId)}`);
+  }
+  if ((target.pageType === 'entityrecord' || target.pageType === 'generative') && target.data.trim()) {
+    parts.push(`data: JSON.parse(${JSON.stringify(target.data)})`);
   }
   return parts;
 }
@@ -263,6 +273,14 @@ function buildNavigateInput(config: PaneDefinitionConfig): string {
       return target.searchText
         ? `{ pageType: ${JSON.stringify(target.pageType)}, searchText: ${JSON.stringify(target.searchText)} }`
         : `{ pageType: ${JSON.stringify(target.pageType)} }`;
+    case 'generative': {
+      const parts = [`pageType: ${JSON.stringify(target.pageType)}`, ...buildTargetParameterParts(target)];
+      if (rc.idExpr && rc.entityExpr) {
+        parts.push(`entityName: ${rc.entityExpr}`);
+        parts.push(`recordId: ${bareGuidExpr(rc.idExpr)}`);
+      }
+      return `{ ${parts.join(', ')} }`;
+    }
   }
 }
 
@@ -504,6 +522,9 @@ export function generateLibraryScript(config: PaneDefinitionConfig): string {
     optLines.push(`    dashboardId: ${JSON.stringify(target.dashboardId)}`);
   } else if (target.pageType === 'search' && target.searchText) {
     optLines.push(`    searchText: ${JSON.stringify(target.searchText)}`);
+  } else if (target.pageType === 'generative' && libIdExpr && rc.entityExpr) {
+    optLines.push(`    entityName: ${rc.entityExpr}`);
+    optLines.push(`    recordId: ${bareGuidExpr(libIdExpr)}`);
   }
 
   optLines.push(...buildTargetParameterParts(target).map(part => `    ${part}`));

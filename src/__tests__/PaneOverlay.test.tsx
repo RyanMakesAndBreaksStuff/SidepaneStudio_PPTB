@@ -51,6 +51,18 @@ describe('preview helpers', () => {
 });
 
 describe('PaneOverlay', () => {
+  it('renders a generative page with its label, shortened page ID, and no record skeleton', async () => {
+    await render(
+      <PaneOverlay
+        pane={DEFAULT_CONFIG.pane}
+        target={{ pageType: 'generative', pageId: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee', data: '' }}
+        validation={{ isValid: true, errors: [], warnings: [] }}
+      />
+    );
+    expect(host?.textContent).toContain('Generative Page');
+    expect(host?.textContent).toContain('…eeeeeeee');
+    expect(host?.textContent).not.toContain('Email');
+  });
   it('does not render an img for blocked image sources', async () => {
     await render(
       <PaneOverlay

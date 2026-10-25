@@ -1,7 +1,7 @@
 // src/types/PaneDefinitionConfig.ts
 
 export type TriggerKind = 'FormOnLoad' | 'FormButton' | 'MainGridButton' | 'SubgridButton' | 'MainGridOnSelect' | 'SubgridOnSelect' | 'ManualJS' | 'FormOnChange' | 'LookupTagClick';
-export type PageType = 'custom' | 'entityrecord' | 'entitylist' | 'webresource' | 'dashboard' | 'search';
+export type PageType = 'custom' | 'entityrecord' | 'entitylist' | 'webresource' | 'dashboard' | 'search' | 'generative';
 export type ContextMode = 'CurrentRecord' | 'SelectedRow' | 'Static' | 'RelatedRecord' | 'None';
 
 export interface PaneConfig {
@@ -30,10 +30,11 @@ export type TargetConfig =
   | { pageType: 'entitylist'; entityName: string; viewId: string; viewType: '' | 'savedquery' | 'userquery' }
   | { pageType: 'webresource';  name: string }
   | { pageType: 'dashboard';    dashboardId: string; dashboardName: string }
-  | { pageType: 'search';       searchText: string };
+  | { pageType: 'search';       searchText: string }
+  | { pageType: 'generative';   pageId: string; data: string };
 
 /** Targets whose record context comes from the clicked lookup tag (tag.id, tag.entityType). */
-export const LOOKUP_TAG_TARGETS: readonly PageType[] = ['custom', 'entityrecord'];
+export const LOOKUP_TAG_TARGETS: readonly PageType[] = ['custom', 'entityrecord', 'generative'];
 /** Targets that can open the one record a RelatedRecord lookup resolves to. */
 export const RELATED_RECORD_TARGETS: readonly PageType[] = ['custom', 'entityrecord', 'webresource'];
 

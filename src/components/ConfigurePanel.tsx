@@ -62,6 +62,7 @@ function resetTarget(pageType: PageType): TargetConfig {
     case 'webresource':  return { pageType: 'webresource', name: '' };
     case 'dashboard':    return { pageType: 'dashboard', dashboardId: '', dashboardName: '' };
     case 'search':       return { pageType: 'search', searchText: '' };
+    case 'generative':   return { pageType: 'generative', pageId: '', data: '' };
   }
 }
 
