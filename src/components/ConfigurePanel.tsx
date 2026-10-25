@@ -372,9 +372,9 @@ export function ConfigurePanel({
 
         {(trigger.kind === 'FormOnChange' || trigger.kind === 'LookupTagClick') && (
           <Field
-            label={trigger.kind === 'LookupTagClick' ? 'Lookup control name' : 'Field name'}
+            label={trigger.kind === 'LookupTagClick' ? 'Lookup control names' : 'Field name'}
             required
-            hint={trigger.kind === 'LookupTagClick' ? 'Logical name of the lookup control whose tag clicks should open the pane' : 'Logical name of the field to watch for changes'}
+            hint={trigger.kind === 'LookupTagClick' ? 'Logical names of the lookup controls whose tag clicks open the pane. Separate several with commas.' : 'Logical name of the field to watch for changes'}
             error={vErrors['trigger.fieldName']}
           >
             <Input

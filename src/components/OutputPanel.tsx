@@ -160,7 +160,8 @@ export const OutputPanel = React.memo(function OutputPanel({ config, xrm, valida
             )}
             <SummaryCard
               title="📚 Shared library version"
-              body={`Shorter snippet that calls the pre-deployed <strong>SidePaneHelper</strong> runtime. Your organization must deploy the shared library web resource first.`}
+              body={`Shorter snippet that calls the pre-deployed <strong>SidePaneHelper</strong> runtime.`}
+              steps={DEPLOY_STEPS[config.trigger.kind] || []}
             />
             {validation.errors.length > 0 && (
               <Callout type="err" icon="✕">

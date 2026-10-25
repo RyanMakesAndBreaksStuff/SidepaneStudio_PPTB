@@ -27,6 +27,11 @@ export function isConfigWidthValid(value: unknown): value is number {
     value >= MIN_CONFIG_WIDTH && value <= MAX_CONFIG_WIDTH;
 }
 
+/** Lookup tag click accepts several lookup controls as a comma-separated list. */
+export function parseLookupFieldNames(value: string): string[] {
+  return [...new Set(value.split(',').map(name => name.trim()).filter(Boolean))];
+}
+
 function stringOr(value: unknown, fallback: string): string {
   return typeof value === 'string' ? value : fallback;
 }

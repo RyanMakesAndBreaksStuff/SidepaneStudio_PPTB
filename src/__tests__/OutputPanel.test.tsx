@@ -123,6 +123,21 @@ describe('runtime download', () => {
 });
 
 describe('OutputPanel', () => {
+  it('names the generated lookup registrar and the Dependencies step in Command Steps', async () => {
+    const config = { ...DEFAULT_CONFIG, trigger: { kind: 'LookupTagClick' as const, namespace: 'Contoso', functionName: 'openTag', fieldName: 'parentcustomerid' } };
+    await render(<OutputPanel config={config} xrm={xrmStub()} validation={{ isValid: true, errors: [], warnings: [] }} />);
+    const tab = Array.from(host!.querySelectorAll('[role="tab"]')).find(t => t.textContent === 'Command Steps') as HTMLButtonElement;
+    await act(async () => { tab.click(); });
+    expect(host!.textContent).toContain('Contoso.registerOpenTag');
+    expect(host!.textContent).toContain('Dependencies');
+  });
+
+  it('lists the deployment steps on the Shared Library tab', async () => {
+    await render(<OutputPanel config={DEFAULT_CONFIG} xrm={xrmStub()} validation={{ isValid: true, errors: [], warnings: [] }} />);
+    await clickLibraryTab();
+    expect(host!.textContent).toContain('Command Designer');
+  });
+
   it('shows generated FormOnChange entitylist code with double-quoted pageType', async () => {
     const config = {
       ...DEFAULT_CONFIG,

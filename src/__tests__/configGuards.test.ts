@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseStoredConfig } from '../services/configGuards';
+import { parseLookupFieldNames, parseStoredConfig } from '../services/configGuards';
 import { DEFAULT_CONFIG } from '../types/PaneDefinitionConfig';
 
 describe('parseStoredConfig', () => {
@@ -86,5 +86,11 @@ describe('parseStoredConfig', () => {
     expect(parsed?.context.entityName).toBe('');
     expect(parsed?.context.reuseExistingPane).toBe(DEFAULT_CONFIG.context.reuseExistingPane);
     expect(parsed?.behavior).toEqual(DEFAULT_CONFIG.behavior);
+  });
+});
+
+describe('parseLookupFieldNames', () => {
+  it('splits, trims, and de-duplicates a comma-separated list', () => {
+    expect(parseLookupFieldNames(' parentcustomerid ,primarycontactid,, parentcustomerid ')).toEqual(['parentcustomerid', 'primarycontactid']);
   });
 });
