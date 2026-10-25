@@ -311,6 +311,13 @@ describe('ConfigurePanel behavior controls', () => {
     expect(next.behavior.closeOthers).toBe(true);
   });
 
+  it('stores Close if already open', async () => {
+    const onChange = vi.fn();
+    await renderPanel({ config: DEFAULT_CONFIG, onChange });
+    await act(async () => { findToggleByLabel('Close if already open')!.click(); });
+    expect(onChange.mock.calls[0][0](DEFAULT_CONFIG).behavior.toggleIfOpen).toBe(true);
+  });
+
   it('exposes the static record ID field for ManualJS + entityrecord', async () => {
     const config: PaneDefinitionConfig = {
       ...DEFAULT_CONFIG,

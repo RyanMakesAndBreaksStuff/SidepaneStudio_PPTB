@@ -54,6 +54,12 @@ describe('parseStoredConfig', () => {
     expect(parsed?.behavior).toEqual(DEFAULT_CONFIG.behavior);
   });
 
+  it('back-fills toggleIfOpen as off for older configs and keeps a stored value', () => {
+    const load = (behavior: object) => parseStoredConfig(JSON.stringify({ ...DEFAULT_CONFIG, behavior }))?.behavior.toggleIfOpen;
+    expect(load({ expandOnOpen: true, closeOthers: false })).toBe(false);
+    expect(load({ expandOnOpen: true, closeOthers: false, toggleIfOpen: true })).toBe(true);
+  });
+
   it('round-trips related record context and back-fills lookupAttribute for older configs', () => {
     const context = { ...DEFAULT_CONFIG.context, mode: 'RelatedRecord', entityName: 'account', lookupAttribute: 'primarycontactid' };
     expect(parseStoredConfig(JSON.stringify({ ...DEFAULT_CONFIG, context }))?.context).toEqual(context);

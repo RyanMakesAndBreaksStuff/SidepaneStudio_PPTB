@@ -1,8 +1,7 @@
-import { PaneDefinitionConfig, TriggerKind, DEFAULT_CONFIG, LOOKUP_TAG_TARGETS } from '../types/PaneDefinitionConfig';
+import { PaneDefinitionConfig, TriggerKind, DEFAULT_CONFIG, LOOKUP_TAG_TARGETS, COMMAND_TRIGGERS } from '../types/PaneDefinitionConfig';
 import { normalizeGuid } from './odataGuards';
 import { normalizeConfigWidth, parseLookupFieldNames } from './configGuards';
 
-const CMD_KINDS: TriggerKind[] = ['FormButton', 'MainGridButton', 'SubgridButton'];
 const GRID_KINDS: TriggerKind[] = ['MainGridButton', 'SubgridButton', 'MainGridOnSelect', 'SubgridOnSelect'];
 const GRID_SELECT_KINDS: TriggerKind[] = ['MainGridOnSelect', 'SubgridOnSelect'];
 
@@ -292,7 +291,7 @@ function buildNavigateInput(config: PaneDefinitionConfig): string {
 }
 
 function buildStateAssignment(config: PaneDefinitionConfig): string {
-  const isCmd = CMD_KINDS.includes(config.trigger.kind);
+  const isCmd = COMMAND_TRIGGERS.includes(config.trigger.kind);
   if (isCmd && config.pane.isSelected !== false && config.behavior.expandOnOpen) {
     return `  Xrm.App.sidePanes.state = 1;\n`;
   }
@@ -304,11 +303,22 @@ function buildAvailabilityGuard(config: PaneDefinitionConfig, indent: string, be
   // A lookup tag click checks before it cancels the tag's default navigation, so the body does not repeat the check.
   if ((config.trigger.kind === 'LookupTagClick') !== beforeCancel) return '';
   const message = JSON.stringify('Side panes are not available in this client.');
-  const notify = CMD_KINDS.includes(config.trigger.kind)
+  const notify = COMMAND_TRIGGERS.includes(config.trigger.kind)
     ? `Xrm.Navigation.openAlertDialog({ text: ${message} });`
     : `console.warn(${message});`;
   return `${indent}if (!Xrm.App || !Xrm.App.sidePanes) { ${notify} return; }
 `;
+}
+
+/** Runs after the availability guard and before any lookup read, so a closing click does no other work. */
+function buildToggleIfOpen(config: PaneDefinitionConfig, indent: string): string {
+  if (!config.behavior.toggleIfOpen || !COMMAND_TRIGGERS.includes(config.trigger.kind)) return '';
+  return (
+    `${indent}var selectedPane = Xrm.App.sidePanes.getSelectedPane();
+` +
+    `${indent}if (selectedPane && selectedPane.paneId === ${JSON.stringify(config.pane.paneId)} && Xrm.App.sidePanes.state === 1) { selectedPane.close(); return; }
+`
+  );
 }
 
 function buildGetOrCreateBody(config: PaneDefinitionConfig, indent = '  '): string {
@@ -330,7 +340,7 @@ function buildGetOrCreateBody(config: PaneDefinitionConfig, indent = '  '): stri
     : '';
 
   const createBody = `${stateAssign}${indent}var pane = await Xrm.App.sidePanes.createPane(${paneOpts});\n${indent}await pane.navigate(${navInput});\n${badgeAssign}`;
-  return `${buildAvailabilityGuard(config, indent)}${buildRelatedRecordPreamble(config, indent)}${reuseCheck}${createBody}${context.reuseExistingPane ? `${indent}}\n` : ''}${closeOthersBlock}`;
+  return `${buildAvailabilityGuard(config, indent)}${buildToggleIfOpen(config, indent)}${buildRelatedRecordPreamble(config, indent)}${reuseCheck}${createBody}${context.reuseExistingPane ? `${indent}}\n` : ''}${closeOthersBlock}`;
 }
 
 function generateFormOnLoad(config: PaneDefinitionConfig): string {
@@ -561,6 +571,7 @@ export function generateLibraryScript(config: PaneDefinitionConfig): string {
   if (!context.reuseExistingPane) optLines.push(`    reuseExistingPane: false`);
   if (!behavior.expandOnOpen) optLines.push(`    expandOnOpen: false`);
   if (behavior.closeOthers) optLines.push(`    closeOthers: true`);
+  if (behavior.toggleIfOpen && COMMAND_TRIGGERS.includes(trigger.kind)) optLines.push(`    toggleIfOpen: true`);
 
   const param =
     trigger.kind === 'FormOnLoad' || trigger.kind === 'FormOnChange' || trigger.kind === 'LookupTagClick' || GRID_SELECT_KINDS.includes(trigger.kind)

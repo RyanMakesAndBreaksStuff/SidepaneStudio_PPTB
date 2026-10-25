@@ -536,6 +536,15 @@ export function ConfigurePanel({
           onChange={v => patch('behavior', 'closeOthers', v)}
         />
 
+        <Toggle
+          label="Close if already open"
+          desc="Command bar buttons close this pane when it is open and showing"
+          checked={behavior.toggleIfOpen}
+          onChange={v => patch('behavior', 'toggleIfOpen', v)}
+        />
+        {vErrors['behavior.toggleIfOpen'] && <Callout type="err" icon="✕">{vErrors['behavior.toggleIfOpen']}</Callout>}
+        {vWarnings['behavior.toggleIfOpen'] && <Callout type="warn" icon="⚠">{vWarnings['behavior.toggleIfOpen']}</Callout>}
+
         <Field label="Initial badge value" hint="0 = no badge shown">
           <Input type="number" value={pane.badgeValue} onChange={v => patch('pane', 'badgeValue', +v)} />
         </Field>

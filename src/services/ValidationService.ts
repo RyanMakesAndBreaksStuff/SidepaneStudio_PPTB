@@ -2,7 +2,7 @@ import { PaneDefinitionConfig } from '../types/PaneDefinitionConfig';
 import { isValidLogicalName, normalizeGuid } from './odataGuards';
 import { parseFormData } from './formData';
 import { isConfigWidthValid, parseLookupFieldNames } from './configGuards';
-import { MAX_CONFIG_WIDTH, MIN_CONFIG_WIDTH, RELATED_RECORD_TARGETS } from '../types/PaneDefinitionConfig';
+import { COMMAND_TRIGGERS, MAX_CONFIG_WIDTH, MIN_CONFIG_WIDTH, RELATED_RECORD_TARGETS } from '../types/PaneDefinitionConfig';
 
 export interface ValidationError {
   field: string;
@@ -277,6 +277,14 @@ export function validate(config: PaneDefinitionConfig, accessibleTables?: Set<st
     }
   }
 
+
+  if (config.behavior.toggleIfOpen) {
+    if (!COMMAND_TRIGGERS.includes(config.trigger.kind)) {
+      errors.push({ field: 'behavior.toggleIfOpen', message: 'Close if already open works only for command bar buttons. Any other trigger would close its own pane when it fires again.' });
+    } else if (config.pane.hideHeader || !config.pane.canClose) {
+      warnings.push({ field: 'behavior.toggleIfOpen', message: 'This pane has no close button, so the command button is the only way to close it.' });
+    }
+  }
 
   const specialCharPattern = /['"\\]/;
   const stringFields: Array<{ value: string; field: string; label: string }> = [

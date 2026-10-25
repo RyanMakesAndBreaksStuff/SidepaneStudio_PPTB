@@ -163,6 +163,7 @@ export function parseStoredConfig(raw: unknown): PaneDefinitionConfig | null {
     behavior: {
       expandOnOpen: booleanOr(behavior.expandOnOpen, DEFAULT_CONFIG.behavior.expandOnOpen),
       closeOthers: booleanOr(behavior.closeOthers, DEFAULT_CONFIG.behavior.closeOthers),
+      toggleIfOpen: booleanOr(behavior.toggleIfOpen, DEFAULT_CONFIG.behavior.toggleIfOpen),
     },
   };
 }

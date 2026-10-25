@@ -1044,3 +1044,42 @@ describe('side pane availability guard', () => {
     warn.mockRestore();
   });
 });
+
+describe('close if already open (toggleIfOpen)', () => {
+  function load(selected: unknown, state: number) {
+    const pane = { navigate: vi.fn().mockResolvedValue(undefined), select: vi.fn() };
+    const xrm = { App: { sidePanes: {
+      state,
+      getSelectedPane: vi.fn().mockReturnValue(selected),
+      getPane: vi.fn().mockReturnValue(pane),
+      createPane: vi.fn(),
+      getAllPanes: vi.fn().mockReturnValue([]),
+    } }, Navigation: { openErrorDialog: vi.fn(), openAlertDialog: vi.fn() } };
+    const config = cfg({ pane: { paneId: 'p' }, trigger: { kind: 'FormButton', namespace: 'TestNs', functionName: 'open' },
+      context: { mode: 'None' }, behavior: { toggleIfOpen: true } });
+    const open = new Function('window', 'Xrm', `${generateBasicScript(config)}
+return TestNs.open;`)({}, xrm) as (arg: unknown) => void;
+    return { open, pane };
+  }
+
+  it('closes the pane instead of navigating when it is selected and expanded', async () => {
+    const selected = { paneId: 'p', close: vi.fn() };
+    const { open, pane } = load(selected, 1);
+    open({});
+    await vi.waitFor(() => expect(selected.close).toHaveBeenCalledOnce());
+    expect(pane.navigate).not.toHaveBeenCalled();
+  });
+
+  it.each([[null, 1], [undefined, 1], [{ paneId: 'other', close: vi.fn() }, 1], [{ paneId: 'p', close: vi.fn() }, 0]])(
+    'opens as usual for selected pane %o and state %i', async (selected, state) => {
+      const { open, pane } = load(selected, state);
+      open({});
+      await vi.waitFor(() => expect(pane.navigate).toHaveBeenCalled());
+    });
+
+  it('is emitted for command-bar triggers only, in both outputs', () => {
+    expect(generateLibraryScript(cfg({ behavior: { toggleIfOpen: true } }))).toContain('toggleIfOpen: true');
+    expect(generateBasicScript(cfg({ trigger: { kind: 'FormOnLoad' }, behavior: { toggleIfOpen: true } }))).not.toContain('getSelectedPane');
+    expect(generateLibraryScript(cfg({ trigger: { kind: 'FormOnLoad' }, behavior: { toggleIfOpen: true } }))).not.toContain('toggleIfOpen');
+  });
+});
