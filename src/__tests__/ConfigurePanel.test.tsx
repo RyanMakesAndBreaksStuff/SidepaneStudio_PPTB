@@ -546,9 +546,28 @@ describe('ConfigurePanel — form data guidance', () => {
   it('tells makers column defaults need create mode and links the docs', async () => {
     await renderPanel({ config: entityRecordConfig, onChange: vi.fn() });
     await expandSection('What opens in the pane');
-    expect(host?.textContent ?? '').toMatch(/always navigates to an existing record/i);
+    expect(host?.textContent ?? '').toMatch(/Choose Create new record to pre-fill columns/);
     const links = Array.from(host?.querySelectorAll('a') ?? []).map(a => (a as HTMLAnchorElement).href);
     expect(links.some(h => h.includes('set-field-values-using-parameters-passed-form'))).toBe(true);
     expect(links.some(h => h.includes('configure-form-accept-custom-querystring-parameters'))).toBe(true);
+  });
+});
+
+describe('ConfigurePanel — entity record create mode', () => {
+  const openRecord: PaneDefinitionConfig = {
+    ...DEFAULT_CONFIG,
+    target: { pageType: 'entityrecord', entityName: 'contact', formId: '', tabName: '', data: '' },
+    context: { ...DEFAULT_CONFIG.context, mode: 'None' },
+  };
+
+  it('switches to create mode, hides Record ID, and explains Form data pre-fill', async () => {
+    await render(<StatefulConfigurePanel initialConfig={openRecord} metadataService={makeMetadataService()} />);
+    await expandSection('What opens in the pane');
+    await expandSection('Record context');
+    expect(findInputByPlaceholder('00000000-0000-0000-0000-000000000000')).toBeTruthy();
+    await act(async () => { getChoiceButton('Create new record')!.click(); });
+    expect(getChoiceButton('Create new record')?.getAttribute('aria-checked')).toBe('true');
+    expect(findInputByPlaceholder('00000000-0000-0000-0000-000000000000')).toBeUndefined();
+    expect(host!.textContent).toContain('In create mode these values pre-fill columns on the new record.');
   });
 });

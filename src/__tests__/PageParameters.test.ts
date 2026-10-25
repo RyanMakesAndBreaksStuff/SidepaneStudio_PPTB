@@ -52,6 +52,16 @@ afterEach(() => {
 });
 
 describe('page parameter contract', () => {
+  it('opens a blank create-mode form with pre-filled data through both outputs', async () => {
+    const c = config({ pageType: 'entityrecord', entityName: 'contact', formId: '', tabName: '', data: '{"firstname":"Pat"}', createNew: true });
+    c.context.mode = 'None';
+    c.context.staticRecordId = '';
+    for (const library of [false, true]) {
+      const input = await navigate(c, library);
+      expect(input).toEqual({ pageType: 'entityrecord', entityName: 'contact', data: { firstname: 'Pat' } });
+      expect(input).not.toHaveProperty('entityId');
+    }
+  });
   it.each(['MainGridButton', 'SubgridButton', 'MainGridOnSelect', 'SubgridOnSelect'] as const)('delivers selected row parameters from %s through both outputs', async kind => {
     const c = config({ pageType: 'entityrecord', entityName: 'account', formId: id, tabName: '', data: '' });
     c.trigger.kind = kind;
@@ -99,7 +109,7 @@ describe('page parameter contract', () => {
     legacy.context.staticRecordId = '';
     const migrated = parseStoredConfig(JSON.stringify(legacy));
     expect(migrated?.context.staticRecordId).toBe(otherId);
-    expect(migrated?.target).toEqual({ pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '' });
+    expect(migrated?.target).toEqual({ pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '', createNew: false, createFromCurrent: false });
     expect(parseStoredConfig(JSON.stringify(config({ pageType: 'entitylist', entityName: 'account' })))?.target).toEqual({ pageType: 'entitylist', entityName: 'account', viewId: '', viewType: '' });
   });
   it('rejects wrong-shaped new settings values', () => {

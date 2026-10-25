@@ -22,7 +22,11 @@ export interface PaneConfig {
 
 export type TargetConfig =
   | { pageType: 'custom';       name: string }
-  | { pageType: 'entityrecord'; entityName: string; formId: string; tabName: string; data: string }
+  | { pageType: 'entityrecord'; entityName: string; formId: string; tabName: string; data: string;
+      /** Omit entityId so the form opens in create mode. Optional so configs saved before create mode type-check; parseStoredConfig back-fills false. */
+      createNew?: boolean;
+      /** Create mode only: send the triggering record as createFromEntity. */
+      createFromCurrent?: boolean }
   | { pageType: 'entitylist'; entityName: string; viewId: string; viewType: '' | 'savedquery' | 'userquery' }
   | { pageType: 'webresource';  name: string }
   | { pageType: 'dashboard';    dashboardId: string; dashboardName: string }

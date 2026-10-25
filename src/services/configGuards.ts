@@ -85,6 +85,8 @@ export function parseStoredConfig(raw: unknown): PaneDefinitionConfig | null {
         formId: (target.formId as string | undefined) ?? '',
         tabName: (target.tabName as string | undefined) ?? '',
         data: (target.data as string | undefined) ?? '',
+        createNew: booleanOr(target.createNew, false),
+        createFromCurrent: booleanOr(target.createFromCurrent, false),
       };
     } else {
       if (target.viewType !== undefined && !['', 'savedquery', 'userquery'].includes(target.viewType as string)) return null;

@@ -62,4 +62,15 @@ describe('PaneOverlay', () => {
 
     expect(host?.querySelector('img')).toBeNull();
   });
+
+  it('labels a create-mode record target as a new record', async () => {
+    await render(
+      <PaneOverlay
+        pane={DEFAULT_CONFIG.pane}
+        target={{ pageType: 'entityrecord', entityName: 'contact', formId: '', tabName: '', data: '', createNew: true }}
+        validation={{ isValid: true, errors: [], warnings: [] }}
+      />
+    );
+    expect(host?.textContent).toContain('New contact');
+  });
 });

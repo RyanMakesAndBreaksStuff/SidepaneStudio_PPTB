@@ -845,3 +845,26 @@ describe('generated scripts — RelatedRecord context', () => {
     expect(open.mock.calls[0][0]).toMatchObject({ entityName: 'contact', entityId: '{C2}' });
   });
 });
+
+describe('entityrecord create mode', () => {
+  const create = (context: Partial<PaneDefinitionConfig['context']> = {}) => cfg({
+    trigger: { kind: 'FormButton' },
+    target: { pageType: 'entityrecord', entityName: 'contact', formId: '', tabName: 'details', data: '{"firstname":"Pat"}', createNew: true },
+    context: { mode: 'None', ...context },
+  });
+
+  it.each([generateBasicScript, generateLibraryScript])('omits entityId and keeps tab and data (%#)', generate => {
+    const code = generate(create());
+    expect(isValidJS(code)).toBe(true);
+    expect(code).not.toContain('entityId');
+    expect(code).toContain('entityName: "contact"');
+    expect(code).toContain('tabName: "details"');
+    expect(code).toContain('data: JSON.parse(');
+  });
+
+  it.each([generateBasicScript, generateLibraryScript])('uses the target table, never the context table (%#)', generate => {
+    const code = generate(create({ mode: 'CurrentRecord', entityName: 'account' }));
+    expect(code).toContain('entityName: "contact"');
+    expect(code).not.toContain('"account"');
+  });
+});

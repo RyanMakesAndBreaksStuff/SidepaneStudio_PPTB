@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { validate } from '../services/ValidationService';
 import { cfg } from './testHelpers';
+import type { PaneDefinitionConfig } from '../types/PaneDefinitionConfig';
 
 describe('ValidationService errors', () => {
   it('errors on empty paneId', () => {
@@ -336,5 +337,36 @@ describe('validate — related record context', () => {
     const result = validate(cfg({ trigger: { kind: 'MainGridOnSelect' }, target: contactRecord,
       context: { mode: 'RelatedRecord', entityName: '', lookupAttribute: "primarycontactid'" } }));
     expect(result.errors.map(e => e.field)).toEqual(['context.entityName', 'context.lookupAttribute']);
+  });
+});
+
+describe('validate — entity record create mode', () => {
+  const create = (
+    trigger: Partial<PaneDefinitionConfig['trigger']>,
+    context: Partial<PaneDefinitionConfig['context']>,
+    extra: { createFromCurrent?: boolean } = {},
+  ) => cfg({
+    trigger,
+    context,
+    target: { pageType: 'entityrecord', entityName: 'contact', formId: '', tabName: '', data: '', createNew: true, ...extra },
+  });
+
+  it('needs no record ID', () => {
+    expect(validate(create({ kind: 'FormButton' }, { mode: 'None', staticRecordId: '' })).errors).toEqual([]);
+  });
+
+  it('blocks a clicked lookup tag, which names a record to open', () => {
+    const result = validate(create({ kind: 'LookupTagClick', fieldName: 'parentcustomerid' }, { mode: 'None' }));
+    expect(result.errors.map(e => e.field)).toContain('target.createNew');
+  });
+
+  it('blocks related record context, which names a record to open', () => {
+    const result = validate(create({ kind: 'FormButton' }, { mode: 'RelatedRecord', entityName: 'account', lookupAttribute: 'primarycontactid' }));
+    expect(result.errors.map(e => e.field)).toContain('target.createNew');
+  });
+
+  it('warns that record context is ignored', () => {
+    const result = validate(create({ kind: 'FormButton' }, { mode: 'CurrentRecord', entityName: 'account' }));
+    expect(result.warnings).toContainEqual({ field: 'target.createNew', message: 'Create mode ignores record context.' });
   });
 });
