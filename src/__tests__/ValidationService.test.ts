@@ -369,4 +369,15 @@ describe('validate — entity record create mode', () => {
     const result = validate(create({ kind: 'FormButton' }, { mode: 'CurrentRecord', entityName: 'account' }));
     expect(result.warnings).toContainEqual({ field: 'target.createNew', message: 'Create mode ignores record context.' });
   });
+
+  it('does not warn about record context when pre-filling from it, but explains the mapping', () => {
+    const result = validate(create({ kind: 'FormButton' }, { mode: 'CurrentRecord', entityName: 'account' }, { createFromCurrent: true }));
+    expect(result.warnings.map(w => w.message)).not.toContain('Create mode ignores record context.');
+    expect(result.warnings.map(w => w.field)).toContain('target.createFromCurrent');
+  });
+
+  it('needs the grid table to pre-fill from a grid row', () => {
+    const result = validate(create({ kind: 'MainGridButton' }, { mode: 'None', entityName: '' }, { createFromCurrent: true }));
+    expect(result.errors.map(e => e.field)).toContain('target.createFromCurrent');
+  });
 });

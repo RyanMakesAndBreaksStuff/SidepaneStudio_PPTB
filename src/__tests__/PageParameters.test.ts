@@ -120,4 +120,14 @@ describe('page parameter contract', () => {
       { pageType: 'entitylist', entityName: 'account', viewId: [] },
     ]) expect(parseStoredConfig(JSON.stringify(config(target)))).toBeNull();
   });
+
+  it('pre-fills a new record from the selected grid row through both outputs', async () => {
+    const c = config({ pageType: 'entityrecord', entityName: 'contact', formId: '', tabName: '', data: '', createNew: true, createFromCurrent: true });
+    c.trigger.kind = 'MainGridButton';
+    c.context.mode = 'SelectedRow';
+    c.context.entityName = 'account';
+    const expected = { pageType: 'entityrecord', entityName: 'contact', createFromEntity: { entityType: 'account', id: otherId } };
+    expect(await navigate(c, false)).toEqual(expected);
+    expect(await navigate(c, true)).toEqual(expected);
+  });
 });
