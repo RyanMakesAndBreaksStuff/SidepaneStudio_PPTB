@@ -193,6 +193,21 @@ describe('validate — pane width', () => {
 });
 
 describe('validate — LookupTagClick', () => {
+  it('accepts several comma-separated lookup controls', () => {
+    const result = validate(cfg({ trigger: { kind: 'LookupTagClick', fieldName: 'parentcustomerid, primarycontactid' } }));
+    expect(result.errors.map(e => e.field)).not.toContain('trigger.fieldName');
+  });
+
+  it('blocks a list entry that is not a logical name', () => {
+    const result = validate(cfg({ trigger: { kind: 'LookupTagClick', fieldName: 'parentcustomerid, bad name' } }));
+    expect(result.errors).toContainEqual({ field: 'trigger.fieldName', message: 'Lookup control names must be logical names separated by commas.' });
+  });
+
+  it('treats a list of only commas as empty', () => {
+    const result = validate(cfg({ trigger: { kind: 'LookupTagClick', fieldName: ' , ' } }));
+    expect(result.errors).toContainEqual({ field: 'trigger.fieldName', message: 'Lookup control name is required for LookupTagClick triggers.' });
+  });
+
   it('requires a lookup control name', () => {
     const result = validate(cfg({ trigger: { kind: 'LookupTagClick', fieldName: '' } as any }));
     expect(result.errors).toContainEqual({

@@ -903,3 +903,65 @@ return TestNs.open;`)({}, { open }) as (arg: unknown) => void;
     expect(generateBasicScript({ ...prefill, trigger: { ...prefill.trigger, kind: 'ManualJS' } })).not.toContain('createFromEntity');
   });
 });
+
+describe('lookup tag registrar', () => {
+  const lookup = cfg({
+    pane: { paneId: 'p' },
+    trigger: { kind: 'LookupTagClick', namespace: 'TestNs', functionName: 'openTag', fieldName: 'parentcustomerid, primarycontactid, parentcustomerid' },
+    target: { pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '' },
+    context: { mode: 'None' },
+  });
+  type Ns = Record<string, (arg: unknown) => unknown>;
+
+  // Arrays, not Sets: the platform is not documented to ignore a duplicate add, so only remove-then-add keeps one handler.
+  function formWith(names: string[]) {
+    const handlers = new Map(names.map(name => [name, [] as unknown[]]));
+    const executionContext = { getFormContext: () => ({
+      getControl: (name: string) => handlers.has(name) ? {
+        addOnLookupTagClick: (fn: unknown) => { handlers.get(name)!.push(fn); },
+        removeOnLookupTagClick: (fn: unknown) => { handlers.set(name, handlers.get(name)!.filter(handler => handler !== fn)); },
+      } : null,
+    }) };
+    return { handlers, executionContext };
+  }
+  const tagClick = (id: string, entityType: string) => ({
+    getEventArgs: () => ({ preventDefault: vi.fn(), getTagValue: () => ({ id, entityType, name: 'n', fieldName: 'parentcustomerid' }) }),
+  });
+
+  it('registers one handler per listed control however often OnLoad runs', () => {
+    const ns = new Function('Xrm', `${generateBasicScript(lookup)}\nreturn TestNs;`)({}) as Ns;
+    const { handlers, executionContext } = formWith(['parentcustomerid', 'primarycontactid']);
+    ns.registerOpenTag(executionContext);
+    ns.registerOpenTag(executionContext);
+    expect([...handlers.values()]).toEqual([[ns.openTag], [ns.openTag]]);
+  });
+
+  it('warns and skips a lookup control that is not on the form', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const ns = new Function('Xrm', `${generateBasicScript(lookup)}\nreturn TestNs;`)({}) as Ns;
+    const { handlers, executionContext } = formWith(['parentcustomerid']);
+    expect(() => ns.registerOpenTag(executionContext)).not.toThrow();
+    expect(handlers.get('parentcustomerid')).toHaveLength(1);
+    expect(warn).toHaveBeenCalledWith('TestNs.registerOpenTag: no lookup control primarycontactid');
+    warn.mockRestore();
+  });
+
+  it('opens the clicked tag in Basic output', async () => {
+    const pane = { navigate: vi.fn().mockResolvedValue(undefined) };
+    const xrm = { App: { sidePanes: { state: 0, getPane: vi.fn(), createPane: vi.fn().mockResolvedValue(pane), getAllPanes: vi.fn().mockReturnValue([]) } },
+      Navigation: { openErrorDialog: vi.fn(), openAlertDialog: vi.fn() } };
+    const ns = new Function('Xrm', `${generateBasicScript(lookup)}\nreturn TestNs;`)(xrm) as Ns;
+    await ns.openTag(tagClick('{C1}', 'contact'));
+    expect(pane.navigate).toHaveBeenCalledWith({ pageType: 'entityrecord', entityName: 'contact', entityId: '{C1}' });
+  });
+
+  it('registers and opens the clicked tag in Shared Library output', () => {
+    const open = vi.fn();
+    const ns = new Function('SidePaneHelper', `${generateLibraryScript(lookup)}\nreturn TestNs;`)({ open }) as Ns;
+    const { handlers, executionContext } = formWith(['parentcustomerid', 'primarycontactid']);
+    ns.registerOpenTag(executionContext);
+    expect(handlers.get('primarycontactid')).toContain(ns.openTag);
+    ns.openTag(tagClick('{C1}', 'contact'));
+    expect(open.mock.calls[0][0]).toMatchObject({ entityName: 'contact', entityId: '{C1}' });
+  });
+});

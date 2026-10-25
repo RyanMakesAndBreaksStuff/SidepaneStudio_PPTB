@@ -1,6 +1,6 @@
 import { PaneDefinitionConfig, TriggerKind, DEFAULT_CONFIG, LOOKUP_TAG_TARGETS } from '../types/PaneDefinitionConfig';
 import { normalizeGuid } from './odataGuards';
-import { normalizeConfigWidth } from './configGuards';
+import { normalizeConfigWidth, parseLookupFieldNames } from './configGuards';
 
 const CMD_KINDS: TriggerKind[] = ['FormButton', 'MainGridButton', 'SubgridButton'];
 const GRID_KINDS: TriggerKind[] = ['MainGridButton', 'SubgridButton', 'MainGridOnSelect', 'SubgridOnSelect'];
@@ -37,6 +37,27 @@ function buildCatchBody(label: string, indent: string): string {
     `${indent}console.error(${JSON.stringify(label)}, e);\n` +
     `${indent}Xrm.Navigation.openErrorDialog({ message: e.message });`
   );
+}
+
+/** Name of the generated form OnLoad function that registers the lookup tag click handler. */
+export function lookupRegistrarName(functionName: string): string {
+  return `register${functionName.charAt(0).toUpperCase()}${functionName.slice(1)}`;
+}
+
+/** Item 2 — registrations live on each control, so remove-then-add keeps repeat OnLoad runs from registering twice. */
+function buildLookupRegistrar(ns: string, fn: string, fieldName: string): string {
+  const registrar = `${ns}.${lookupRegistrarName(fn)}`;
+  return `
+// Form OnLoad handler. Turn on "Pass execution context as first parameter". Safe to run more than once.
+${registrar} = function(executionContext) {
+  var formContext = executionContext.getFormContext();
+  ${JSON.stringify(parseLookupFieldNames(fieldName))}.forEach(function(name) {
+    var control = formContext.getControl(name);
+    if (!control) { console.warn(${JSON.stringify(`${registrar}: no lookup control `)} + name); return; }
+    control.removeOnLookupTagClick(${ns}.${fn});
+    control.addOnLookupTagClick(${ns}.${fn});
+  });
+};`;
 }
 
 function buildConfiguredRecordIdExpression(config: PaneDefinitionConfig): string {
@@ -413,9 +434,7 @@ ${body.split('\n').map(line => '  ' + line).join('\n')}
   } catch(e) {
     ${buildCatchBody(`${ns}.${fn}`, '    ')}
   }
-};
-// Register from form OnLoad:
-// formContext.getControl(${JSON.stringify(trigger.fieldName || '')}).addOnLookupTagClick(${ns}.${fn});`;
+};${buildLookupRegistrar(ns, fn, trigger.fieldName)}`;
 }
 
 export function generateBasicScript(config: PaneDefinitionConfig): string {
@@ -520,9 +539,7 @@ export function generateLibraryScript(config: PaneDefinitionConfig): string {
     ? `  var eventArgs = executionContext.getEventArgs();\n  eventArgs.preventDefault();\n  var tag = eventArgs.getTagValue();\n  if (!tag || !tag.id) return;\n`
     : '';
 
-  const lookupRegistration = trigger.kind === 'LookupTagClick'
-    ? `\n// Register from form OnLoad:\n// formContext.getControl(${JSON.stringify(trigger.fieldName || '')}).addOnLookupTagClick(${ns}.${fn});`
-    : '';
+  const lookupRegistration = trigger.kind === 'LookupTagClick' ? buildLookupRegistrar(ns, fn, trigger.fieldName) : '';
 
   const openCall = `  SidePaneHelper.open({\n${optLines.join(',\n')}\n  });\n`;
   const relatedPreamble = buildRelatedRecordPreamble(config, '      ', 'executionContext.getFormContext()');

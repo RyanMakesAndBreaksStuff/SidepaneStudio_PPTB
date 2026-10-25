@@ -1,7 +1,7 @@
 import { PaneDefinitionConfig } from '../types/PaneDefinitionConfig';
 import { isValidLogicalName, normalizeGuid } from './odataGuards';
 import { parseFormData } from './formData';
-import { isConfigWidthValid } from './configGuards';
+import { isConfigWidthValid, parseLookupFieldNames } from './configGuards';
 import { MAX_CONFIG_WIDTH, MIN_CONFIG_WIDTH, RELATED_RECORD_TARGETS } from '../types/PaneDefinitionConfig';
 
 export interface ValidationError {
@@ -244,13 +244,16 @@ export function validate(config: PaneDefinitionConfig, accessibleTables?: Set<st
   }
 
 
-  if ((config.trigger.kind === 'FormOnChange' || config.trigger.kind === 'LookupTagClick') && !config.trigger.fieldName?.trim()) {
-    errors.push({
-      field: 'trigger.fieldName',
-      message: config.trigger.kind === 'LookupTagClick'
-        ? 'Lookup control name is required for LookupTagClick triggers.'
-        : 'Field name is required for FormOnChange triggers.',
-    });
+  if (config.trigger.kind === 'FormOnChange' && !config.trigger.fieldName?.trim()) {
+    errors.push({ field: 'trigger.fieldName', message: 'Field name is required for FormOnChange triggers.' });
+  }
+  if (config.trigger.kind === 'LookupTagClick') {
+    const names = parseLookupFieldNames(config.trigger.fieldName ?? '');
+    if (names.length === 0) {
+      errors.push({ field: 'trigger.fieldName', message: 'Lookup control name is required for LookupTagClick triggers.' });
+    } else if (!names.every(name => isValidLogicalName(name))) {
+      errors.push({ field: 'trigger.fieldName', message: 'Lookup control names must be logical names separated by commas.' });
+    }
   }
 
 

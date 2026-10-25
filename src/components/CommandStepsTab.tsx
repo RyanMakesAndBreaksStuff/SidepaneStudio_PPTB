@@ -8,6 +8,7 @@ import { Field } from './Field';
 import { Callout } from './Callout';
 import { RUNTIME_WEB_RESOURCE_NAME } from '../constants';
 import { copyText } from '../services/clipboard';
+import { lookupRegistrarName } from '../services/CodeGenerationService';
 
 const TRIGGER_SUMMARIES: Record<TriggerKind, string> = {
   FormOnLoad:     'Opens automatically when a record form loads.',
@@ -33,9 +34,10 @@ const DEPLOY_STEPS: Record<TriggerKind, string[]> = {
     'Open <strong>Events → OnChange</strong> and add the web resource as a library, then select the function name. Enable <strong>Pass execution context as first parameter</strong>.',
   ],
   LookupTagClick: [
-    'Paste this function into a new JavaScript web resource and publish it.',
-    'In the form editor, open <strong>Events → OnLoad</strong> and add the web resource as a library.',
-    'Register <code>formContext.getControl(\'lookuplogicalname\').addOnLookupTagClick(...)</code> from form OnLoad. The lookup event automatically passes execution context.',
+    'Paste this script into a new JavaScript web resource and publish it.',
+    'In the form editor, open <strong>Form libraries</strong> and add the web resource. With Shared Library output, add the runtime library to the same form too: the handler calls it when a tag is clicked.',
+    'Open <strong>Events → OnLoad</strong> and add the function shown under <strong>Your function name</strong> (the generated <code>register…</code> function). Keep it enabled and turn on <strong>Pass execution context as first parameter</strong>.',
+    'In the classic form editor, open that handler\'s <strong>Dependencies</strong> tab and add each lookup column as a dependent column. The new form designer lists column dependencies for On Save events only, so skip this step there.',
   ],
   FormButton: [
     'Paste this function into a new JavaScript web resource and publish it.',
@@ -84,7 +86,8 @@ export function CommandStepsTab({ config }: CommandStepsTabProps): React.ReactEl
   const T = theme(isDark);
   const [copyFallback, setCopyFallback] = useState(false);
 
-  const fqn = `${config.trigger.namespace || 'Ns'}.${config.trigger.functionName || 'fn'}`;
+  const fn = config.trigger.functionName || 'fn';
+  const fqn = `${config.trigger.namespace || 'Ns'}.${config.trigger.kind === 'LookupTagClick' ? lookupRegistrarName(fn) : fn}`;
   const steps = DEPLOY_STEPS[config.trigger.kind] ?? [];
   const isManual = config.trigger.kind === 'ManualJS';
 
