@@ -958,7 +958,7 @@ describe('lookup tag registrar', () => {
 
   it('registers and opens the clicked tag in Shared Library output', () => {
     const open = vi.fn();
-    const ns = new Function('SidePaneHelper', `${generateLibraryScript(lookup)}\nreturn TestNs;`)({ open }) as Ns;
+    const ns = new Function('Xrm', 'SidePaneHelper', `${generateLibraryScript(lookup)}\nreturn TestNs;`)({ App: { sidePanes: {} } }, { open }) as Ns;
     const { handlers, executionContext } = formWith(['parentcustomerid', 'primarycontactid']);
     ns.registerOpenTag(executionContext);
     expect(handlers.get('primarycontactid')).toContain(ns.openTag);
@@ -992,5 +992,55 @@ describe('generative page target', () => {
     const ns = new Function('Xrm', `${generateBasicScript(generative('LookupTagClick'))}\nreturn TestNs;`)(xrm) as Record<string, (arg: unknown) => Promise<void>>;
     await ns.open({ getEventArgs: () => ({ preventDefault: vi.fn(), getTagValue: () => ({ id: '{C1}', entityType: 'contact' }) }) });
     expect(pane.navigate).toHaveBeenCalledWith({ pageType: 'generative', pageId: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee', entityName: 'contact', recordId: 'C1' });
+  });
+});
+
+describe('side pane availability guard', () => {
+  const COMMAND_KINDS: TriggerKind[] = ['FormButton', 'MainGridButton', 'SubgridButton'];
+  const preventDefault = vi.fn();
+  const triggerArg = {
+    getFormContext: () => ({ data: { entity: { getId: () => '{A1}' } } }),
+    getEventSource: () => ({ getId: () => '{A1}' }),
+    getEventArgs: () => ({ preventDefault, getTagValue: () => ({ id: '{A1}', entityType: 'account' }) }),
+    getGrid: () => ({ getSelectedRows: () => ({ getLength: () => 1, get: () => ({ getData: () => ({ getEntity: () => ({ getId: () => '{A1}' }) }) }) }) }),
+    data: { entity: { getId: () => '{A1}' } },
+  };
+
+  for (const kind of TRIGGER_KINDS) {
+    it(`${kind} exits without an error dialog when Xrm.App.sidePanes is missing`, async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const xrm = { Navigation: { openAlertDialog: vi.fn(), openErrorDialog: vi.fn() } };
+      preventDefault.mockClear();
+      const config = cfg({ pane: { paneId: 'p' }, trigger: { kind, namespace: 'TestNs', functionName: 'open', fieldName: 'parentcustomerid' }, context: { mode: 'None' } });
+      const handler = new Function('window', 'Xrm',
+        `${generateBasicScript(config)}\nreturn typeof TestNs === 'undefined' ? undefined : TestNs.open;`)({}, xrm) as ((arg: unknown) => void) | undefined;
+      handler?.(triggerArg);
+      const command = COMMAND_KINDS.includes(kind);
+      await vi.waitFor(() => expect(command ? xrm.Navigation.openAlertDialog : warn).toHaveBeenCalled());
+      if (command) {
+        expect(xrm.Navigation.openAlertDialog).toHaveBeenCalledWith({ text: 'Side panes are not available in this client.' });
+      } else {
+        expect(warn).toHaveBeenCalledWith('Side panes are not available in this client.');
+        expect(xrm.Navigation.openAlertDialog).not.toHaveBeenCalled();
+      }
+      expect(xrm.Navigation.openErrorDialog).not.toHaveBeenCalled();
+      expect(preventDefault).not.toHaveBeenCalled(); // a lookup tag keeps its default navigation
+      warn.mockRestore();
+      error.mockRestore();
+    });
+  }
+
+  it('LookupTagClick Library output leaves the default tag navigation alone when side panes are missing', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const open = vi.fn();
+    preventDefault.mockClear();
+    const config = cfg({ pane: { paneId: 'p' }, trigger: { kind: 'LookupTagClick', namespace: 'TestNs', functionName: 'open', fieldName: 'parentcustomerid' }, context: { mode: 'None' } });
+    const ns = new Function('Xrm', 'SidePaneHelper', `${generateLibraryScript(config)}\nreturn TestNs;`)({}, { open }) as Record<string, (arg: unknown) => void>;
+    ns.open(triggerArg);
+    expect(warn).toHaveBeenCalledWith('Side panes are not available in this client.');
+    expect(preventDefault).not.toHaveBeenCalled();
+    expect(open).not.toHaveBeenCalled();
+    warn.mockRestore();
   });
 });

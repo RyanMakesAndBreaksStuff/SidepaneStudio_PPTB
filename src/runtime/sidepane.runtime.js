@@ -68,6 +68,10 @@
       if (!options || !options.paneId) {
         throw new Error('SidePaneHelper.open requires a paneId.');
       }
+      if (!xrm || !xrm.App || !xrm.App.sidePanes) {
+        console.warn('SidePaneHelper.open: side panes are not available in this client.');
+        return;
+      }
       const sidePanes = xrm.App.sidePanes;
       const navInput = buildNavigateInput(options);
       const reuse = options.reuseExistingPane !== false;

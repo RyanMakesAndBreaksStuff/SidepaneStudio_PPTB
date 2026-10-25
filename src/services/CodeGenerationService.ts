@@ -299,6 +299,18 @@ function buildStateAssignment(config: PaneDefinitionConfig): string {
   return '';
 }
 
+/** Side panes are unavailable in on-premises deployments and native players. Load and change handlers log instead of raising a dialog on every form load. */
+function buildAvailabilityGuard(config: PaneDefinitionConfig, indent: string, beforeCancel = false): string {
+  // A lookup tag click checks before it cancels the tag's default navigation, so the body does not repeat the check.
+  if ((config.trigger.kind === 'LookupTagClick') !== beforeCancel) return '';
+  const message = JSON.stringify('Side panes are not available in this client.');
+  const notify = CMD_KINDS.includes(config.trigger.kind)
+    ? `Xrm.Navigation.openAlertDialog({ text: ${message} });`
+    : `console.warn(${message});`;
+  return `${indent}if (!Xrm.App || !Xrm.App.sidePanes) { ${notify} return; }
+`;
+}
+
 function buildGetOrCreateBody(config: PaneDefinitionConfig, indent = '  '): string {
   const { pane, context } = config;
   const paneOpts = buildPaneOptions(config);
@@ -318,7 +330,7 @@ function buildGetOrCreateBody(config: PaneDefinitionConfig, indent = '  '): stri
     : '';
 
   const createBody = `${stateAssign}${indent}var pane = await Xrm.App.sidePanes.createPane(${paneOpts});\n${indent}await pane.navigate(${navInput});\n${badgeAssign}`;
-  return `${buildRelatedRecordPreamble(config, indent)}${reuseCheck}${createBody}${context.reuseExistingPane ? `${indent}}\n` : ''}${closeOthersBlock}`;
+  return `${buildAvailabilityGuard(config, indent)}${buildRelatedRecordPreamble(config, indent)}${reuseCheck}${createBody}${context.reuseExistingPane ? `${indent}}\n` : ''}${closeOthersBlock}`;
 }
 
 function generateFormOnLoad(config: PaneDefinitionConfig): string {
@@ -450,7 +462,7 @@ function generateLookupTagClick(config: PaneDefinitionConfig): string {
   const body = buildGetOrCreateBody(config, '  ');
   return `var ${ns} = ${ns} || {};
 ${ns}.${fn} = async function(executionContext) {
-  var eventArgs = executionContext.getEventArgs();
+${buildAvailabilityGuard(config, '  ', true)}  var eventArgs = executionContext.getEventArgs();
   eventArgs.preventDefault();
   var tag = eventArgs.getTagValue();
   if (!tag || !tag.id) return;
@@ -564,7 +576,7 @@ export function generateLibraryScript(config: PaneDefinitionConfig): string {
       : '';
 
   const lookupPreamble = trigger.kind === 'LookupTagClick'
-    ? `  var eventArgs = executionContext.getEventArgs();\n  eventArgs.preventDefault();\n  var tag = eventArgs.getTagValue();\n  if (!tag || !tag.id) return;\n`
+    ? `${buildAvailabilityGuard(config, '  ', true)}  var eventArgs = executionContext.getEventArgs();\n  eventArgs.preventDefault();\n  var tag = eventArgs.getTagValue();\n  if (!tag || !tag.id) return;\n`
     : '';
 
   const lookupRegistration = trigger.kind === 'LookupTagClick' ? buildLookupRegistrar(ns, fn, trigger.fieldName) : '';
