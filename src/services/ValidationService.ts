@@ -2,7 +2,7 @@ import { PaneDefinitionConfig } from '../types/PaneDefinitionConfig';
 import { isValidLogicalName, normalizeGuid } from './odataGuards';
 import { parseFormData } from './formData';
 import { isConfigWidthValid } from './configGuards';
-import { MAX_CONFIG_WIDTH, MIN_CONFIG_WIDTH } from '../types/PaneDefinitionConfig';
+import { MAX_CONFIG_WIDTH, MIN_CONFIG_WIDTH, RELATED_RECORD_TARGETS } from '../types/PaneDefinitionConfig';
 
 export interface ValidationError {
   field: string;
@@ -152,7 +152,7 @@ export function validate(config: PaneDefinitionConfig, accessibleTables?: Set<st
         field: 'context.mode',
         message: 'Related record context reads a lookup from the triggering form or grid row. Choose a form or grid trigger.',
       });
-    } else if (!['custom', 'entityrecord', 'webresource'].includes(config.target.pageType)) {
+    } else if (!RELATED_RECORD_TARGETS.includes(config.target.pageType)) {
       errors.push({
         field: 'context.mode',
         message: 'Related record context opens one record. Choose a custom page, table record, or web resource target.',
