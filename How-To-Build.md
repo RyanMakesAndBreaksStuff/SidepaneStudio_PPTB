@@ -72,17 +72,13 @@ npm run preview
 
 Open the URL printed by Vite. The same host-API limitation applies to this standalone preview.
 
-## 5. Build the optional shared runtime
+## 5. Get the optional shared runtime
 
-Build the reusable helper separately:
+The shared runtime has no build step. `src/runtime/sidepane.runtime.js` is the file you deploy, byte for byte; its option types are in `src/runtime/sidePaneHelper.d.ts`. Makers get the same file from **Output → Shared Library → Download runtime**.
 
-```shell
-npm run build:runtime
-```
+**Verify:** `npx vitest run --dir src sidePaneHelper` passes. Those tests evaluate the file itself.
 
-**Verify:** `dist-runtime/sidepane.runtime.js` exists. This is the shared JavaScript helper, not the studio application. Its build configuration is `vite.runtime.config.ts`.
-
-For **Shared Library** output, upload the runtime as a JavaScript web resource named `spstudio_/scripts/sidepane.runtime.js`, publish it, and load it before the generated handler. Makers can also download the bundled runtime from **Output → Shared Library → Download runtime**. **Basic Script** output is self-contained and does not require the shared runtime.
+For **Shared Library** output, upload the runtime as a JavaScript web resource named `spstudio_/scripts/sidepane.runtime.js`, publish it, and load it before the generated handler. **Basic Script** output is self-contained and does not require the shared runtime.
 
 ## 6. Test inside ToolBox
 
@@ -112,7 +108,6 @@ Reload the tool in ToolBox after a rebuild as needed. Passing local checks and s
 | Dependency installation reports an unsupported engine | Use a Node version compatible with the project, Vite, and ESLint requirements above, then rerun `npm install`. | Installation succeeds without an engine mismatch. |
 | The browser reports missing ToolBox or Dataverse APIs | Load the built tool inside ToolBox and select a connection. | The workbench and connected metadata load. |
 | Type checking, lint, or tests fail | Read the named file and diagnostic, fix the issue, and rerun that command before building. | The failed check exits successfully. |
-| The shared-runtime output is missing | Run `npm run build:runtime`; the studio build is separate. | `dist-runtime/sidepane.runtime.js` exists. |
 
 ## Command reference
 
@@ -125,7 +120,6 @@ Reload the tool in ToolBox after a rebuild as needed. Passing local checks and s
 | Tests | `npm test` | Vitest results |
 | Coverage | `npm run coverage` | Test coverage report |
 | Studio build | `npm run build` | `dist/` |
-| Shared runtime | `npm run build:runtime` | `dist-runtime/sidepane.runtime.js` |
 | Preview build | `npm run preview` | Vite preview URL |
 | Watch builds | `npm run watch` | Rebuilt studio output |
 | Debug builds | `npm run debug` | Watch builds with sourcemaps |

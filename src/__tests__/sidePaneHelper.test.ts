@@ -1,5 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { open, __setXrm } from '../runtime/sidePaneHelper';
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
+import type { SidePaneHelperOptions } from '../runtime/sidePaneHelper';
+import runtimeSource from '../runtime/sidepane.runtime.js?raw';
 
 function fakeXrm() {
   const pane = { paneId: 'p', select: vi.fn(), close: vi.fn(), navigate: vi.fn().mockResolvedValue(undefined), badge: 0 };
@@ -12,9 +13,20 @@ function fakeXrm() {
   return { pane, xrm: { App: { sidePanes }, Navigation: { openErrorDialog: vi.fn() } } };
 }
 
+/** Calls the shipped bytes: Download runtime saves this same file. */
+function open(options: SidePaneHelperOptions): Promise<void> {
+  return (globalThis as unknown as { SidePaneHelper: { open: typeof open } }).SidePaneHelper.open(options);
+}
+
+beforeEach(() => { (0, eval)(runtimeSource); });
+afterEach(() => {
+  vi.unstubAllGlobals();
+  Reflect.deleteProperty(globalThis, 'SidePaneHelper');
+});
+
 describe('SidePaneHelper.open — createPane options (contract C4/C3)', () => {
   let f: ReturnType<typeof fakeXrm>;
-  beforeEach(() => { f = fakeXrm(); __setXrm(f.xrm as any); });
+  beforeEach(() => { f = fakeXrm(); vi.stubGlobal('Xrm', f.xrm); });
 
   it('forwards only documented paneOptions to createPane', async () => {
     await open({ paneId: 'p', title: 'T', width: 600, pageType: 'custom', name: 'sps_Page', badge: 3, closeOthers: true });
@@ -52,7 +64,7 @@ describe('SidePaneHelper.open — createPane options (contract C4/C3)', () => {
   it('shared helper closes other panes after reusing one', async () => {
     const events: string[] = [];
     const f = fakeXrm();
-    __setXrm(f.xrm as any);
+    vi.stubGlobal('Xrm', f.xrm);
     f.xrm.App.sidePanes.getPane.mockReturnValue(f.pane);
     f.pane.navigate.mockImplementation(async () => { events.push('navigate'); });
     f.pane.select.mockImplementation(() => { events.push('select'); });
@@ -74,7 +86,8 @@ describe('SidePaneHelper.open — createPane options (contract C4/C3)', () => {
     await open({ paneId: 'p', pageType: 'custom', name: 'sps_Page' });
     expect(f.xrm.App.sidePanes.state).toBe(1);
 
-    const g = fakeXrm(); __setXrm(g.xrm as any);
+    const g = fakeXrm();
+    vi.stubGlobal('Xrm', g.xrm);
     await open({ paneId: 'p', pageType: 'custom', name: 'sps_Page', expandOnOpen: false });
     expect(g.xrm.App.sidePanes.state).toBe(0);
   });
@@ -93,8 +106,7 @@ describe('SidePaneHelper.open — createPane options (contract C4/C3)', () => {
 });
 
 describe('SidePaneHelper — global attachment', () => {
-  it('publishes SidePaneHelper.open on the window', async () => {
-    await import('../runtime/index');
+  it('publishes SidePaneHelper.open on the window', () => {
     expect(typeof (globalThis as any).SidePaneHelper?.open).toBe('function');
   });
 });

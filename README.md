@@ -87,14 +87,10 @@ Build the package:
 npm run build
 ```
 
-The studio build is written to `dist/`. To build the separate shared runtime:
-
-```powershell
-npm run build:runtime
-```
-
-This writes `dist-runtime/sidepane.runtime.js` for deployment as the shared
-JavaScript web resource. Basic Script output does not need that runtime.
+The studio build is written to `dist/`. The shared runtime has no build step:
+`src/runtime/sidepane.runtime.js` is the web resource you deploy, byte for
+byte, and **Output → Shared Library → Download runtime** saves the same file.
+Basic Script output does not need that runtime.
 
 Run tests:
 
@@ -124,7 +120,7 @@ does not supply the PPTB and Dataverse APIs needed for connected features.
 - `src/components/` - Workbench panels, preview UI, config inputs, and output UI.
 - `src/services/` - Code generation, validation, metadata, and form XML helpers.
 - `src/contexts/` - Theme and preview session state.
-- `src/runtime/` - Shared `SidePaneHelper` runtime and its entry point.
+- `src/runtime/` - Shared `SidePaneHelper` runtime (`sidepane.runtime.js`, deployed as written) and its option types.
 - `src/__tests__/` - Automated regression tests.
 - `documentation/` - User-facing guides and supporting docs.
 
