@@ -60,7 +60,7 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@microsoft/eslint-plugin-power-apps": "0.6.0",
-    "@pptb/types": "1.2.5",
+    "@pptb/types": "1.2.7",
     "@types/react": "^18.0.0",
     "@types/react-dom": "^18.0.0",
     "@vitejs/plugin-react": "^5.0.0",
