@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { PptbContextAdapter } from '../adapters/PptbContextAdapter';
+import { PptbContextAdapter, type DataverseError } from '../adapters/PptbContextAdapter';
 
 function makeMockDataverseAPI(userId = 'user-abc-123') {
   return {
@@ -226,5 +226,42 @@ describe('PptbContextAdapter', () => {
     await expect(
       adapter.dataverseExecute({ operationName: 'WhoAmI', operationType: '' as any })
     ).rejects.toThrow('operationType');
+  });
+
+  describe('rejection normalisation', () => {
+    const calls: Array<[string, (a: PptbContextAdapter) => Promise<unknown>]> = [
+      ['webApiGet', a => a.webApiGet('accounts')],
+      ['webApiGetEntity', a => a.webApiGetEntity('accounts(1)')],
+      ['checkWebResourceExists', a => a.checkWebResourceExists('new_x')],
+    ];
+
+    it.each(calls)('%s rejects with a DataverseError carrying status', async (_n, call) => {
+      const api = makeMockDataverseAPI();
+      api.queryData.mockRejectedValue({ message: 'Forbidden', status: 403, statusText: 'Forbidden' });
+      vi.stubGlobal('dataverseAPI', api);
+      const err = await call(new PptbContextAdapter()).catch((e: unknown) => e) as DataverseError;
+      expect(err).toBeInstanceOf(Error);
+      expect(err.message).toBe('Forbidden');
+      expect(err.status).toBe(403);
+      expect(err.statusText).toBe('Forbidden');
+    });
+
+    it.each(calls)('%s JSON-stringifies a rejection without a message', async (_n, call) => {
+      const api = makeMockDataverseAPI();
+      api.queryData.mockRejectedValue({ code: 'X' });
+      vi.stubGlobal('dataverseAPI', api);
+      const err = await call(new PptbContextAdapter()).catch((e: unknown) => e) as Error;
+      expect(err).toBeInstanceOf(Error);
+      expect(err.message).toBe('{"code":"X"}');
+    });
+
+    it.each(calls)('%s passes a real Error through as the same instance', async (_n, call) => {
+      const original = new Error('boom');
+      const api = makeMockDataverseAPI();
+      api.queryData.mockRejectedValue(original);
+      vi.stubGlobal('dataverseAPI', api);
+      const err = await call(new PptbContextAdapter()).catch((e: unknown) => e);
+      expect(err).toBe(original);
+    });
   });
 });

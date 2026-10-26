@@ -66,11 +66,56 @@ export interface IXrmHostExtensions {
   getAllEntitiesMetadata(properties: string[], connectionTarget?: 'primary' | 'secondary'): Promise<any[]>;
 }
 
+/** Error thrown for Dataverse failures; carries HTTP details when the host supplies them. */
+export class DataverseError extends Error {
+  status?: number;
+  statusText?: string;
+
+  constructor(message: string, status?: number, statusText?: string) {
+    super(message);
+    this.name = 'DataverseError';
+    this.status = status;
+    this.statusText = statusText;
+  }
+}
+
+function toError(reason: unknown): Error {
+  if (reason instanceof Error) return reason;
+  if (typeof reason === 'object' && reason !== null) {
+    const { message, status, statusText } = reason as { message?: unknown; status?: unknown; statusText?: unknown };
+    let text: string;
+    if (typeof message === 'string' && message) {
+      text = message;
+    } else {
+      try {
+        text = JSON.stringify(reason) ?? String(reason);
+      } catch {
+        text = String(reason);
+      }
+    }
+    return new DataverseError(
+      text,
+      typeof status === 'number' ? status : undefined,
+      typeof statusText === 'string' ? statusText : undefined
+    );
+  }
+  return new DataverseError(String(reason));
+}
+
 export class PptbContextAdapter implements IXrmContext, IXrmHostExtensions {
   readonly isAvailable = false;
   readonly sidePanesAvailable = false;
 
   private _whoAmIPromise: Promise<string> | null = null;
+
+  /** Wraps a dataverseAPI call so non-Error rejections become Error instances. */
+  private async callApi<T>(fn: () => Promise<T>): Promise<T> {
+    try {
+      return await fn();
+    } catch (reason) {
+      throw toError(reason);
+    }
+  }
 
   async createPane(_options: PaneCreateOptions): Promise<never> {
     throw new Error('Side pane creation is not available in the PPTB context.');
@@ -85,10 +130,10 @@ export class PptbContextAdapter implements IXrmContext, IXrmHostExtensions {
   }
 
   async checkWebResourceExists(name: string): Promise<boolean> {
-    const result = await window.dataverseAPI.queryData(
+    const result = await this.callApi(() => window.dataverseAPI.queryData(
       `webresourceset?$select=webresourceid&$filter=name eq '${escapeODataStringLiteral(name)}'&$top=1`,
       undefined
-    );
+    ));
     return (result.value ?? []).length > 0;
   }
 
@@ -120,7 +165,7 @@ export class PptbContextAdapter implements IXrmContext, IXrmHostExtensions {
 
   async webApiGet<T = unknown>(odataPath: string, connectionTarget?: 'primary' | 'secondary'): Promise<T> {
     const cleanPath = odataPath.replace(/^\/api\/data\/v\d+\.\d+\//, '');
-    const result = await window.dataverseAPI.queryData(cleanPath, connectionTarget);
+    const result = await this.callApi(() => window.dataverseAPI.queryData(cleanPath, connectionTarget));
     return result.value as unknown as T;
   }
 
@@ -131,7 +176,7 @@ export class PptbContextAdapter implements IXrmContext, IXrmHostExtensions {
    */
   async webApiGetEntity<T = unknown>(odataPath: string, connectionTarget?: 'primary' | 'secondary'): Promise<T> {
     const cleanPath = odataPath.replace(/^\/api\/data\/v\d+\.\d+\//, '');
-    const result = await window.dataverseAPI.queryData(cleanPath, connectionTarget);
+    const result = await this.callApi(() => window.dataverseAPI.queryData(cleanPath, connectionTarget));
     return result as unknown as T;
   }
 
@@ -145,11 +190,11 @@ export class PptbContextAdapter implements IXrmContext, IXrmHostExtensions {
     if (request.entityName !== undefined) payload.entityName = request.entityName;
     if (request.entityId !== undefined) payload.entityId = request.entityId;
     if (request.parameters !== undefined) payload.parameters = request.parameters;
-    return window.dataverseAPI.execute(payload, connectionTarget) as Promise<T>;
+    return this.callApi(() => window.dataverseAPI.execute(payload, connectionTarget)) as Promise<T>;
   }
 
   async getAllEntitiesMetadata(properties: string[], connectionTarget?: 'primary' | 'secondary'): Promise<any[]> {
-    const result = await window.dataverseAPI.getAllEntitiesMetadata(properties, connectionTarget);
+    const result = await this.callApi(() => window.dataverseAPI.getAllEntitiesMetadata(properties, connectionTarget));
     return result.value;
   }
 }
