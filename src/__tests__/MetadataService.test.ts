@@ -252,21 +252,6 @@ describe('MetadataService', () => {
       logSpy.mockRestore();
     });
 
-    it('forwards connectionTarget to webApiGet', async () => {
-      const xrm = makeXrm([]);
-      const svc = new MetadataService(xrm);
-      await svc.listAccessibleTables('secondary');
-      expect(xrm.webApiGet).toHaveBeenCalledWith(expect.any(String), 'secondary');
-    });
-
-    it('cache key includes connectionTarget — primary and secondary are independent', async () => {
-      const xrm = makeXrm([]);
-      const svc = new MetadataService(xrm);
-      await svc.listAccessibleTables('primary');
-      await svc.listAccessibleTables('secondary');
-      expect(xrm.webApiGet).toHaveBeenCalledTimes(2);
-    });
-
     it('uses custom filter config for exact denies and allowed standard tables', async () => {
       const xrm = makeXrm([ENTITY_ACCOUNT, ENTITY_STANDARD_LOCKED]);
       const svc = new MetadataService(xrm, {
@@ -450,10 +435,10 @@ describe('view metadata', () => {
         userqueryid: 'bbbbbbbb-0000-0000-0000-000000000002',
         name: 'My accounts', fetchxml: '<fetch top="3"><entity name="account"/></fetch>',
       }]);
-    const result = await new MetadataService({ webApiGet }).listViewsForEntity('account', 'secondary');
+    const result = await new MetadataService({ webApiGet }).listViewsForEntity('account');
     expect(webApiGet.mock.calls).toEqual([
-      ["savedqueries?$select=name,savedqueryid,fetchxml,layoutxml&$filter=returnedtypecode eq 'account' and querytype eq 0&$orderby=name asc", 'secondary'],
-      ["userqueries?$select=name,userqueryid,fetchxml,layoutxml&$filter=returnedtypecode eq 'account' and querytype eq 0&$orderby=name asc", 'secondary'],
+      ["savedqueries?$select=name,savedqueryid,fetchxml,layoutxml&$filter=returnedtypecode eq 'account' and querytype eq 0&$orderby=name asc"],
+      ["userqueries?$select=name,userqueryid,fetchxml,layoutxml&$filter=returnedtypecode eq 'account' and querytype eq 0&$orderby=name asc"],
     ]);
     expect(result).toEqual({ status: 'ok', views: [
       { id: 'bbbbbbbb-0000-0000-0000-000000000002', name: 'My accounts', viewType: 'userquery', fetchXml: '<fetch top="3"><entity name="account"/></fetch>', layoutXml: '' },
@@ -465,9 +450,9 @@ describe('view metadata', () => {
     const labels = [{ LogicalName: 'name', DisplayName: { UserLocalizedLabel: { Label: 'Account Name' } } }];
     const webApiGet = vi.fn().mockResolvedValue(labels);
     const service = new MetadataService({ webApiGet });
-    expect(await service.listAttributeLabels('account', 'secondary')).toEqual(labels);
+    expect(await service.listAttributeLabels('account')).toEqual(labels);
     expect(webApiGet).toHaveBeenCalledWith(
-      "EntityDefinitions(LogicalName='account')/Attributes?$select=LogicalName,DisplayName", 'secondary');
+      "EntityDefinitions(LogicalName='account')/Attributes?$select=LogicalName,DisplayName");
     await expect(service.listAttributeLabels("account'bad")).rejects.toThrow('Invalid table logical name.');
     expect(webApiGet).toHaveBeenCalledTimes(1);
   });
@@ -478,8 +463,7 @@ describe('view metadata', () => {
     const service = new MetadataService({ webApiGet });
     expect(await service.listLookupAttributes('account')).toEqual(lookups);
     expect(webApiGet).toHaveBeenCalledWith(
-      "EntityDefinitions(LogicalName='account')/Attributes/Microsoft.Dynamics.CRM.LookupAttributeMetadata?$select=LogicalName,DisplayName",
-      undefined);
+      "EntityDefinitions(LogicalName='account')/Attributes/Microsoft.Dynamics.CRM.LookupAttributeMetadata?$select=LogicalName,DisplayName");
     await expect(service.listLookupAttributes("account'bad")).rejects.toThrow('Invalid table logical name.');
     expect(webApiGet).toHaveBeenCalledTimes(1);
   });
