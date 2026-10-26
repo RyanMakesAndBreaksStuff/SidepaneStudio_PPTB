@@ -136,7 +136,7 @@ const PreviewPanelContent = React.memo(function PreviewPanelContent({
     const requestId = ++sampleRequestRef.current;
     setSample({ key: sampleKey, state: { status: 'loading' } });
     try {
-      const response = await window.dataverseAPI.fetchXmlQuery(buildRelatedSampleFetchXml(previewHostEntity, relatedLookup));
+      const response = await xrm.fetchXml(buildRelatedSampleFetchXml(previewHostEntity, relatedLookup));
       if (!mountedRef.current || sampleRequestRef.current !== requestId) return;
       const row = Array.isArray(response.value) ? response.value[0] : undefined;
       setSample({ key: sampleKey, state: { status: 'loaded',
@@ -198,7 +198,7 @@ const PreviewPanelContent = React.memo(function PreviewPanelContent({
           key={JSON.stringify([gridEntity,
             config.target.pageType === 'entitylist' ? config.target.viewId : '',
             config.target.pageType === 'entitylist' ? config.target.viewType : ''])}
-          config={config} validation={validation} metadataService={metadataService}
+          config={config} validation={validation} metadataService={metadataService} xrm={xrm}
           entityName={gridEntity} allowEntityChange={!configuredHostEntity} onEntityNameChange={setPreviewHostEntity}
         />}
 

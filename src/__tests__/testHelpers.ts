@@ -27,5 +27,6 @@ export function xrmStub(): IXrmContext {
     checkWebResourceExists: vi.fn().mockResolvedValue(true),
     webApiGet: vi.fn(),
     webApiGetEntity: vi.fn(),
+    fetchXml: vi.fn(),
   };
 }

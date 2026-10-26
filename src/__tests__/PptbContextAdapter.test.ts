@@ -14,6 +14,20 @@ describe('PptbContextAdapter', () => {
     vi.unstubAllGlobals();
   });
 
+  it('fetchXml delegates to fetchXmlQuery and returns the host result as-is', async () => {
+    const result = { value: [{ name: 'Acme' }] };
+    const api = { ...makeMockDataverseAPI(), fetchXmlQuery: vi.fn().mockResolvedValue(result) };
+    vi.stubGlobal('dataverseAPI', api);
+    await expect(new PptbContextAdapter().fetchXml('<fetch/>')).resolves.toBe(result);
+    expect(api.fetchXmlQuery).toHaveBeenCalledWith('<fetch/>');
+  });
+
+  it('fetchXml normalises non-Error rejections', async () => {
+    const api = { ...makeMockDataverseAPI(), fetchXmlQuery: vi.fn().mockRejectedValue('boom') };
+    vi.stubGlobal('dataverseAPI', api);
+    await expect(new PptbContextAdapter().fetchXml('<fetch/>')).rejects.toBeInstanceOf(Error);
+  });
+
   it('isAvailable and sidePanesAvailable are false', () => {
     vi.stubGlobal('dataverseAPI', makeMockDataverseAPI());
     const adapter = new PptbContextAdapter();
