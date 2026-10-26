@@ -9,19 +9,19 @@
 
 The adapter calls the documented API correctly. Every method it uses exists with the argument order we pass: `queryData(odataQuery, connectionTarget?)`, `execute(request, connectionTarget?)` and `getAllEntitiesMetadata(entityProperties?, connectionTarget?)`. Every OData path uses entity set names (`systemforms`, `savedqueries`, `webresourceset`, `EntityDefinitions`), which is what `queryData` expects. No call is outright wrong. The risks are in error handling, in behaviour the docs don't cover, and in dead code.
 
-| # | Severity | Finding |
-|---|----------|---------|
-| 1 | **High** | Dataverse errors may not be `Error` instances, so the real message gets thrown away |
-| 2 | Medium | `webApiGet` returns `result.value` without a guard, so callers crash on an unexpected shape |
-| 3 | Medium | `webApiGetEntity` relies on undocumented `queryData` behaviour |
-| 4 | Medium | The `connectionTarget` parameter is never used, and secondary-connection support is untested in production |
-| 5 | Medium | `@pptb/types` is pinned at 1.2.5 while the docs describe up to 1.2.8 |
-| 6 | Low | `toolboxAPI.events.off` is not in the docs |
-| 7 | Low | Two components call `dataverseAPI.fetchXmlQuery` directly instead of going through the adapter |
-| 8 | Low | Dead code: the WhoAmI cache, `getAllEntitiesMetadata`, and the extension stubs |
-| 9 | Low | No paging: `queryData` gives no `@odata.nextLink` handling |
-| 10 | Low | `ConnectionTarget` is narrower than the docs allow (no numeric slots) |
-| 11 | Info | Query strings are escaped for OData but not URL-encoded |
+| # | Severity | Finding | Status |
+|---|----------|---------|--------|
+| 1 | **High** | Dataverse errors may not be `Error` instances, so the real message gets thrown away | ✅ Fixed: `DataverseError` + `callApi` |
+| 2 | Medium | `webApiGet` returns `result.value` without a guard, so callers crash on an unexpected shape | ✅ Fixed: throws on missing `value` |
+| 3 | Medium | `webApiGetEntity` relies on undocumented `queryData` behaviour | ✅ Fixed: unwraps `{value:[x]}` |
+| 4 | Medium | The `connectionTarget` parameter is never used, and secondary-connection support is untested in production | ✅ Removed parameter |
+| 5 | Medium | `@pptb/types` is pinned at 1.2.5 while the docs describe up to 1.2.8 | ✅ Bumped to 1.2.7 (latest published) |
+| 6 | Low | `toolboxAPI.events.off` is not in the docs | ✅ No change: `off` is declared in 1.2.7 types |
+| 7 | Low | Two components call `dataverseAPI.fetchXmlQuery` directly instead of going through the adapter | ✅ Fixed: `fetchXml` on adapter |
+| 8 | Low | Dead code: the WhoAmI cache, `getAllEntitiesMetadata`, and the extension stubs | ✅ Deleted |
+| 9 | Low | No paging: `queryData` gives no `@odata.nextLink` handling | ⏸ Deferred: verify on a large org first |
+| 10 | Low | `ConnectionTarget` is narrower than the docs allow (no numeric slots) | ✅ Moot (parameter removed) |
+| 11 | Info | Query strings are escaped for OData but not URL-encoded | ℹ️ No change |
 
 ## Method-by-method validation
 
