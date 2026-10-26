@@ -37,10 +37,15 @@ export interface DataverseExecuteRequest {
  * adapters/tests (PR-002, 2026-09-03) — none of the other original 12 members
  * had a production caller reached through this interface.
  */
+export interface FetchXmlResult {
+  value: Record<string, unknown>[];
+}
+
 export interface IXrmContext {
   checkWebResourceExists(name: string): Promise<boolean>;
   webApiGet<T = unknown>(path: string, connectionTarget?: 'primary' | 'secondary'): Promise<T>;
   webApiGetEntity<T = unknown>(path: string, connectionTarget?: 'primary' | 'secondary'): Promise<T>;
+  fetchXml(xml: string): Promise<FetchXmlResult>;
 }
 
 /**
@@ -196,6 +201,10 @@ export class PptbContextAdapter implements IXrmContext, IXrmHostExtensions {
     if (request.entityId !== undefined) payload.entityId = request.entityId;
     if (request.parameters !== undefined) payload.parameters = request.parameters;
     return this.callApi(() => window.dataverseAPI.execute(payload, connectionTarget)) as Promise<T>;
+  }
+
+  async fetchXml(xml: string): Promise<FetchXmlResult> {
+    return this.callApi(() => window.dataverseAPI.fetchXmlQuery(xml));
   }
 
   async getAllEntitiesMetadata(properties: string[], connectionTarget?: 'primary' | 'secondary'): Promise<any[]> {
