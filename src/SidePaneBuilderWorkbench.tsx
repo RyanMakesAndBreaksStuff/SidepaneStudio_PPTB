@@ -136,7 +136,6 @@ export function SidePaneBuilderWorkbench(): React.ReactElement {
           case 'connection:updated':
           case 'connection:deleted':
             setPreviewEpoch(value => value + 1);
-            adapterRef.current?.resetUserId();
             metaRef.current?.invalidate();
             void refreshConnection();
             break;
