@@ -43,8 +43,8 @@ export interface FetchXmlResult {
 
 export interface IXrmContext {
   checkWebResourceExists(name: string): Promise<boolean>;
-  webApiGet<T = unknown>(path: string, connectionTarget?: 'primary' | 'secondary'): Promise<T>;
-  webApiGetEntity<T = unknown>(path: string, connectionTarget?: 'primary' | 'secondary'): Promise<T>;
+  webApiGet<T = unknown>(path: string): Promise<T>;
+  webApiGetEntity<T = unknown>(path: string): Promise<T>;
   fetchXml(xml: string): Promise<FetchXmlResult>;
 }
 
@@ -67,8 +67,8 @@ export interface IXrmHostExtensions {
   readEnvVar(name: string): Promise<string | null>;
   getCurrentAppId(): string | null;
   getCurrentUserId(): Promise<string>;
-  dataverseExecute<T = unknown>(request: DataverseExecuteRequest, connectionTarget?: 'primary' | 'secondary'): Promise<T>;
-  getAllEntitiesMetadata(properties: string[], connectionTarget?: 'primary' | 'secondary'): Promise<any[]>;
+  dataverseExecute<T = unknown>(request: DataverseExecuteRequest): Promise<T>;
+  getAllEntitiesMetadata(properties: string[]): Promise<any[]>;
 }
 
 /** Error thrown for Dataverse failures; carries HTTP details when the host supplies them. */
@@ -136,8 +136,7 @@ export class PptbContextAdapter implements IXrmContext, IXrmHostExtensions {
 
   async checkWebResourceExists(name: string): Promise<boolean> {
     const result = await this.callApi(() => window.dataverseAPI.queryData(
-      `webresourceset?$select=webresourceid&$filter=name eq '${escapeODataStringLiteral(name)}'&$top=1`,
-      undefined
+      `webresourceset?$select=webresourceid&$filter=name eq '${escapeODataStringLiteral(name)}'&$top=1`
     ));
     return (result.value ?? []).length > 0;
   }
@@ -168,9 +167,9 @@ export class PptbContextAdapter implements IXrmContext, IXrmHostExtensions {
     this._whoAmIPromise = null;
   }
 
-  async webApiGet<T = unknown>(odataPath: string, connectionTarget?: 'primary' | 'secondary'): Promise<T> {
+  async webApiGet<T = unknown>(odataPath: string): Promise<T> {
     const cleanPath = odataPath.replace(/^\/api\/data\/v\d+\.\d+\//, '');
-    const result = await this.callApi(() => window.dataverseAPI.queryData(cleanPath, connectionTarget));
+    const result = await this.callApi(() => window.dataverseAPI.queryData(cleanPath));
     if (!Array.isArray(result?.value)) {
       throw new Error(`Unexpected response for ${cleanPath}: missing value array`);
     }
@@ -182,15 +181,15 @@ export class PptbContextAdapter implements IXrmContext, IXrmHostExtensions {
    * ({ value: [...] }) but returns the entity itself for a keyed path, so the cast
    * is unavoidable — it is confined here rather than leaking into services.
    */
-  async webApiGetEntity<T = unknown>(odataPath: string, connectionTarget?: 'primary' | 'secondary'): Promise<T> {
+  async webApiGetEntity<T = unknown>(odataPath: string): Promise<T> {
     const cleanPath = odataPath.replace(/^\/api\/data\/v\d+\.\d+\//, '');
-    const result = await this.callApi(() => window.dataverseAPI.queryData(cleanPath, connectionTarget));
+    const result = await this.callApi(() => window.dataverseAPI.queryData(cleanPath));
     const value = (result as { value?: unknown } | null | undefined)?.value;
     if (Array.isArray(value) && value.length === 1) return value[0] as T;
     return result as unknown as T;
   }
 
-  async dataverseExecute<T = unknown>(request: DataverseExecuteRequest, connectionTarget?: 'primary' | 'secondary'): Promise<T> {
+  async dataverseExecute<T = unknown>(request: DataverseExecuteRequest): Promise<T> {
     if (!request.operationName) throw new Error('dataverseExecute: operationName is required');
     if (!request.operationType) throw new Error('dataverseExecute: operationType is required');
     const payload: DataverseAPI.ExecuteRequest = {
@@ -200,15 +199,15 @@ export class PptbContextAdapter implements IXrmContext, IXrmHostExtensions {
     if (request.entityName !== undefined) payload.entityName = request.entityName;
     if (request.entityId !== undefined) payload.entityId = request.entityId;
     if (request.parameters !== undefined) payload.parameters = request.parameters;
-    return this.callApi(() => window.dataverseAPI.execute(payload, connectionTarget)) as Promise<T>;
+    return this.callApi(() => window.dataverseAPI.execute(payload)) as Promise<T>;
   }
 
   async fetchXml(xml: string): Promise<FetchXmlResult> {
     return this.callApi(() => window.dataverseAPI.fetchXmlQuery(xml));
   }
 
-  async getAllEntitiesMetadata(properties: string[], connectionTarget?: 'primary' | 'secondary'): Promise<any[]> {
-    const result = await this.callApi(() => window.dataverseAPI.getAllEntitiesMetadata(properties, connectionTarget));
+  async getAllEntitiesMetadata(properties: string[]): Promise<any[]> {
+    const result = await this.callApi(() => window.dataverseAPI.getAllEntitiesMetadata(properties));
     return result.value;
   }
 }

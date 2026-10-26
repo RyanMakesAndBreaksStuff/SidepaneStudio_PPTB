@@ -44,7 +44,7 @@ describe('PptbContextAdapter', () => {
     expect(api.execute).toHaveBeenCalledWith({
       operationName: 'WhoAmI',
       operationType: 'function',
-    }, undefined);
+    });
   });
 
   it('getCurrentUserId caches WhoAmI — only one execute call', async () => {
@@ -102,7 +102,7 @@ describe('PptbContextAdapter', () => {
       operationName: 'RetrieveUserPrivileges',
       operationType: 'function',
       parameters: { UserId: 'user-123' },
-    }, undefined);
+    });
   });
 
   it('dataverseExecute omits optional fields when not provided', async () => {
@@ -114,7 +114,7 @@ describe('PptbContextAdapter', () => {
     expect(api.execute).toHaveBeenCalledWith({
       operationName: 'WhoAmI',
       operationType: 'function',
-    }, undefined);
+    });
   });
 
   it('getAllEntitiesMetadata unwraps value array', async () => {
@@ -124,7 +124,7 @@ describe('PptbContextAdapter', () => {
     const adapter = new PptbContextAdapter();
     const result = await adapter.getAllEntitiesMetadata(['LogicalName']);
     expect(result).toEqual([{ LogicalName: 'account' }]);
-    expect(api.getAllEntitiesMetadata).toHaveBeenCalledWith(['LogicalName'], undefined);
+    expect(api.getAllEntitiesMetadata).toHaveBeenCalledWith(['LogicalName']);
   });
 
   it('getAllEntitiesMetadata returns empty array when value is empty', async () => {
@@ -161,8 +161,7 @@ describe('PptbContextAdapter', () => {
     const adapter = new PptbContextAdapter();
     expect(await adapter.checkWebResourceExists("sps_/icons/o'brien.svg")).toBe(true);
     expect(api.queryData).toHaveBeenCalledWith(
-      "webresourceset?$select=webresourceid&$filter=name eq 'sps_/icons/o''brien.svg'&$top=1",
-      undefined
+      "webresourceset?$select=webresourceid&$filter=name eq 'sps_/icons/o''brien.svg'&$top=1"
     );
   });
 
@@ -192,7 +191,7 @@ describe('PptbContextAdapter', () => {
     vi.stubGlobal('dataverseAPI', api);
     const adapter = new PptbContextAdapter();
     const result = await adapter.webApiGet('/api/data/v9.2/accounts?$select=name');
-    expect(api.queryData).toHaveBeenCalledWith('accounts?$select=name', undefined);
+    expect(api.queryData).toHaveBeenCalledWith('accounts?$select=name');
     expect(result).toEqual([{ name: 'Acme' }]);
   });
 
@@ -202,7 +201,7 @@ describe('PptbContextAdapter', () => {
     vi.stubGlobal('dataverseAPI', api);
     const adapter = new PptbContextAdapter();
     await adapter.webApiGet('contacts?$select=fullname');
-    expect(api.queryData).toHaveBeenCalledWith('contacts?$select=fullname', undefined);
+    expect(api.queryData).toHaveBeenCalledWith('contacts?$select=fullname');
   });
 
   it('webApiGet throws when the response has no value array', async () => {
@@ -239,27 +238,6 @@ describe('PptbContextAdapter', () => {
     expect(await adapter.webApiGetEntity('accounts(1)')).toEqual({ name: 'Acme' });
     api.queryData.mockResolvedValue({ value: [{ a: 1 }, { a: 2 }] });
     expect(await adapter.webApiGetEntity('accounts')).toEqual({ value: [{ a: 1 }, { a: 2 }] });
-  });
-
-  it('dataverseExecute forwards connectionTarget to window.dataverseAPI.execute', async () => {
-    const api = makeMockDataverseAPI();
-    api.execute.mockResolvedValue({ UserId: 'u' });
-    vi.stubGlobal('dataverseAPI', api);
-    const adapter = new PptbContextAdapter();
-    await adapter.dataverseExecute({ operationName: 'WhoAmI', operationType: 'function' }, 'secondary');
-    expect(api.execute).toHaveBeenCalledWith(
-      { operationName: 'WhoAmI', operationType: 'function' },
-      'secondary'
-    );
-  });
-
-  it('getAllEntitiesMetadata forwards connectionTarget', async () => {
-    const api = makeMockDataverseAPI();
-    api.getAllEntitiesMetadata.mockResolvedValue({ value: [] });
-    vi.stubGlobal('dataverseAPI', api);
-    const adapter = new PptbContextAdapter();
-    await adapter.getAllEntitiesMetadata(['LogicalName'], 'secondary');
-    expect(api.getAllEntitiesMetadata).toHaveBeenCalledWith(['LogicalName'], 'secondary');
   });
 
   it('dataverseExecute throws immediately when operationName is missing', async () => {
