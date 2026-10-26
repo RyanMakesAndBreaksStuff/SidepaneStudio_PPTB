@@ -166,6 +166,9 @@ export class PptbContextAdapter implements IXrmContext, IXrmHostExtensions {
   async webApiGet<T = unknown>(odataPath: string, connectionTarget?: 'primary' | 'secondary'): Promise<T> {
     const cleanPath = odataPath.replace(/^\/api\/data\/v\d+\.\d+\//, '');
     const result = await this.callApi(() => window.dataverseAPI.queryData(cleanPath, connectionTarget));
+    if (!Array.isArray(result?.value)) {
+      throw new Error(`Unexpected response for ${cleanPath}: missing value array`);
+    }
     return result.value as unknown as T;
   }
 
@@ -177,6 +180,8 @@ export class PptbContextAdapter implements IXrmContext, IXrmHostExtensions {
   async webApiGetEntity<T = unknown>(odataPath: string, connectionTarget?: 'primary' | 'secondary'): Promise<T> {
     const cleanPath = odataPath.replace(/^\/api\/data\/v\d+\.\d+\//, '');
     const result = await this.callApi(() => window.dataverseAPI.queryData(cleanPath, connectionTarget));
+    const value = (result as { value?: unknown } | null | undefined)?.value;
+    if (Array.isArray(value) && value.length === 1) return value[0] as T;
     return result as unknown as T;
   }
 

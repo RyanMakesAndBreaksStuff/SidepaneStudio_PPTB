@@ -191,6 +191,42 @@ describe('PptbContextAdapter', () => {
     expect(api.queryData).toHaveBeenCalledWith('contacts?$select=fullname', undefined);
   });
 
+  it('webApiGet throws when the response has no value array', async () => {
+    const api = makeMockDataverseAPI();
+    api.queryData.mockResolvedValue({ accountid: 'a-1' });
+    vi.stubGlobal('dataverseAPI', api);
+    const adapter = new PptbContextAdapter();
+    await expect(adapter.webApiGet('accounts')).rejects.toThrow(
+      'Unexpected response for accounts: missing value array',
+    );
+  });
+
+  it('webApiGet throws when the response is null', async () => {
+    const api = makeMockDataverseAPI();
+    api.queryData.mockResolvedValue(null);
+    vi.stubGlobal('dataverseAPI', api);
+    const adapter = new PptbContextAdapter();
+    await expect(adapter.webApiGet('accounts')).rejects.toThrow('missing value array');
+  });
+
+  it('webApiGetEntity unwraps a single-element value array', async () => {
+    const api = makeMockDataverseAPI();
+    api.queryData.mockResolvedValue({ value: [{ name: 'Acme' }] });
+    vi.stubGlobal('dataverseAPI', api);
+    const adapter = new PptbContextAdapter();
+    expect(await adapter.webApiGetEntity('accounts(1)')).toEqual({ name: 'Acme' });
+  });
+
+  it('webApiGetEntity returns the result as-is when it is not a single-element value array', async () => {
+    const api = makeMockDataverseAPI();
+    vi.stubGlobal('dataverseAPI', api);
+    const adapter = new PptbContextAdapter();
+    api.queryData.mockResolvedValue({ name: 'Acme' });
+    expect(await adapter.webApiGetEntity('accounts(1)')).toEqual({ name: 'Acme' });
+    api.queryData.mockResolvedValue({ value: [{ a: 1 }, { a: 2 }] });
+    expect(await adapter.webApiGetEntity('accounts')).toEqual({ value: [{ a: 1 }, { a: 2 }] });
+  });
+
   it('dataverseExecute forwards connectionTarget to window.dataverseAPI.execute', async () => {
     const api = makeMockDataverseAPI();
     api.execute.mockResolvedValue({ UserId: 'u' });
