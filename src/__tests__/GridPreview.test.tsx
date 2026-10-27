@@ -7,8 +7,11 @@ import { PreviewPanel } from '../components/PreviewPanel';
 import { PreviewSessionProvider } from '../contexts/PreviewSessionContext';
 import { MetadataService } from '../services/MetadataService';
 import { gridCellText, resolveGridColumns } from '../services/GridViewModel';
+import type { IXrmContext } from '../adapters/PptbContextAdapter';
 import { cfg, deferred, xrmStub } from './testHelpers';
 
+let xrm = xrmStub();
+function setFetch(fn: unknown) { xrm = { ...xrmStub(), fetchXml: fn as IXrmContext['fetchXml'] }; }
 let root: Root | undefined;
 let host: HTMLDivElement | undefined;
 const view = {
@@ -42,23 +45,23 @@ async function click(text: string) {
   await act(async () => { button!.click(); });
 }
 function preview(service = metadata(), key = 'account') {
-  return <GridPreview key={key} config={config} validation={validation} metadataService={service}
+  return <GridPreview key={key} config={config} validation={validation} metadataService={service} xrm={xrm}
     entityName="account" allowEntityChange={false} onEntityNameChange={() => undefined} />;
 }
 afterEach(async () => {
   await act(async () => { root?.unmount(); });
-  host?.remove(); root = undefined; host = undefined; vi.unstubAllGlobals();
+  host?.remove(); root = undefined; host = undefined; xrm = xrmStub(); vi.unstubAllGlobals();
 });
 
 describe('grid preview', () => {
   it('uses layout display labels and excludes incidental record keys', async () => {
-    vi.stubGlobal('dataverseAPI', { fetchXmlQuery: vi.fn().mockResolvedValue({ value: [{
+    setFetch(vi.fn().mockResolvedValue({ value: [{
       accountid: 'record-id', name: 'Acme', statuscode: 1,
       'statuscode@OData.Community.Display.V1.FormattedValue': 'Active',
       _primarycontactid_value: 'contact-id',
       '_primarycontactid_value@OData.Community.Display.V1.FormattedValue': 'Pat Lee',
       'c.emailaddress1': 'pat@example.com',
-    }] }) });
+    }] }));
     await render(preview());
     await click('Generate grid preview');
     expect(Array.from(host!.querySelectorAll('thead th')).slice(1).map(th => th.textContent))
@@ -105,7 +108,7 @@ describe('grid preview', () => {
   it('reads only on Generate, caps displayed rows, uses annotations, and simulates selection', async () => {
     const fetchXmlQuery = vi.fn().mockResolvedValue({ value: Array.from({ length: 12 }, (_, i) => ({ name: `Acme ${i}`, statuscode: 1,
       'statuscode@OData.Community.Display.V1.FormattedValue': 'Active', '@odata.etag': 'secret' })) });
-    vi.stubGlobal('dataverseAPI', { fetchXmlQuery });
+    setFetch(fetchXmlQuery);
     await render(preview());
     expect(fetchXmlQuery).not.toHaveBeenCalled();
     await click('Generate grid preview');
@@ -125,7 +128,7 @@ describe('grid preview', () => {
 
   it('uses checkbox selection and an explicit ribbon command without choosing row one', async () => {
     const fetchXmlQuery = vi.fn().mockResolvedValue({ value: [{ name: 'Acme' }, { name: 'Beta' }] });
-    vi.stubGlobal('dataverseAPI', { fetchXmlQuery });
+    setFetch(fetchXmlQuery);
     await render(preview());
     await click('Generate grid preview');
     const command = () => Array.from(host!.querySelectorAll('button')).find(b => b.textContent === 'Preview command')!;
@@ -151,9 +154,9 @@ describe('grid preview', () => {
   });
 
   it.each(['MainGridOnSelect', 'SubgridOnSelect'] as const)('simulates %s only for one selected row', async kind => {
-    vi.stubGlobal('dataverseAPI', { fetchXmlQuery: vi.fn().mockResolvedValue({ value: [{ name: 'Acme' }, { name: 'Beta' }] }) });
+    setFetch(vi.fn().mockResolvedValue({ value: [{ name: 'Acme' }, { name: 'Beta' }] }));
     await render(<GridPreview config={{ ...config, trigger: { ...config.trigger, kind } }} validation={validation}
-      metadataService={metadata()} entityName="account" allowEntityChange={false} onEntityNameChange={() => undefined} />);
+      metadataService={metadata()} xrm={xrm} entityName="account" allowEntityChange={false} onEntityNameChange={() => undefined} />);
     await click('Generate grid preview');
     await act(async () => { host!.querySelector<HTMLInputElement>('input[aria-label="Select row 2"]')!.click(); });
     expect(host!.textContent).toContain('SelectedRow: row 2');
@@ -163,7 +166,7 @@ describe('grid preview', () => {
 
   it('shows empty results and query failures with a repeatable explicit action', async () => {
     const fetchXmlQuery = vi.fn().mockRejectedValueOnce(new Error('Access denied')).mockResolvedValue({ value: [] });
-    vi.stubGlobal('dataverseAPI', { fetchXmlQuery });
+    setFetch(fetchXmlQuery);
     await render(preview());
     await click('Generate grid preview');
     expect(host!.querySelector('[role="alert"]')?.textContent).toContain('Access denied');
@@ -176,7 +179,7 @@ describe('grid preview', () => {
     const listViewsForEntity = vi.fn().mockResolvedValue({ status: 'ok', views: [view] });
     const service = { ...metadata(), listViewsForEntity } as unknown as MetadataService;
     const fetchXmlQuery = vi.fn();
-    vi.stubGlobal('dataverseAPI', { fetchXmlQuery });
+    setFetch(fetchXmlQuery);
     await render(preview(service));
     listViewsForEntity.mockResolvedValueOnce({ status: 'error', reason: 'Views unavailable' });
     await click('Generate grid preview');
@@ -190,7 +193,7 @@ describe('grid preview', () => {
   it('discards pending reads when the preview selection is replaced', async () => {
     const pending = deferred<{ value: Record<string, unknown>[] }>();
     const fetchXmlQuery = vi.fn().mockReturnValue(pending.promise);
-    vi.stubGlobal('dataverseAPI', { fetchXmlQuery });
+    setFetch(fetchXmlQuery);
     const service = metadata();
     await render(preview(service, 'old'));
     await click('Generate grid preview');
@@ -203,9 +206,8 @@ describe('grid preview', () => {
   it('uses the configured entity and view after switching from a custom target', async () => {
     const listViewsForEntity = vi.fn().mockResolvedValue({ status: 'ok', views: [view] });
     const service = { ...metadata(), listViewsForEntity } as unknown as MetadataService;
-    const xrm = xrmStub();
     const fetchXmlQuery = vi.fn().mockResolvedValue({ value: [] });
-    vi.stubGlobal('dataverseAPI', { fetchXmlQuery });
+    setFetch(fetchXmlQuery);
     const panel = (value: ReturnType<typeof cfg>) => <PreviewPanel config={value} validation={validation} metadataService={service} xrm={xrm} />;
     await render(panel(cfg()));
     await render(panel(config));
@@ -226,9 +228,9 @@ describe('grid preview', () => {
       { logicalName: 'account', displayName: 'Account', objectTypeCode: 1 },
     ] });
     const fetchXmlQuery = vi.fn();
-    vi.stubGlobal('dataverseAPI', { fetchXmlQuery });
+    setFetch(fetchXmlQuery);
     await render(<PreviewPanel config={cfg({ trigger: { ...config.trigger, kind: 'MainGridButton' } })}
-      validation={validation} metadataService={service} xrm={xrmStub()} />);
+      validation={validation} metadataService={service} xrm={xrm} />);
     await click('Grid');
     const entityGroup = host!.querySelector('[role="group"][aria-label="Preview entity"]');
     const entitySelect = entityGroup?.querySelector('select');
@@ -268,8 +270,8 @@ describe('grid preview', () => {
 
   it('keeps a generated grid when switching to Mock and back', async () => {
     const fetchXmlQuery = vi.fn().mockResolvedValue({ value: [{ name: 'Keep me' }] });
-    vi.stubGlobal('dataverseAPI', { fetchXmlQuery });
-    await render(<PreviewPanel config={config} validation={validation} metadataService={metadata()} xrm={xrmStub()} />);
+    setFetch(fetchXmlQuery);
+    await render(<PreviewPanel config={config} validation={validation} metadataService={metadata()} xrm={xrm} />);
     await click('Grid');
     await click('Generate grid preview');
     await click('Mock');
@@ -280,9 +282,8 @@ describe('grid preview', () => {
 
   it('restores the grid after panel unmount and clears it for a new session', async () => {
     const fetchXmlQuery = vi.fn().mockResolvedValue({ value: [{ name: 'Session row' }] });
-    vi.stubGlobal('dataverseAPI', { fetchXmlQuery });
+    setFetch(fetchXmlQuery);
     const service = metadata();
-    const xrm = xrmStub();
     const panel = (visible: boolean, epoch = 0) => <PreviewSessionProvider key={epoch}>
       {visible && <PreviewPanel config={config} validation={validation} metadataService={service} xrm={xrm} />}
     </PreviewSessionProvider>;
@@ -323,13 +324,13 @@ describe('grid preview', () => {
       { name: 'Acme', _primarycontactid_value: 'contact-id', '_primarycontactid_value@OData.Community.Display.V1.FormattedValue': 'Pat Lee' },
       { name: 'Beta', _primarycontactid_value: null },
     ] });
-    vi.stubGlobal('dataverseAPI', { fetchXmlQuery });
+    setFetch(fetchXmlQuery);
     const related = cfg({
       trigger: { kind: 'MainGridOnSelect' },
       target: { pageType: 'entityrecord', entityName: 'contact', formId: '', tabName: '', data: '' },
       context: { mode: 'RelatedRecord', entityName: 'account', lookupAttribute: 'primarycontactid' },
     });
-    await render(<PreviewPanel config={related} validation={validation} metadataService={service} xrm={xrmStub()} />);
+    await render(<PreviewPanel config={related} validation={validation} metadataService={service} xrm={xrm} />);
     await click('Grid');
     expect(host!.textContent).toContain('Preview entity: account');
     const viewSelect = host!.querySelector<HTMLSelectElement>('select[aria-label="View"]')!;

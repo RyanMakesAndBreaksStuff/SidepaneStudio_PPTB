@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 import { theme } from '../theme/tokens';
 import { PaneDefinitionConfig } from '../types/PaneDefinitionConfig';
+import type { IXrmContext } from '../adapters/PptbContextAdapter';
 import { MetadataService } from '../services/MetadataService';
 import { ValidationResult } from '../services/ValidationService';
 import { TablePicker } from './TablePicker';
@@ -41,6 +42,7 @@ interface Props {
   config: PaneDefinitionConfig;
   validation: ValidationResult;
   metadataService: MetadataService;
+  xrm: Pick<IXrmContext, 'fetchXml'>;
   entityName: string;
   allowEntityChange: boolean;
   onEntityNameChange: (name: string) => void;
@@ -75,7 +77,7 @@ export function GridPreview(props: Props): React.ReactElement {
 type State = { status: 'idle' | 'loading' } | { status: 'error'; reason: string } |
   { status: 'loaded'; rows: Record<string, unknown>[]; viewName: string; columns: GridColumn[] };
 
-function GridData({ config, validation, metadataService, entityName, viewId, viewType, relatedLookup }: Props & {
+function GridData({ config, validation, metadataService, xrm, entityName, viewId, viewType, relatedLookup }: Props & {
   viewId: string; viewType: '' | 'savedquery' | 'userquery'; relatedLookup: string;
 }): React.ReactElement {
   const { isDark } = useTheme();
@@ -110,7 +112,7 @@ function GridData({ config, validation, metadataService, entityName, viewId, vie
       const xml = capGridFetchXml(view.fetchXml, entityName, relatedLookup);
       const columns = await resolveGridColumns(view, entityName, metadataService);
       if (id !== request.current) return;
-      const response = await window.dataverseAPI.fetchXmlQuery(xml);
+      const response = await xrm.fetchXml(xml);
       if (id !== request.current) return;
       if (!Array.isArray(response.value) || response.value.some(row => !row || typeof row !== 'object' || Array.isArray(row))) {
         throw new Error('The grid query returned an invalid response.');
