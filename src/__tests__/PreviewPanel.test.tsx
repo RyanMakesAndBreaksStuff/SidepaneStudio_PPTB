@@ -99,6 +99,28 @@ describe('PreviewPanel', () => {
     expect(host?.textContent).toContain('Form: aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee');
     expect(host?.textContent).toContain('Tab: tab_details');
   });
+
+  it('completes the form layout load under StrictMode', async () => {
+    const xrm = { ...xrmStub(),
+      webApiGet: vi.fn().mockResolvedValue([{ formid: '11111111-2222-3333-4444-555555555555', name: 'Account' }]),
+      webApiGetEntity: vi.fn().mockResolvedValue({ formxml: '<form/>' }) };
+    await render(
+      <React.StrictMode>
+        <PreviewPanel
+          config={cfg({ target: { pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '' } })}
+          validation={{ isValid: true, errors: [], warnings: [] }}
+          metadataService={new MetadataService(xrm)}
+          xrm={xrm}
+        />
+      </React.StrictMode>
+    );
+    const formTab = Array.from(host!.querySelectorAll('button')).find(b => b.textContent === 'Form')!;
+    await act(async () => { formTab.click(); });
+    await act(async () => { await Promise.resolve(); });
+
+    expect(xrm.webApiGetEntity).toHaveBeenCalled();
+    expect(host!.textContent).not.toContain('Loading form layout');
+  });
 });
 
 describe('PreviewPanel — RelatedRecord Form preview', () => {
