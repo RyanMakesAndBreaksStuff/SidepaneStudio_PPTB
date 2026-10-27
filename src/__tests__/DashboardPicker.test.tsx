@@ -58,20 +58,36 @@ describe('DashboardPicker', () => {
     expect(select.textContent).toContain('My Dashboard (Personal)');
   });
 
-  it('calls onChange with id and name when selection changes', async () => {
+  it('keeps an unset value unselected and commits the first dashboard when chosen', async () => {
     const onChange = vi.fn();
     const dashboards: DashboardInfo[] = [
-      { id: 'aaa', name: 'Sales Dashboard', isPersonal: false },
+      { id: 'aaa', name: 'Only Dashboard', isPersonal: false },
     ];
     const service = makeService(Promise.resolve({ status: 'ok', dashboards }));
     await render(<DashboardPicker value="" onChange={onChange} metadataService={service} />);
     await act(async () => { await Promise.resolve(); });
     const select = host?.querySelector('select') as HTMLSelectElement;
+
+    expect(select.value).toBe('');
+    expect(select.options[0].textContent).toBe('Select a dashboard…');
+    expect(onChange).not.toHaveBeenCalled();
+
     select.value = 'aaa';
     await act(async () => {
       select.dispatchEvent(new Event('change', { bubbles: true }));
     });
-    expect(onChange).toHaveBeenCalledWith('aaa', 'Sales Dashboard');
+    expect(onChange).toHaveBeenCalledWith('aaa', 'Only Dashboard');
+  });
+
+  it('omits the placeholder once a dashboard is selected', async () => {
+    const dashboards: DashboardInfo[] = [{ id: 'aaa', name: 'Sales Dashboard', isPersonal: false }];
+    const service = makeService(Promise.resolve({ status: 'ok', dashboards }));
+    await render(<DashboardPicker value="aaa" onChange={() => {}} metadataService={service} />);
+    await act(async () => { await Promise.resolve(); });
+    const select = host?.querySelector('select') as HTMLSelectElement;
+
+    expect(select.value).toBe('aaa');
+    expect(select.querySelector('option[value=""]')).toBeNull();
   });
 
   it('shows error state and retry button on failure', async () => {
