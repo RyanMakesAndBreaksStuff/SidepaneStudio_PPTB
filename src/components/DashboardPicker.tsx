@@ -66,7 +66,10 @@ export function DashboardPicker({
     if (value && !loadState.dashboards.some(d => d.id === value)) {
       return [{ value, label: `${value} (no longer accessible)`, disabled: true }, ...opts];
     }
-    return opts.length > 0 ? opts : [{ value: '', label: 'No dashboards found' }];
+    if (opts.length === 0) return [{ value: '', label: 'No dashboards found' }];
+    // Without an explicit placeholder an unset value renders as the first dashboard,
+    // which then cannot be committed because choosing it fires no change event.
+    return value ? opts : [{ value: '', label: 'Select a dashboard…' }, ...opts];
   }, [loadState, value]);
 
   const handleChange = useCallback((id: string) => {
