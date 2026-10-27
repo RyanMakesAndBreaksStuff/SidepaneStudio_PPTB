@@ -37,7 +37,7 @@ export interface FormSelectorProps {
    * inside MetadataService is shared across both consumers, so the table list
    * is fetched once per session (5-min TTL) regardless of which picker hits it first.
    */
-  metadataService: Pick<MetadataService, 'listAccessibleTables' | 'invalidate'>;
+  metadataService: Pick<MetadataService, 'listAccessibleTables' | 'invalidate' | 'subscribeTables'>;
   onFormSelected: (selection: FormSelection | null) => void;
   selectedFormId?: string;
   hideEntityPicker?: boolean;
@@ -118,6 +118,11 @@ export function FormSelector({
     });
     return () => { cancelled = true; };
   }, [metadataService, tablesReloadKey]);
+
+  useEffect(
+    () => metadataService.subscribeTables(() => setTablesReloadKey(k => k + 1)),
+    [metadataService]
+  );
 
   const retryTables = useCallback(() => {
     metadataService.invalidate();

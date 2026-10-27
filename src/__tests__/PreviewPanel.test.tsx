@@ -34,6 +34,7 @@ afterEach(async () => {
 const mockMetadataService = {
   listAccessibleTables: vi.fn().mockResolvedValue({ status: 'ok', tables: [] }),
   invalidate: vi.fn(),
+  subscribeTables: vi.fn(() => () => undefined),
 } as unknown as MetadataService;
 
 describe('PreviewPanel', () => {

@@ -19,6 +19,7 @@ function makeMetadataService(overrides: Partial<MetadataService> = {}): Metadata
     listAccessibleDashboards: vi.fn().mockResolvedValue({ status: 'ok', dashboards: [] }),
     listViewsForEntity: vi.fn().mockResolvedValue({ status: 'ok', views: [] }),
     invalidate: vi.fn(),
+    subscribeTables: vi.fn(() => () => undefined),
     ...overrides,
   } as unknown as MetadataService;
 }

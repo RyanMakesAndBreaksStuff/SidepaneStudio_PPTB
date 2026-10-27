@@ -110,6 +110,7 @@ export class MetadataService {
   private _filterConfig: MetadataFilterConfig;
   private _denyExact: Set<string>;
   private _allowedStandardTables: Set<string>;
+  private _tableListeners = new Set<() => void>();
 
   constructor(
     private readonly xrm: Pick<IXrmContext, 'webApiGet'>,
@@ -125,6 +126,13 @@ export class MetadataService {
     this._denyExact = new Set(this._filterConfig.denyExact);
     this._allowedStandardTables = new Set(this._filterConfig.allowedStandardTables);
     this._tableCache.clear();
+    this._tableListeners.forEach(listener => listener());
+  }
+
+  /** Notifies mounted table-list consumers that a reload would return a different list. */
+  subscribeTables(listener: () => void): () => void {
+    this._tableListeners.add(listener);
+    return () => { this._tableListeners.delete(listener); };
   }
 
   async listAccessibleTables(
