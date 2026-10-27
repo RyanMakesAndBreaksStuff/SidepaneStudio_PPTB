@@ -15,7 +15,7 @@ type LoadState =
 export interface TablePickerProps {
   value: string;
   onChange: (value: string) => void;
-  metadataService: Pick<MetadataService, 'listAccessibleTables' | 'invalidate'>;
+  metadataService: Pick<MetadataService, 'listAccessibleTables' | 'invalidate' | 'subscribeTables'>;
   error?: boolean;
   disabled?: boolean;
   onAccessibleTablesChange?: (tables: Set<string> | undefined) => void;
@@ -72,6 +72,11 @@ export function TablePicker({
 
     return () => { cancelled = true; };
   }, [metadataService, onAccessibleTablesChange, reloadKey]);
+
+  useEffect(
+    () => metadataService.subscribeTables(() => setReloadKey(key => key + 1)),
+    [metadataService]
+  );
 
   const retry = useCallback(() => {
     metadataService.invalidate();

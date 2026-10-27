@@ -3,13 +3,15 @@ import { act } from 'react';
 import { createRoot, Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TablePicker } from '../components/TablePicker';
-import { TableInfo } from '../services/MetadataService';
+import { MetadataService, TableInfo } from '../services/MetadataService';
+import { DEFAULT_METADATA_FILTER_CONFIG } from '../types/MetadataFilterConfig';
 import { deferred } from './testHelpers';
 
 function makeService(result: Promise<{ status: 'ok'; tables: TableInfo[] } | { status: 'error'; reason: string }>) {
   return {
     listAccessibleTables: vi.fn(() => result),
     invalidate: vi.fn(),
+    subscribeTables: vi.fn(() => () => undefined),
   };
 }
 
@@ -83,6 +85,7 @@ describe('TablePicker', () => {
           tables: [{ logicalName: 'account', displayName: 'Account', objectTypeCode: 1 }],
         }),
       invalidate: vi.fn(),
+      subscribeTables: vi.fn(() => () => undefined),
     };
 
     await render(<TablePicker value="" onChange={() => { /* noop */ }} metadataService={service} />);
@@ -114,5 +117,22 @@ describe('TablePicker', () => {
     const select = host?.querySelector('select') as HTMLSelectElement;
     expect(select.value).toBe('account');
     expect(select.textContent).toContain('account (no longer accessible)');
+  });
+
+  it('reloads mounted options when the filter configuration changes', async () => {
+    const metadata = new MetadataService({ webApiGet: vi.fn().mockResolvedValue(
+      ['account', 'contact'].map(name => ({ LogicalName: name, SchemaName: name, EntitySetName: `${name}s`, IsCustomEntity: true }))
+    ) });
+    await render(<TablePicker value="" onChange={() => { /* noop */ }} metadataService={metadata} />);
+    await act(async () => { await Promise.resolve(); });
+    expect(host?.querySelector('option[value="contact"]')).not.toBeNull();
+
+    await act(async () => {
+      metadata.setFilterConfig({ ...DEFAULT_METADATA_FILTER_CONFIG, denyExact: ['contact'] });
+    });
+    await act(async () => { await Promise.resolve(); });
+
+    expect(host?.querySelector('option[value="contact"]')).toBeNull();
+    expect(host?.querySelector('option[value="account"]')).not.toBeNull();
   });
 });

@@ -29,7 +29,8 @@ function metadata() {
     ] : [
       { LogicalName: 'emailaddress1', DisplayName: { UserLocalizedLabel: { Label: 'Email' } } },
     ]),
-    invalidate: vi.fn() } as unknown as MetadataService;
+    invalidate: vi.fn(),
+    subscribeTables: vi.fn(() => () => undefined) } as unknown as MetadataService;
 }
 async function render(element: React.ReactElement) {
   if (!root) { host = document.createElement('div'); document.body.append(host); root = createRoot(host); }

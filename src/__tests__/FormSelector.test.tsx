@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { FormSelector } from '../components/FormSelector';
 import { FormXmlService } from '../services/FormXmlService';
 import { MetadataService } from '../services/MetadataService';
+import { DEFAULT_METADATA_FILTER_CONFIG } from '../types/MetadataFilterConfig';
 
 let root: Root | undefined;
 let host: HTMLDivElement | undefined;
@@ -32,6 +33,7 @@ afterEach(async () => {
 const mockMetadataService = {
   listAccessibleTables: vi.fn().mockResolvedValue({ status: 'ok', tables: [] }),
   invalidate: vi.fn(),
+  subscribeTables: vi.fn(() => () => undefined),
 } as unknown as MetadataService;
 
 describe('FormSelector', () => {
@@ -139,5 +141,25 @@ describe('FormSelector', () => {
     const chip = Array.from(host!.querySelectorAll('span[title]')).find(span => span.textContent === 'diverged');
     expect(chip?.getAttribute('title'))
       .toBe('Preview is showing a different entity than the configured host table (account).');
+  });
+
+  it('reloads its table list when the filter configuration changes', async () => {
+    const webApiGet = vi.fn().mockResolvedValue([]);
+    const metadata = new MetadataService({ webApiGet });
+    const formXmlService = {
+      getFormsForEntityResult: vi.fn().mockResolvedValue({ ok: true, forms: [] }),
+    } as unknown as FormXmlService;
+    await render(
+      <FormSelector entityName="" onEntityNameChange={vi.fn()} formXmlService={formXmlService}
+        metadataService={metadata} onFormSelected={vi.fn()} />
+    );
+    await act(async () => { await Promise.resolve(); });
+    expect(webApiGet).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      metadata.setFilterConfig({ ...DEFAULT_METADATA_FILTER_CONFIG, denyExact: ['contact'] });
+    });
+
+    expect(webApiGet).toHaveBeenCalledTimes(2);
   });
 });
