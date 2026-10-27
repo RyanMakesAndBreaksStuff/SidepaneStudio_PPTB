@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { PreviewPanel } from '../components/PreviewPanel';
 import { DEFAULT_CONFIG } from '../types/PaneDefinitionConfig';
 import { MetadataService } from '../services/MetadataService';
+import type { IXrmContext } from '../adapters/PptbContextAdapter';
 import { cfg, xrmStub } from './testHelpers';
 
 let root: Root | undefined;
@@ -132,8 +133,7 @@ describe('PreviewPanel — RelatedRecord Form preview', () => {
   });
 
   async function openForm(fetchXmlQuery: ReturnType<typeof vi.fn>) {
-    vi.stubGlobal('dataverseAPI', { fetchXmlQuery });
-    const xrm = { ...xrmStub(),
+    const xrm = { ...xrmStub(), fetchXml: fetchXmlQuery as IXrmContext['fetchXml'],
       webApiGet: vi.fn().mockResolvedValue([{ formid: '11111111-2222-3333-4444-555555555555', name: 'Account' }]),
       webApiGetEntity: vi.fn().mockResolvedValue({ formxml: '<form/>' }) };
     await render(<PreviewPanel config={related} validation={{ isValid: true, errors: [], warnings: [] }}

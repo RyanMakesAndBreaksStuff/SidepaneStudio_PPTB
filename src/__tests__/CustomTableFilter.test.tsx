@@ -215,7 +215,7 @@ it('retains the grid filter through the entity-keyed remount', async () => {
   function GridHost() {
     const [entity, setEntity] = React.useState('account');
     return <PreviewSessionProvider><GridPreview key={entity}
-      config={DEFAULT_CONFIG} validation={validation} metadataService={service}
+      config={DEFAULT_CONFIG} validation={validation} metadataService={service} xrm={xrmStub()}
       entityName={entity} allowEntityChange onEntityNameChange={setEntity} />
     </PreviewSessionProvider>;
   }

@@ -135,21 +135,18 @@ export class MetadataService {
     return () => { this._tableListeners.delete(listener); };
   }
 
-  async listAccessibleTables(
-    connectionTarget?: 'primary' | 'secondary'
-  ): Promise<AccessibleTablesResult> {
+  async listAccessibleTables(): Promise<AccessibleTablesResult> {
     try {
-      const cacheKey = connectionTarget ?? 'default';
+      const cacheKey = 'tables';
       const cached = this._tableCache.get(cacheKey);
       if (cached && Date.now() < cached.expiresAt) {
         return { status: 'ok', tables: cached.tables };
       }
       const generation = this._connectionGeneration;
       const response = await this.xrm.webApiGet<RawEntityMetadata[]>(
-        buildEntityDefinitionsPath(),
-        connectionTarget
+        buildEntityDefinitionsPath()
       );
-      if (generation !== this._connectionGeneration) return this.listAccessibleTables(connectionTarget);
+      if (generation !== this._connectionGeneration) return this.listAccessibleTables();
       const tables: TableInfo[] = response
         .filter(e => keepEntity(e, this._filterConfig, this._denyExact, this._allowedStandardTables))
         .map(e => ({
@@ -167,11 +164,9 @@ export class MetadataService {
     }
   }
 
-  async listAccessibleDashboards(
-    connectionTarget?: 'primary' | 'secondary'
-  ): Promise<AccessibleDashboardsResult> {
+  async listAccessibleDashboards(): Promise<AccessibleDashboardsResult> {
     try {
-      const cacheKey = `dashboards:${connectionTarget ?? 'default'}`;
+      const cacheKey = 'dashboards';
       const cached = this._dashboardCache.get(cacheKey);
       if (cached && Date.now() < cached.expiresAt) {
         return { status: 'ok', dashboards: cached.dashboards };
@@ -179,15 +174,13 @@ export class MetadataService {
       const generation = this._connectionGeneration;
       const [sysResult, userResult] = await Promise.all([
         this.xrm.webApiGet<RawSystemDashboard[]>(
-          buildSystemDashboardsPath(),
-          connectionTarget
+          buildSystemDashboardsPath()
         ),
         this.xrm.webApiGet<RawUserDashboard[]>(
-          buildUserDashboardsPath(),
-          connectionTarget
+          buildUserDashboardsPath()
         ),
       ]);
-      if (generation !== this._connectionGeneration) return this.listAccessibleDashboards(connectionTarget);
+      if (generation !== this._connectionGeneration) return this.listAccessibleDashboards();
       const dashboards: DashboardInfo[] = [
         ...sysResult.map(d => ({ id: d.formid, name: d.name, isPersonal: false })),
         ...userResult.map(d => ({ id: d.userformid, name: d.name, isPersonal: true })),
@@ -201,16 +194,15 @@ export class MetadataService {
   }
 
   async listViewsForEntity(
-    entityLogicalName: string,
-    connectionTarget?: 'primary' | 'secondary'
+    entityLogicalName: string
   ): Promise<ViewsForEntityResult> {
     const systemPath = buildViewsForEntityPath(entityLogicalName, 'savedquery');
     const personalPath = buildViewsForEntityPath(entityLogicalName, 'userquery');
     if (!systemPath || !personalPath) return { status: 'error', reason: 'Invalid table logical name.' };
     try {
       const [system, personal] = await Promise.all([
-        this.xrm.webApiGet<{ savedqueryid: string; name: string; fetchxml: string | null; layoutxml: string | null }[]>(systemPath, connectionTarget),
-        this.xrm.webApiGet<{ userqueryid: string; name: string; fetchxml: string | null; layoutxml: string | null }[]>(personalPath, connectionTarget),
+        this.xrm.webApiGet<{ savedqueryid: string; name: string; fetchxml: string | null; layoutxml: string | null }[]>(systemPath),
+        this.xrm.webApiGet<{ userqueryid: string; name: string; fetchxml: string | null; layoutxml: string | null }[]>(personalPath),
       ]);
       const views: ViewInfo[] = [
         ...system.map(v => ({ id: v.savedqueryid, name: v.name, viewType: 'savedquery' as const, fetchXml: v.fetchxml ?? '', layoutXml: v.layoutxml ?? '' })),
@@ -224,22 +216,20 @@ export class MetadataService {
   }
 
   async listAttributeLabels(
-    entityLogicalName: string,
-    connectionTarget?: 'primary' | 'secondary'
+    entityLogicalName: string
   ): Promise<AttributeLabel[]> {
     const path = buildAttributeLabelsPath(entityLogicalName);
     if (!path) throw new Error('Invalid table logical name.');
-    return this.xrm.webApiGet<AttributeLabel[]>(path, connectionTarget);
+    return this.xrm.webApiGet<AttributeLabel[]>(path);
   }
 
   /** Lookup, customer, and owner columns — the columns whose value names a related record. */
   async listLookupAttributes(
-    entityLogicalName: string,
-    connectionTarget?: 'primary' | 'secondary'
+    entityLogicalName: string
   ): Promise<AttributeLabel[]> {
     const path = buildLookupAttributesPath(entityLogicalName);
     if (!path) throw new Error('Invalid table logical name.');
-    return this.xrm.webApiGet<AttributeLabel[]>(path, connectionTarget);
+    return this.xrm.webApiGet<AttributeLabel[]>(path);
   }
 
   invalidate(): void {
