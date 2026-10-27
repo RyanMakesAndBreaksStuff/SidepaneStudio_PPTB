@@ -107,6 +107,7 @@ const PreviewPanelContent = React.memo(function PreviewPanelContent({
   if (!formXmlSvcRef.current) formXmlSvcRef.current = new FormXmlService(xrm);
 
   useEffect(() => {
+    mountedRef.current = true;
     return () => {
       mountedRef.current = false;
       formRequestIdRef.current += 1;
