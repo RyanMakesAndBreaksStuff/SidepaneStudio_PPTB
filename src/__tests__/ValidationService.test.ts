@@ -450,3 +450,57 @@ describe('validate — close if already open', () => {
     expect(result.warnings.map(w => w.field)).toContain('behavior.toggleIfOpen');
   });
 });
+
+describe('validate — ordered multi-issue groups', () => {
+  it('lists every generative-page issue in order', () => {
+    const result = validate(cfg({
+      target: { pageType: 'generative', pageId: 'not-a-guid', data: '[1]' },
+      context: { mode: 'Static', staticRecordId: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee', entityName: '' },
+    }));
+    expect(result).toEqual({
+      isValid: false,
+      errors: [
+        { field: 'target.pageId', message: 'Page ID must be the GUID of a generative page.' },
+        { field: 'target.data', message: 'Page data must be a JSON object.' },
+        { field: 'context.entityName', message: "Select the record's table: a generative page receives recordId only together with entityName." },
+      ],
+      warnings: [
+        { field: 'context.mode', message: 'Static record IDs are environment-specific. You must reconfigure this field after deploying to another environment.' },
+        { field: 'target.pageType', message: 'recordId, entityName and data reach the page only if its prompt sets it up to accept input parameters.' },
+      ],
+    });
+  });
+
+  it('lists every create-mode issue in order', () => {
+    const result = validate(cfg({
+      trigger: { kind: 'MainGridButton' },
+      context: { mode: 'RelatedRecord', entityName: '', lookupAttribute: '', staticRecordId: '' },
+      target: {
+        pageType: 'entityrecord',
+        entityName: 'contact',
+        formId: 'not-a-guid',
+        tabName: '',
+        data: '[1]',
+        createNew: true,
+        createFromCurrent: true,
+      },
+    }));
+    expect(result).toEqual({
+      isValid: false,
+      errors: [
+        { field: 'context.entityName', message: 'Select the source table that holds the lookup column.' },
+        { field: 'context.lookupAttribute', message: 'Select the lookup column whose record opens in the pane.' },
+        { field: 'target.formId', message: 'Form ID must be a valid GUID.' },
+        { field: 'target.data', message: 'Form data must be a JSON object.' },
+        { field: 'target.createNew', message: 'Create mode opens a blank form, so it cannot open a related record. Choose Open existing record or another context mode.' },
+        { field: 'target.createFromCurrent', message: "Pre-fill from a grid row needs the row's table. Set Context mode to Selected row and choose the table." },
+      ],
+      warnings: [
+        {
+          field: 'target.pageType',
+          message: 'MainGridButton opens the first selected row. The generated script exits without opening a pane when no row is selected, and ignores rows beyond the first.',
+        },
+      ],
+    });
+  });
+});
