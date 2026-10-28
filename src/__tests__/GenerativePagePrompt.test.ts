@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { recordContextTable } from '../services/CodeGenerationService';
 import { buildGenerativePagePrompt } from '../services/GenerativePagePromptService';
 import type { PaneDefinitionConfig } from '../types/PaneDefinitionConfig';
 import { cfg } from './testHelpers';
@@ -32,5 +33,24 @@ describe('buildGenerativePagePrompt', () => {
 
   it('ignores page data that is not a JSON object', () => {
     expect(buildGenerativePagePrompt(page('[1]'))).toBe('');
+  });
+});
+
+describe('recordContextTable', () => {
+  it('returns a known logical name', () => {
+    expect(recordContextTable(page('', { mode: 'CurrentRecord', entityName: 'account' }))).toBe('account');
+  });
+
+  it('returns an empty string for a runtime lookup or related table', () => {
+    expect(recordContextTable(page('', {}, { kind: 'LookupTagClick', fieldName: 'parentcustomerid' }))).toBe('');
+    expect(recordContextTable(page('', {
+      mode: 'RelatedRecord',
+      entityName: 'account',
+      lookupAttribute: 'parentcustomerid',
+    }))).toBe('');
+  });
+
+  it('returns null when no record pair is sent', () => {
+    expect(recordContextTable(page('', { mode: 'None', entityName: 'account' }))).toBeNull();
   });
 });
