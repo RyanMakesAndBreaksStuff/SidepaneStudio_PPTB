@@ -624,4 +624,23 @@ describe('ConfigurePanel — generative page', () => {
     });
     expect(onChange.mock.calls[0][0](config).target).toEqual({ pageType: 'generative', pageId: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee', data: '' });
   });
+
+  it('returns the original configuration when a page-id updater is applied to another target', async () => {
+    const onChange = vi.fn();
+    const config: PaneDefinitionConfig = { ...DEFAULT_CONFIG, target: { pageType: 'generative', pageId: '', data: '' } };
+    await render(<ConfigurePanel config={config} onChange={onChange} validation={validate(config)} metadataService={makeMetadataService()} />);
+    await expandSection('What opens in the pane');
+    const input = findInputByPlaceholder('xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx')!;
+    const setValue = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set?.bind(input);
+    await act(async () => {
+      setValue?.('aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee');
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    const updater = onChange.mock.calls[0][0] as (prev: PaneDefinitionConfig) => PaneDefinitionConfig;
+    const other: PaneDefinitionConfig = {
+      ...DEFAULT_CONFIG,
+      target: { pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '{"name":"Contoso"}', createNew: true, createFromCurrent: true },
+    };
+    expect(updater(other)).toBe(other);
+  });
 });
