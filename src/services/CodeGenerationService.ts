@@ -99,6 +99,8 @@ interface RecordContext {
   idExpr: string | null;
   /** JS expression for the record's table; null when the table is unknown. */
   entityExpr: string | null;
+  /** Logical name, '' when that expression is only known at runtime, or null when no record pair is sent. */
+  table: string | null;
 }
 
 /** Form object whose record identity and attributes form triggers read. */
@@ -117,7 +119,7 @@ function buildRecordContext(config: PaneDefinitionConfig, formContextExpr = 'for
   const form = formObjectExpr(trigger.kind);
 
   if (trigger.kind === 'LookupTagClick' && LOOKUP_TAG_TARGETS.includes(target.pageType)) {
-    return { idExpr: 'tag.id', entityExpr: 'tag.entityType' };
+    return { idExpr: 'tag.id', entityExpr: 'tag.entityType', table: '' };
   }
 
   let idExpr: string | null = null;
@@ -144,20 +146,19 @@ function buildRecordContext(config: PaneDefinitionConfig, formContextExpr = 'for
     case 'RelatedRecord':
       // buildRelatedRecordPreamble declares relatedRecord before navigation.
       return form || GRID_KINDS.includes(trigger.kind)
-        ? { idExpr: 'relatedRecord.id', entityExpr: 'relatedRecord.entityType' }
-        : { idExpr: null, entityExpr: null };
+        ? { idExpr: 'relatedRecord.id', entityExpr: 'relatedRecord.entityType', table: '' }
+        : { idExpr: null, entityExpr: null, table: null };
     case 'None':
       break;
   }
 
-  return { idExpr, entityExpr: entityName ? JSON.stringify(entityName) : null };
+  const entityExpr = entityName ? JSON.stringify(entityName) : null;
+  return { idExpr, entityExpr, table: idExpr && entityExpr ? entityName : null };
 }
 
 /** Table the script sends with a record: its logical name, '' when the table is only known at runtime, or null when no record is sent. */
 export function recordContextTable(config: PaneDefinitionConfig): string | null {
-  const { idExpr, entityExpr } = buildRecordContext(config);
-  if (!idExpr || !entityExpr) return null;
-  return entityExpr.startsWith('"') ? (JSON.parse(entityExpr) as string) : '';
+  return buildRecordContext(config).table;
 }
 
 /** Item 3 — createFromEntity copies mapped columns from the triggering record. Null when no record triggers the script. */
