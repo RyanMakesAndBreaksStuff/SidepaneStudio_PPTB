@@ -7,12 +7,49 @@ import { MetadataService, TableInfo } from '../services/MetadataService';
 import { DEFAULT_METADATA_FILTER_CONFIG } from '../types/MetadataFilterConfig';
 import { deferred } from './testHelpers';
 
-function makeService(result: Promise<{ status: 'ok'; tables: TableInfo[] } | { status: 'error'; reason: string }>) {
+type TableListResult =
+  | { status: 'ok'; tables: TableInfo[] }
+  | { status: 'error'; reason: string };
+
+const accountTable: TableInfo = { logicalName: 'account', displayName: 'Account', objectTypeCode: 1, isCustomEntity: false };
+const contactTable: TableInfo = { logicalName: 'contact', displayName: 'Contact', objectTypeCode: 2, isCustomEntity: false };
+const widgetTable: TableInfo = { logicalName: 'new_widget', displayName: 'Widget', objectTypeCode: 100, isCustomEntity: true };
+
+function makeService(result: Promise<TableListResult>) {
   return {
     listAccessibleTables: vi.fn(() => result),
     invalidate: vi.fn(),
     subscribeTables: vi.fn(() => () => undefined),
   };
+}
+
+function tableService(load: () => Promise<TableListResult>) {
+  const listeners = new Set<() => void>();
+  const listAccessibleTables = vi.fn(load);
+  const service = {
+    listAccessibleTables,
+    invalidate: vi.fn(),
+    subscribeTables: vi.fn((callback: () => void) => {
+      listeners.add(callback);
+      return () => { listeners.delete(callback); };
+    }),
+  };
+  return { service, listeners, listAccessibleTables };
+}
+
+function queuedTables() {
+  const results: Array<ReturnType<typeof deferred<TableListResult>>> = [];
+  const handle = tableService(() => {
+    const next = deferred<TableListResult>();
+    results.push(next);
+    return next.promise;
+  });
+  return { ...handle, results };
+}
+
+function lastNotified(callback: { mock: { calls: unknown[][] } }) {
+  const calls = callback.mock.calls;
+  return calls[calls.length - 1]?.[0];
 }
 
 let root: Root | undefined;
@@ -134,5 +171,258 @@ describe('TablePicker', () => {
 
     expect(host?.querySelector('option[value="contact"]')).toBeNull();
     expect(host?.querySelector('option[value="account"]')).not.toBeNull();
+  });
+
+  it('reports undefined while tables are pending and every logical name after success, including tables hidden by the custom-only filter', async () => {
+    const pending = deferred<TableListResult>();
+    const service = makeService(pending.promise);
+    const onAccessibleTablesChange = vi.fn();
+
+    await render(
+      <TablePicker
+        value=""
+        onChange={() => { /* noop */ }}
+        metadataService={service}
+        onAccessibleTablesChange={onAccessibleTablesChange}
+        customOnlyState={[true, () => { /* noop */ }]}
+      />
+    );
+
+    const select = host?.querySelector('select') as HTMLSelectElement;
+    expect(select.disabled).toBe(true);
+    expect(select.textContent).toContain('Loading tables...');
+    expect(onAccessibleTablesChange).toHaveBeenCalledTimes(1);
+    expect(onAccessibleTablesChange).toHaveBeenCalledWith(undefined);
+
+    await act(async () => {
+      pending.resolve({ status: 'ok', tables: [accountTable, widgetTable] });
+    });
+
+    const filterButton = Array.from(host?.querySelectorAll('button') ?? [])
+      .find(button => button.textContent === 'Only Custom Tables');
+    expect(filterButton?.getAttribute('aria-pressed')).toBe('true');
+    expect(select.disabled).toBe(false);
+    expect(select.textContent).toContain('Widget (new_widget)');
+    expect(select.textContent).not.toContain('Account (account)');
+    expect(lastNotified(onAccessibleTablesChange)).toEqual(new Set(['account', 'new_widget']));
+  });
+
+  it('reports undefined when the table list fails or the request rejects', async () => {
+    const onAccessibleTablesChange = vi.fn();
+    const failed = {
+      listAccessibleTables: vi.fn().mockResolvedValue({ status: 'error', reason: 'metadata unavailable' }),
+      invalidate: vi.fn(),
+      subscribeTables: vi.fn(() => () => undefined),
+    };
+
+    await render(
+      <TablePicker value="" onChange={() => { /* noop */ }} metadataService={failed} onAccessibleTablesChange={onAccessibleTablesChange} />
+    );
+    await act(async () => { await Promise.resolve(); });
+
+    expect(host?.textContent).toContain('Could not load table list');
+    expect(host?.textContent).toContain('metadata unavailable');
+    expect(onAccessibleTablesChange).toHaveBeenCalledWith(undefined);
+    expect(onAccessibleTablesChange).not.toHaveBeenCalledWith(expect.any(Set));
+
+    onAccessibleTablesChange.mockClear();
+    const rejected = {
+      listAccessibleTables: vi.fn().mockRejectedValue(new Error('metadata exploded')),
+      invalidate: vi.fn(),
+      subscribeTables: vi.fn(() => () => undefined),
+    };
+    await act(async () => {
+      root?.unmount();
+      root = undefined;
+      host?.remove();
+    });
+    await render(
+      <TablePicker value="" onChange={() => { /* noop */ }} metadataService={rejected} onAccessibleTablesChange={onAccessibleTablesChange} />
+    );
+    await act(async () => { await Promise.resolve(); });
+
+    expect(host?.textContent).toContain('metadata exploded');
+    expect(host?.textContent).not.toContain('Unable to load table list.');
+    expect(onAccessibleTablesChange).toHaveBeenCalledWith(undefined);
+    expect(onAccessibleTablesChange).not.toHaveBeenCalledWith(expect.any(Set));
+  });
+
+  it('uses the fallback reason when table loading rejects with a non-Error', async () => {
+    const onAccessibleTablesChange = vi.fn();
+    const service = {
+      listAccessibleTables: vi.fn().mockRejectedValue('offline'),
+      invalidate: vi.fn(),
+      subscribeTables: vi.fn(() => () => undefined),
+    };
+
+    await render(
+      <TablePicker value="" onChange={() => { /* noop */ }} metadataService={service} onAccessibleTablesChange={onAccessibleTablesChange} />
+    );
+    await act(async () => { await Promise.resolve(); });
+
+    expect(host?.textContent).toContain('Unable to load table list.');
+    expect(host?.textContent).not.toContain('offline');
+    expect(onAccessibleTablesChange).toHaveBeenCalledWith(undefined);
+    expect(onAccessibleTablesChange).not.toHaveBeenCalledWith(expect.any(Set));
+  });
+
+  it('reloads when onAccessibleTablesChange changes and ignores the in-flight first result', async () => {
+    const first = deferred<TableListResult>();
+    const second = deferred<TableListResult>();
+    const listAccessibleTables = vi.fn()
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValueOnce(second.promise);
+    const service = {
+      listAccessibleTables,
+      invalidate: vi.fn(),
+      subscribeTables: vi.fn(() => () => undefined),
+    };
+    const firstCallback = vi.fn();
+    const secondCallback = vi.fn();
+    const onChange = () => { /* noop */ };
+    const element = (onAccessibleTablesChange: (tables: Set<string> | undefined) => void) => (
+      <TablePicker value="" onChange={onChange} metadataService={service} onAccessibleTablesChange={onAccessibleTablesChange} />
+    );
+
+    await render(element(firstCallback));
+    expect(listAccessibleTables).toHaveBeenCalledTimes(1);
+    expect(firstCallback).toHaveBeenCalledWith(undefined);
+
+    await act(async () => { root?.render(element(secondCallback)); });
+
+    expect(listAccessibleTables).toHaveBeenCalledTimes(2);
+    const select = host?.querySelector('select') as HTMLSelectElement;
+    expect(select.disabled).toBe(true);
+    expect(select.textContent).toContain('Loading tables...');
+    expect(secondCallback).toHaveBeenCalledWith(undefined);
+
+    await act(async () => {
+      second.resolve({ status: 'ok', tables: [contactTable] });
+    });
+    expect(select.textContent).toContain('Contact (contact)');
+    expect(lastNotified(secondCallback)).toEqual(new Set(['contact']));
+
+    await act(async () => {
+      first.resolve({ status: 'ok', tables: [accountTable] });
+    });
+    expect(select.textContent).toContain('Contact (contact)');
+    expect(select.textContent).not.toContain('Account (account)');
+    expect(firstCallback).not.toHaveBeenCalledWith(expect.any(Set));
+    expect(lastNotified(secondCallback)).toEqual(new Set(['contact']));
+    expect(secondCallback.mock.calls.filter(call => call[0] instanceof Set)).toEqual([[new Set(['contact'])]]);
+  });
+
+  it('does not apply an older table result after a newer request has started', async () => {
+    const { service, results, listeners } = queuedTables();
+    const onAccessibleTablesChange = vi.fn();
+
+    await render(
+      <TablePicker value="" onChange={() => { /* noop */ }} metadataService={service} onAccessibleTablesChange={onAccessibleTablesChange} />
+    );
+    expect(results).toHaveLength(1);
+    expect(listeners.size).toBe(1);
+
+    await act(async () => { listeners.forEach(listener => listener()); });
+    expect(results).toHaveLength(2);
+    expect(host?.querySelector('select')?.textContent).toContain('Loading tables...');
+    expect(onAccessibleTablesChange).toHaveBeenLastCalledWith(undefined);
+
+    await act(async () => {
+      results[1].resolve({ status: 'ok', tables: [contactTable] });
+    });
+    expect(host?.textContent).toContain('Contact (contact)');
+    expect(lastNotified(onAccessibleTablesChange)).toEqual(new Set(['contact']));
+    const callsAfterNewer = onAccessibleTablesChange.mock.calls.length;
+
+    await act(async () => {
+      results[0].resolve({ status: 'ok', tables: [accountTable] });
+    });
+    expect(host?.textContent).toContain('Contact (contact)');
+    expect(host?.textContent).not.toContain('Account (account)');
+    expect(onAccessibleTablesChange).toHaveBeenCalledTimes(callsAfterNewer);
+  });
+
+  it('does not notify accessible tables when the request resolves after unmount', async () => {
+    const pending = deferred<TableListResult>();
+    const { service, listeners } = tableService(() => pending.promise);
+    const onAccessibleTablesChange = vi.fn();
+
+    await render(
+      <TablePicker value="" onChange={() => { /* noop */ }} metadataService={service} onAccessibleTablesChange={onAccessibleTablesChange} />
+    );
+    expect(onAccessibleTablesChange).toHaveBeenCalledTimes(1);
+    expect(onAccessibleTablesChange).toHaveBeenCalledWith(undefined);
+    expect(listeners.size).toBe(1);
+
+    await act(async () => { root?.unmount(); });
+    root = undefined;
+    expect(listeners.size).toBe(0);
+
+    await act(async () => {
+      pending.resolve({ status: 'ok', tables: [accountTable] });
+    });
+    expect(onAccessibleTablesChange).toHaveBeenCalledTimes(1);
+    expect(onAccessibleTablesChange).not.toHaveBeenCalledWith(expect.any(Set));
+    expect(host?.textContent).not.toContain('Account (account)');
+  });
+
+  it('unsubscribes the previous metadata service and subscribes the replacement', async () => {
+    const first = tableService(() => Promise.resolve({ status: 'ok', tables: [accountTable] }));
+    const second = tableService(() => Promise.resolve({ status: 'ok', tables: [contactTable] }));
+    const onChange = () => { /* noop */ };
+
+    await render(<TablePicker value="" onChange={onChange} metadataService={first.service} />);
+    await act(async () => { await Promise.resolve(); });
+    expect(host?.textContent).toContain('Account (account)');
+    expect(first.listeners.size).toBe(1);
+
+    await act(async () => {
+      root?.render(<TablePicker value="" onChange={onChange} metadataService={second.service} />);
+    });
+    await act(async () => { await Promise.resolve(); });
+
+    expect(first.listeners.size).toBe(0);
+    expect(second.listeners.size).toBe(1);
+    expect(host?.textContent).toContain('Contact (contact)');
+    expect(host?.textContent).not.toContain('Account (account)');
+  });
+
+  it('ignores the StrictMode throwaway table result and keeps one subscription', async () => {
+    const { service, results, listeners } = queuedTables();
+    const onAccessibleTablesChange = vi.fn();
+
+    await render(
+      <React.StrictMode>
+        <TablePicker value="" onChange={() => { /* noop */ }} metadataService={service} onAccessibleTablesChange={onAccessibleTablesChange} />
+      </React.StrictMode>
+    );
+
+    expect(results).toHaveLength(2);
+    expect(listeners.size).toBe(1);
+    expect(onAccessibleTablesChange).not.toHaveBeenCalledWith(expect.any(Set));
+
+    await act(async () => {
+      results[0].resolve({ status: 'ok', tables: [accountTable] });
+    });
+    expect(host?.textContent).not.toContain('Account (account)');
+    expect(onAccessibleTablesChange).not.toHaveBeenCalledWith(expect.any(Set));
+
+    await act(async () => {
+      results[1].resolve({ status: 'ok', tables: [contactTable] });
+    });
+    expect(host?.textContent).toContain('Contact (contact)');
+    expect(lastNotified(onAccessibleTablesChange)).toEqual(new Set(['contact']));
+
+    await act(async () => { listeners.forEach(listener => listener()); });
+    expect(results).toHaveLength(3);
+    expect(host?.querySelector('select')?.textContent).toContain('Loading tables...');
+
+    await act(async () => {
+      results[2].resolve({ status: 'ok', tables: [widgetTable] });
+    });
+    expect(host?.textContent).toContain('Widget (new_widget)');
+    expect(host?.textContent).not.toContain('Contact (contact)');
+    expect(listeners.size).toBe(1);
+    expect(lastNotified(onAccessibleTablesChange)).toEqual(new Set(['new_widget']));
   });
 });
