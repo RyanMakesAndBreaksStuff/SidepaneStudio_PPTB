@@ -104,8 +104,8 @@ function keepEntity(
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
 export class MetadataService {
-  private _tableCache = new Map<string, { tables: TableInfo[]; expiresAt: number }>();
-  private _dashboardCache = new Map<string, { dashboards: DashboardInfo[]; expiresAt: number }>();
+  private _tableCache?: { tables: TableInfo[]; expiresAt: number };
+  private _dashboardCache?: { dashboards: DashboardInfo[]; expiresAt: number };
   private _connectionGeneration = 0;
   private _filterConfig: MetadataFilterConfig;
   private _denyExact: Set<string>;
@@ -125,7 +125,7 @@ export class MetadataService {
     this._filterConfig = normalizeMetadataFilterConfig(filterConfig);
     this._denyExact = new Set(this._filterConfig.denyExact);
     this._allowedStandardTables = new Set(this._filterConfig.allowedStandardTables);
-    this._tableCache.clear();
+    this._tableCache = undefined;
     this._tableListeners.forEach(listener => listener());
   }
 
@@ -137,8 +137,7 @@ export class MetadataService {
 
   async listAccessibleTables(): Promise<AccessibleTablesResult> {
     try {
-      const cacheKey = 'tables';
-      const cached = this._tableCache.get(cacheKey);
+      const cached = this._tableCache;
       if (cached && Date.now() < cached.expiresAt) {
         return { status: 'ok', tables: cached.tables };
       }
@@ -156,7 +155,7 @@ export class MetadataService {
           isCustomEntity: e.IsCustomEntity === true,
         }))
         .sort((a, b) => a.displayName.localeCompare(b.displayName));
-      this._tableCache.set(cacheKey, { tables, expiresAt: Date.now() + CACHE_TTL_MS });
+      this._tableCache = { tables, expiresAt: Date.now() + CACHE_TTL_MS };
       return { status: 'ok', tables };
     } catch (err) {
       const reason = err instanceof Error ? err.message : 'Unknown error loading table list.';
@@ -166,8 +165,7 @@ export class MetadataService {
 
   async listAccessibleDashboards(): Promise<AccessibleDashboardsResult> {
     try {
-      const cacheKey = 'dashboards';
-      const cached = this._dashboardCache.get(cacheKey);
+      const cached = this._dashboardCache;
       if (cached && Date.now() < cached.expiresAt) {
         return { status: 'ok', dashboards: cached.dashboards };
       }
@@ -185,7 +183,7 @@ export class MetadataService {
         ...sysResult.map(d => ({ id: d.formid, name: d.name, isPersonal: false })),
         ...userResult.map(d => ({ id: d.userformid, name: d.name, isPersonal: true })),
       ].sort((a, b) => a.name.localeCompare(b.name));
-      this._dashboardCache.set(cacheKey, { dashboards, expiresAt: Date.now() + CACHE_TTL_MS });
+      this._dashboardCache = { dashboards, expiresAt: Date.now() + CACHE_TTL_MS };
       return { status: 'ok', dashboards };
     } catch (err) {
       const reason = err instanceof Error ? err.message : 'Unknown error loading dashboards.';
@@ -234,7 +232,7 @@ export class MetadataService {
 
   invalidate(): void {
     this._connectionGeneration += 1;
-    this._tableCache.clear();
-    this._dashboardCache.clear();
+    this._tableCache = undefined;
+    this._dashboardCache = undefined;
   }
 }
