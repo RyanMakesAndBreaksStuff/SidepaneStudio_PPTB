@@ -109,7 +109,7 @@ function formObjectExpr(kind: TriggerKind): string | null {
 }
 
 /** CR-001 / plan contract C1 — the single owner of record-context resolution. */
-function buildRecordContext(config: PaneDefinitionConfig): RecordContext {
+function buildRecordContext(config: PaneDefinitionConfig, formContextExpr = 'formContext'): RecordContext {
   const { context, trigger, target } = config;
   const targetEntityName =
     target.pageType === 'entityrecord' || target.pageType === 'entitylist' ? target.entityName : '';
@@ -124,7 +124,7 @@ function buildRecordContext(config: PaneDefinitionConfig): RecordContext {
   switch (context.mode) {
     case 'CurrentRecord':
       if (trigger.kind === 'FormOnLoad' || trigger.kind === 'FormOnChange') {
-        idExpr = 'formContext.data.entity.getId()';
+        idExpr = `${formContextExpr}.data.entity.getId()`;
       } else if (trigger.kind === 'FormButton') {
         idExpr = 'primaryControl.data.entity.getId()';
       } else if (GRID_KINDS.includes(trigger.kind)) {
@@ -161,10 +161,11 @@ export function recordContextTable(config: PaneDefinitionConfig): string | null 
 }
 
 /** Item 3 — createFromEntity copies mapped columns from the triggering record. Null when no record triggers the script. */
-function buildCreateFromEntityExpr(config: PaneDefinitionConfig): string | null {
+function buildCreateFromEntityExpr(config: PaneDefinitionConfig, formContextExpr = 'formContext'): string | null {
   const { target, trigger, context } = config;
   if (target.pageType !== 'entityrecord' || !target.createNew || !target.createFromCurrent) return null;
-  const form = formObjectExpr(trigger.kind);
+  const kindForm = formObjectExpr(trigger.kind);
+  const form = kindForm === 'formContext' ? formContextExpr : kindForm;
   if (form) return `{ entityType: ${form}.data.entity.getEntityName(), id: ${form}.data.entity.getId() }`;
   return GRID_KINDS.includes(trigger.kind)
     ? `{ entityType: ${JSON.stringify(context.entityName.trim())}, id: selectedRecordId }`
@@ -511,16 +512,17 @@ export function generateLibraryScript(config: PaneDefinitionConfig): string {
   const width = normalizeConfigWidth(pane.width);
   const ns = safeIdentifier(trigger.namespace || '', 'MyOrg');
   const fn = safeIdentifier(trigger.functionName || '', 'openPane');
-  const rc = buildRecordContext(config);
+  const formContextExpr = trigger.kind === 'FormOnLoad' || trigger.kind === 'FormOnChange'
+    ? 'executionContext.getFormContext()'
+    : 'formContext';
+  const rc = buildRecordContext(config, formContextExpr);
+  const libIdExpr = rc.idExpr;
 
   const optLines: string[] = [
     `    paneId: ${JSON.stringify(pane.paneId)}`,
     `    title: ${JSON.stringify(pane.title)}`,
     `    pageType: ${JSON.stringify(target.pageType)}`,
   ];
-
-  // Guard formContext expressions inside a library wrapper that receives executionContext.
-  const libIdExpr = rc.idExpr?.replace(/^formContext\./, 'executionContext.getFormContext().') ?? null;
 
   // Target keys — contract C4. name and webresourceName are mutually exclusive (WR-007).
   if (target.pageType === 'custom') {
@@ -539,8 +541,8 @@ export function generateLibraryScript(config: PaneDefinitionConfig): string {
   } else if (target.pageType === 'entityrecord') {
     if (target.createNew) {
       optLines.push(`    entityName: ${JSON.stringify(target.entityName)}`);
-      const createFrom = buildCreateFromEntityExpr(config);
-      if (createFrom) optLines.push(`    createFromEntity: ${createFrom.replace(/formContext./g, 'executionContext.getFormContext().')}`);
+      const createFrom = buildCreateFromEntityExpr(config, formContextExpr);
+      if (createFrom) optLines.push(`    createFromEntity: ${createFrom}`);
     } else {
       optLines.push(`    entityName: ${rc.entityExpr ?? '""'}`);
       optLines.push(`    entityId: ${libIdExpr ?? buildConfiguredRecordIdExpression(config)}`);
@@ -593,7 +595,7 @@ export function generateLibraryScript(config: PaneDefinitionConfig): string {
   const lookupRegistration = trigger.kind === 'LookupTagClick' ? buildLookupRegistrar(ns, fn, trigger.fieldName) : '';
 
   const openCall = `  SidePaneHelper.open({\n${optLines.join(',\n')}\n  });\n`;
-  const relatedPreamble = buildRelatedRecordPreamble(config, '      ', 'executionContext.getFormContext()');
+  const relatedPreamble = buildRelatedRecordPreamble(config, '      ', formContextExpr);
   // RelatedRecord awaits the lookup, so the open call moves into an async block with the standard catch.
   const body = relatedPreamble
     ? `  (async function() {\n    try {\n${relatedPreamble}${openCall.replace(/^(?=.)/gm, '    ')}` +
