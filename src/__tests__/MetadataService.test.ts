@@ -422,6 +422,154 @@ describe('MetadataService', () => {
       expect(result.reason).toBe('Dashboard fetch failed');
     });
   });
+
+  describe('cache lifetime', () => {
+    const SYS_DASH = { name: 'Sales Dashboard', formid: 'sys-1' };
+    const FIVE_MINUTES_MS = 5 * 60 * 1000;
+    const start = 1700000000000;
+
+    it('reuses the same table array until five minutes and refetches when expiry is equal', async () => {
+      const now = vi.spyOn(Date, 'now');
+      try {
+        now.mockReturnValue(start);
+        const xrm = makeXrm([ENTITY_ACCOUNT, ENTITY_CUSTOM]);
+        const svc = new MetadataService(xrm);
+
+        const first = await svc.listAccessibleTables();
+        expect(first.status).toBe('ok');
+        if (first.status !== 'ok') return;
+
+        now.mockReturnValue(start + FIVE_MINUTES_MS - 1);
+        const cached = await svc.listAccessibleTables();
+        expect(cached.status).toBe('ok');
+        if (cached.status !== 'ok') return;
+        expect(cached.tables).toBe(first.tables);
+        expect(xrm.webApiGet).toHaveBeenCalledTimes(1);
+
+        now.mockReturnValue(start + FIVE_MINUTES_MS);
+        const expired = await svc.listAccessibleTables();
+        expect(expired.status).toBe('ok');
+        if (expired.status !== 'ok') return;
+        expect(expired.tables).not.toBe(first.tables);
+        expect(expired.tables.map(table => table.logicalName)).toEqual(
+          first.tables.map(table => table.logicalName)
+        );
+        expect(xrm.webApiGet).toHaveBeenCalledTimes(2);
+      } finally {
+        now.mockRestore();
+      }
+    });
+
+    it('reuses the same dashboard array until five minutes and refetches when expiry is equal', async () => {
+      const now = vi.spyOn(Date, 'now');
+      try {
+        now.mockReturnValue(start);
+        const webApiGet = vi.fn()
+          .mockResolvedValueOnce([SYS_DASH])
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([SYS_DASH])
+          .mockResolvedValueOnce([]);
+        const svc = new MetadataService({ webApiGet });
+
+        const first = await svc.listAccessibleDashboards();
+        expect(first.status).toBe('ok');
+        if (first.status !== 'ok') return;
+
+        now.mockReturnValue(start + FIVE_MINUTES_MS - 1);
+        const cached = await svc.listAccessibleDashboards();
+        expect(cached.status).toBe('ok');
+        if (cached.status !== 'ok') return;
+        expect(cached.dashboards).toBe(first.dashboards);
+        expect(webApiGet).toHaveBeenCalledTimes(2);
+
+        now.mockReturnValue(start + FIVE_MINUTES_MS);
+        const expired = await svc.listAccessibleDashboards();
+        expect(expired.status).toBe('ok');
+        if (expired.status !== 'ok') return;
+        expect(expired.dashboards).not.toBe(first.dashboards);
+        expect(webApiGet).toHaveBeenCalledTimes(4);
+      } finally {
+        now.mockRestore();
+      }
+    });
+
+    it('setFilterConfig clears only the table cache and notifies table listeners', async () => {
+      const webApiGet = vi.fn()
+        .mockResolvedValueOnce([ENTITY_ACCOUNT])
+        .mockResolvedValueOnce([SYS_DASH])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([]);
+      const svc = new MetadataService({ webApiGet });
+      const tables = await svc.listAccessibleTables();
+      const dashboards = await svc.listAccessibleDashboards();
+      expect(tables.status).toBe('ok');
+      expect(dashboards.status).toBe('ok');
+      if (tables.status !== 'ok' || dashboards.status !== 'ok') return;
+
+      let notifiedReload: ReturnType<MetadataService['listAccessibleTables']> | undefined;
+      svc.subscribeTables(() => {
+        notifiedReload = svc.listAccessibleTables();
+      });
+      svc.setFilterConfig({
+        ...DEFAULT_METADATA_FILTER_CONFIG,
+        denyExact: [...DEFAULT_METADATA_FILTER_CONFIG.denyExact, 'account'],
+      });
+
+      expect(notifiedReload).toBeDefined();
+      if (!notifiedReload) return;
+      const reloaded = await notifiedReload;
+      const dashboardsAgain = await svc.listAccessibleDashboards();
+      expect(reloaded.status).toBe('ok');
+      expect(dashboardsAgain.status).toBe('ok');
+      if (reloaded.status !== 'ok' || dashboardsAgain.status !== 'ok') return;
+      expect(reloaded.tables).toHaveLength(0);
+      expect(reloaded.tables).not.toBe(tables.tables);
+      expect(dashboardsAgain.dashboards).toBe(dashboards.dashboards);
+      expect(webApiGet).toHaveBeenCalledTimes(4);
+    });
+
+    it('invalidate clears both caches and advances the generation', async () => {
+      let resolveOldTables!: (value: typeof ENTITY_ACCOUNT[]) => void;
+      const oldTables = new Promise<typeof ENTITY_ACCOUNT[]>(resolve => { resolveOldTables = resolve; });
+      const webApiGet = vi.fn()
+        .mockResolvedValueOnce([ENTITY_ACCOUNT])
+        .mockResolvedValueOnce([SYS_DASH])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([ENTITY_ACCOUNT])
+        .mockResolvedValueOnce([SYS_DASH])
+        .mockResolvedValueOnce([])
+        .mockReturnValueOnce(oldTables)
+        .mockResolvedValueOnce([ENTITY_CUSTOM]);
+      const svc = new MetadataService({ webApiGet });
+
+      const primedTables = await svc.listAccessibleTables();
+      const primedDashboards = await svc.listAccessibleDashboards();
+      expect(primedTables.status).toBe('ok');
+      expect(primedDashboards.status).toBe('ok');
+      if (primedTables.status !== 'ok' || primedDashboards.status !== 'ok') return;
+
+      svc.invalidate();
+      const tablesAfter = await svc.listAccessibleTables();
+      const dashboardsAfter = await svc.listAccessibleDashboards();
+      expect(tablesAfter.status).toBe('ok');
+      expect(dashboardsAfter.status).toBe('ok');
+      if (tablesAfter.status !== 'ok' || dashboardsAfter.status !== 'ok') return;
+      expect(tablesAfter.tables).not.toBe(primedTables.tables);
+      expect(dashboardsAfter.dashboards).not.toBe(primedDashboards.dashboards);
+      expect(webApiGet).toHaveBeenCalledTimes(6);
+
+      svc.invalidate();
+      const pending = svc.listAccessibleTables();
+      svc.invalidate();
+      resolveOldTables([ENTITY_ACCOUNT]);
+      const retried = await pending;
+      expect(retried.status).toBe('ok');
+      if (retried.status !== 'ok') return;
+      expect(retried.tables.map(table => table.logicalName)).toEqual(['new_widget']);
+      await svc.listAccessibleTables();
+      expect(webApiGet).toHaveBeenCalledTimes(8);
+    });
+  });
 });
 
 describe('view metadata', () => {
