@@ -68,6 +68,20 @@ function resetTarget(pageType: PageType): TargetConfig {
   }
 }
 
+type TargetFields<P extends TargetConfig['pageType']> =
+  Partial<Omit<Extract<TargetConfig, { pageType: P }>, 'pageType'>>;
+
+// A stale updater must return the same object after the page type changes.
+function patchEntityRecordTarget(prev: PaneDefinitionConfig, fields: TargetFields<'entityrecord'>): PaneDefinitionConfig {
+  if (prev.target.pageType !== 'entityrecord') return prev;
+  return { ...prev, target: { ...prev.target, ...fields } };
+}
+
+function patchGenerativeTarget(prev: PaneDefinitionConfig, fields: TargetFields<'generative'>): PaneDefinitionConfig {
+  if (prev.target.pageType !== 'generative') return prev;
+  return { ...prev, target: { ...prev.target, ...fields } };
+}
+
 const PAGE_TYPE_OPTIONS = [
   { value: 'custom',       label: 'Custom page',    desc: 'A canvas app page in your solution' },
   { value: 'generative',   label: 'Generative page', desc: 'A page the app agent built in the app designer' },
@@ -203,13 +217,13 @@ export function ConfigurePanel({
         {target.pageType === 'entityrecord' && <>
           <Field label="Record" error={vErrors['target.createNew']}>
             <ChoiceGroup name="entityRecordMode" options={RECORD_MODE_OPTIONS} value={creating ? 'create' : 'open'}
-              onChange={v => onChange(prev => prev.target.pageType !== 'entityrecord' ? prev : { ...prev, target: { ...prev.target, createNew: v === 'create' } })} />
+              onChange={v => onChange(prev => patchEntityRecordTarget(prev, { createNew: v === 'create' }))} />
           </Field>
           {vWarnings['target.createNew'] && <Callout type="warn" icon="⚠">{vWarnings['target.createNew']}</Callout>}
           {creating && trigger.kind !== 'ManualJS' && trigger.kind !== 'LookupTagClick' && <>
             <Toggle label="Pre-fill from current record" desc="Copies mapped columns from the form record or selected row (createFromEntity)"
               checked={target.createFromCurrent === true}
-              onChange={v => onChange(prev => prev.target.pageType !== 'entityrecord' ? prev : { ...prev, target: { ...prev.target, createFromCurrent: v } })} />
+              onChange={v => onChange(prev => patchEntityRecordTarget(prev, { createFromCurrent: v }))} />
             {vErrors['target.createFromCurrent'] && <Callout type="err" icon="✕">{vErrors['target.createFromCurrent']}</Callout>}
             {vWarnings['target.createFromCurrent'] && <Callout type="warn" icon="⚠">{vWarnings['target.createFromCurrent']}</Callout>}
           </>}
@@ -217,20 +231,20 @@ export function ConfigurePanel({
             <FormSelector entityName={target.entityName} onEntityNameChange={() => undefined}
               selectedFormId={target.formId} hideEntityPicker disabled={readOnly}
               formXmlService={formXmlService} metadataService={metadataService}
-              onFormSelected={selection => onChange(prev => prev.target.pageType !== 'entityrecord' ? prev : {
-                ...prev, target: { ...prev.target, formId: selection?.formId ?? '', tabName: '' },
-              })} />
+              onFormSelected={selection => onChange(prev => patchEntityRecordTarget(prev, {
+                formId: selection?.formId ?? '', tabName: '',
+              }))} />
           </Field>}
           <Field label="Tab name" hint="Logical name of the form tab to focus">
-            <Input value={target.tabName} disabled={readOnly} onChange={tabName => onChange(prev => prev.target.pageType !== 'entityrecord' ? prev : { ...prev, target: { ...prev.target, tabName } })} />
+            <Input value={target.tabName} disabled={readOnly} onChange={tabName => onChange(prev => patchEntityRecordTarget(prev, { tabName }))} />
           </Field>
           <JsonDataField label="Form data" value={target.data} disabled={readOnly} placeholder={FORM_DATA_EXAMPLE} error={vErrors['target.data']}
             hint="Optional JSON object of extra form parameters. Keys are column logical names (e.g. name) or pre-registered custom params. Lookups need a pair/triple: primarycontactid + primarycontactidname, or parentcustomerid + parentcustomeridname + parentcustomeridtype (account|contact|systemuser|team)."
-            onChange={data => onChange(prev => prev.target.pageType !== 'entityrecord' ? prev : { ...prev, target: { ...prev.target, data } })}>
+            onChange={data => onChange(prev => patchEntityRecordTarget(prev, { data }))}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
               <button type="button" disabled={readOnly}
                 style={{ fontSize: 12, padding: '4px 10px', borderRadius: T.rM, border: `1px solid ${T.stroke1}`, background: T.surface2, color: T.fg1, fontFamily: T.font, cursor: readOnly ? 'default' : 'pointer' }}
-                onClick={() => onChange(prev => prev.target.pageType !== 'entityrecord' ? prev : { ...prev, target: { ...prev.target, data: FORM_DATA_EXAMPLE } })}>
+                onClick={() => onChange(prev => patchEntityRecordTarget(prev, { data: FORM_DATA_EXAMPLE }))}>
                 Insert example
               </button>
               <span style={{ fontSize: 11, color: T.fg3, fontFamily: T.font }}>
@@ -250,10 +264,10 @@ export function ConfigurePanel({
         {target.pageType === 'generative' && <>
           <Field label="Page ID" required hint="In the app designer, select the page; the properties pane shows the ID in the Generative page field" error={vErrors['target.pageId']}>
             <Input value={target.pageId} disabled={readOnly} placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" error={!!vErrors['target.pageId']}
-              onChange={pageId => onChange(prev => prev.target.pageType !== 'generative' ? prev : { ...prev, target: { ...prev.target, pageId } })} />
+              onChange={pageId => onChange(prev => patchGenerativeTarget(prev, { pageId }))} />
           </Field>
           <JsonDataField label="Page data" hint="Optional JSON object the page reads as pageInput.data" value={target.data} disabled={readOnly} error={vErrors['target.data']}
-            onChange={data => onChange(prev => prev.target.pageType !== 'generative' ? prev : { ...prev, target: { ...prev.target, data } })} />
+            onChange={data => onChange(prev => patchGenerativeTarget(prev, { data }))} />
           {vWarnings['target.pageType'] && (
             <Callout type="warn" icon="⚠">
               {vWarnings['target.pageType']}{' '}
