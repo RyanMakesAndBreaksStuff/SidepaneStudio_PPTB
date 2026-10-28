@@ -1,12 +1,12 @@
 import * as React from 'react';
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 import { theme } from '../theme/tokens';
 import { FormXmlService, FormMeta } from '../services/FormXmlService';
-import { MetadataService, TableInfo } from '../services/MetadataService';
 import { TableComboBox } from './TableComboBox';
 import { CustomTableFilterButton } from './CustomTableFilterButton';
 import { usePreviewSessionState } from '../contexts/PreviewSessionContext';
+import { useAccessibleTables, type AccessibleTablesService } from './useAccessibleTables';
 
 export interface FormSelection {
   entityLogicalName: string;
@@ -37,7 +37,7 @@ export interface FormSelectorProps {
    * inside MetadataService is shared across both consumers, so the table list
    * is fetched once per session (5-min TTL) regardless of which picker hits it first.
    */
-  metadataService: Pick<MetadataService, 'listAccessibleTables' | 'invalidate' | 'subscribeTables'>;
+  metadataService: AccessibleTablesService;
   onFormSelected: (selection: FormSelection | null) => void;
   selectedFormId?: string;
   hideEntityPicker?: boolean;
@@ -71,63 +71,31 @@ export function FormSelector({
   const controlledRef = useRef(controlledFormId !== undefined);
   controlledRef.current = controlledFormId !== undefined;
 
-  // Table list state — mirrors TablePicker's loading shape so the combobox
-  // can show loading / error / loaded states. Cache is per-MetadataService
-  // instance, so the second consumer just gets the cached array back.
-  type TablesState =
-    | { status: 'loading' }
-    | { status: 'loaded'; tables: TableInfo[] }
-    | { status: 'error'; reason: string };
-  const [tablesState, setTablesState] = useState<TablesState>({ status: 'loading' });
-  const [tablesReloadKey, setTablesReloadKey] = useState(0);
   const [customOnly, setCustomOnly] =
     usePreviewSessionState<boolean>('form-custom-tables-only', false);
+  const {
+    tables,
+    loading: tablesLoading,
+    error: tablesError,
+    retry: retryTables,
+  } = useAccessibleTables(metadataService);
+  const tablesLoaded = !tablesLoading && tablesError === undefined;
   const visibleTables = useMemo(() => {
-    if (tablesState.status !== 'loaded') return [];
+    if (!tablesLoaded) return [];
     return customOnly
-      ? tablesState.tables.filter(table => table.isCustomEntity === true)
-      : tablesState.tables;
-  }, [tablesState, customOnly]);
-  const formEntity = !hideEntityPicker && customOnly && tablesState.status === 'loaded' &&
+      ? tables.filter(table => table.isCustomEntity === true)
+      : tables;
+  }, [tables, tablesLoaded, customOnly]);
+  const formEntity = !hideEntityPicker && customOnly && tablesLoaded &&
     !visibleTables.some(table => table.logicalName === entityName) ? '' : entityName;
   const toggleCustomOnly = () => {
     const next = !customOnly;
     setCustomOnly(next);
-    if (next && entityName && tablesState.status === 'loaded' &&
-        !tablesState.tables.some(table => table.logicalName === entityName && table.isCustomEntity === true)) {
+    if (next && entityName && tablesLoaded &&
+        !tables.some(table => table.logicalName === entityName && table.isCustomEntity === true)) {
       onEntityNameChange('');
     }
   };
-
-  useEffect(() => {
-    let cancelled = false;
-    setTablesState({ status: 'loading' });
-    metadataService.listAccessibleTables().then(result => {
-      if (cancelled) return;
-      if (result.status === 'ok') {
-        setTablesState({ status: 'loaded', tables: result.tables });
-      } else {
-        setTablesState({ status: 'error', reason: result.reason });
-      }
-    }).catch(err => {
-      if (cancelled) return;
-      setTablesState({
-        status: 'error',
-        reason: err instanceof Error ? err.message : 'Unable to load table list.',
-      });
-    });
-    return () => { cancelled = true; };
-  }, [metadataService, tablesReloadKey]);
-
-  useEffect(
-    () => metadataService.subscribeTables(() => setTablesReloadKey(k => k + 1)),
-    [metadataService]
-  );
-
-  const retryTables = useCallback(() => {
-    metadataService.invalidate();
-    setTablesReloadKey(k => k + 1);
-  }, [metadataService]);
 
   const commitEntity = (next: string) => {
     const trimmed = next.trim();
@@ -283,7 +251,7 @@ export function FormSelector({
           </div>
           <CustomTableFilterButton
             pressed={customOnly}
-            disabled={disabled || tablesState.status !== 'loaded'}
+            disabled={disabled || !tablesLoaded}
             onClick={toggleCustomOnly}
           />
           <TableComboBox
@@ -291,8 +259,8 @@ export function FormSelector({
             value={formEntity}
             onChange={commitEntity}
             tables={visibleTables}
-            loading={tablesState.status === 'loading'}
-            error={tablesState.status === 'error' ? tablesState.reason : undefined}
+            loading={tablesLoading}
+            error={tablesError}
             onRetry={retryTables}
             placeholder={entityNameHint ? `e.g. ${entityNameHint}` : 'Select a table…'}
             ariaLabel="Preview entity"
