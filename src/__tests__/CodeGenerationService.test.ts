@@ -1043,6 +1043,73 @@ describe('side pane availability guard', () => {
     expect(open).not.toHaveBeenCalled();
     warn.mockRestore();
   });
+
+  const GUARD = 'if (!Xrm.App || !Xrm.App.sidePanes)';
+  const ALERT = 'Xrm.Navigation.openAlertDialog({ text: "Side panes are not available in this client." })';
+  const WARN = 'console.warn("Side panes are not available in this client.")';
+
+  function onlyGuardAt(code: string): number {
+    const at = code.indexOf(GUARD);
+    expect(at).toBeGreaterThanOrEqual(0);
+    expect(code.indexOf(GUARD, at + GUARD.length)).toBe(-1);
+    return at;
+  }
+
+  it('places one command guard before toggle and the related-record read', () => {
+    const code = generateBasicScript(cfg({
+      pane: { paneId: 'p' },
+      trigger: { kind: 'FormButton', namespace: 'TestNs', functionName: 'open' },
+      context: { mode: 'RelatedRecord', entityName: 'account', lookupAttribute: 'primarycontactid' },
+      behavior: { toggleIfOpen: true },
+    }));
+    const guard = onlyGuardAt(code);
+    const toggle = code.indexOf('getSelectedPane');
+    const related = code.indexOf('getAttribute("primarycontactid")');
+    expect(code.slice(guard, toggle)).toContain(ALERT);
+    expect(guard).toBeLessThan(toggle);
+    expect(toggle).toBeLessThan(related);
+    expect(code).not.toContain(WARN);
+  });
+
+  it('places one warning guard before the related-record read when the trigger is not a command', () => {
+    const code = generateBasicScript(cfg({
+      pane: { paneId: 'p' },
+      trigger: { kind: 'FormOnLoad', namespace: 'TestNs', functionName: 'open' },
+      context: { mode: 'RelatedRecord', entityName: 'account', lookupAttribute: 'primarycontactid' },
+      behavior: { toggleIfOpen: true },
+    }));
+    const guard = onlyGuardAt(code);
+    expect(code.slice(guard)).toContain(WARN);
+    expect(code).not.toContain(ALERT);
+    expect(code).not.toContain('getSelectedPane');
+    expect(guard).toBeLessThan(code.indexOf('getAttribute("primarycontactid")'));
+  });
+
+  it('emits the lookup guard once, immediately before the event is read or cancelled', () => {
+    for (const generate of [generateBasicScript, generateLibraryScript]) {
+      const code = generate(cfg({
+        pane: { paneId: 'p' },
+        trigger: { kind: 'LookupTagClick', namespace: 'TestNs', functionName: 'open', fieldName: 'parentcustomerid' },
+        context: { mode: 'None' },
+        behavior: { toggleIfOpen: true },
+      }));
+      const guard = onlyGuardAt(code);
+      const cancel = code.indexOf('eventArgs.preventDefault()');
+      expect(code.slice(guard, cancel)).toBe(
+        'if (!Xrm.App || !Xrm.App.sidePanes) { console.warn("Side panes are not available in this client."); return; }\n' +
+        '  var eventArgs = executionContext.getEventArgs();\n  '
+      );
+      expect(code).not.toContain(ALERT);
+    }
+  });
+
+  it('leaves non-lookup library output without an availability guard', () => {
+    const code = generateLibraryScript(cfg({
+      trigger: { kind: 'FormButton', namespace: 'TestNs', functionName: 'open' },
+      behavior: { toggleIfOpen: true },
+    }));
+    expect(code).not.toContain(GUARD);
+  });
 });
 
 describe('close if already open (toggleIfOpen)', () => {
