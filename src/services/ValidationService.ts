@@ -20,6 +20,63 @@ export interface ValidationResult {
   isValid: boolean;
 }
 
+const GRID_TRIGGERS = ['MainGridButton', 'SubgridButton', 'MainGridOnSelect', 'SubgridOnSelect'];
+
+function pushJsonObjectError(errors: ValidationError[], data: string, message: string): void {
+  try {
+    parseFormData(data);
+  } catch {
+    errors.push({ field: 'target.data', message });
+  }
+}
+
+function validateGenerativeTarget(
+  config: PaneDefinitionConfig,
+  errors: ValidationError[],
+  warnings: ValidationWarning[],
+): void {
+  if (config.target.pageType !== 'generative') return;
+  if (!normalizeGuid(config.target.pageId)) {
+    errors.push({ field: 'target.pageId', message: 'Page ID must be the GUID of a generative page.' });
+  }
+  pushJsonObjectError(errors, config.target.data, 'Page data must be a JSON object.');
+  // The page receives recordId only together with entityName.
+  if (config.context.mode === 'Static') {
+    if (!normalizeGuid(config.context.staticRecordId)) {
+      errors.push({ field: 'context.staticRecordId', message: 'A valid record ID (GUID) is required for Static record context.' });
+    } else if (!config.context.entityName.trim()) {
+      errors.push({ field: 'context.entityName', message: "Select the record's table: a generative page receives recordId only together with entityName." });
+    }
+  }
+  if (config.trigger.kind === 'LookupTagClick' || config.context.mode !== 'None' || config.target.data.trim()) {
+    warnings.push({ field: 'target.pageType', message: 'recordId, entityName and data reach the page only if its prompt sets it up to accept input parameters.' });
+  }
+}
+
+function validateCreateMode(
+  config: PaneDefinitionConfig,
+  errors: ValidationError[],
+  warnings: ValidationWarning[],
+): void {
+  if (config.target.pageType !== 'entityrecord' || !config.target.createNew) return;
+  // Create mode opens a blank form, so nothing may name a record to open.
+  if (config.trigger.kind === 'LookupTagClick') {
+    errors.push({ field: 'target.createNew', message: 'Create mode opens a blank form, so it cannot open the clicked lookup record. Choose Open existing record or another trigger.' });
+  } else if (config.context.mode === 'RelatedRecord') {
+    errors.push({ field: 'target.createNew', message: 'Create mode opens a blank form, so it cannot open a related record. Choose Open existing record or another context mode.' });
+  } else if (config.context.mode !== 'None' && !config.target.createFromCurrent) {
+    warnings.push({ field: 'target.createNew', message: 'Create mode ignores record context.' });
+  }
+  // The generator ignores pre-fill on console and lookup triggers, and the panel hides it there.
+  if (config.target.createFromCurrent && config.trigger.kind !== 'ManualJS' && config.trigger.kind !== 'LookupTagClick') {
+    if (GRID_TRIGGERS.includes(config.trigger.kind) && !isValidLogicalName(config.context.entityName.trim())) {
+      errors.push({ field: 'target.createFromCurrent', message: "Pre-fill from a grid row needs the row's table. Set Context mode to Selected row and choose the table." });
+    } else {
+      warnings.push({ field: 'target.createFromCurrent', message: 'Pre-fill copies only the columns that a relationship mapping between the two tables defines.' });
+    }
+  }
+}
+
 export function validate(config: PaneDefinitionConfig, accessibleTables?: Set<string>): ValidationResult {
   const errors: ValidationError[] = [];
   const warnings: ValidationWarning[] = [];
@@ -129,7 +186,6 @@ export function validate(config: PaneDefinitionConfig, accessibleTables?: Set<st
   }
 
   // Error: the selected context mode resolves to no record for this trigger (CR-001 / contract C1)
-  const GRID_TRIGGERS = ['MainGridButton', 'SubgridButton', 'MainGridOnSelect', 'SubgridOnSelect'];
   if (config.context.mode === 'SelectedRow' && !GRID_TRIGGERS.includes(config.trigger.kind)) {
     errors.push({
       field: 'context.mode',
@@ -199,52 +255,11 @@ export function validate(config: PaneDefinitionConfig, accessibleTables?: Set<st
     if (config.target.formId.trim() && !normalizeGuid(config.target.formId)) {
       errors.push({ field: 'target.formId', message: 'Form ID must be a valid GUID.' });
     }
-    try {
-      parseFormData(config.target.data);
-    } catch {
-      errors.push({ field: 'target.data', message: 'Form data must be a JSON object.' });
-    }
+    pushJsonObjectError(errors, config.target.data, 'Form data must be a JSON object.');
   }
-  if (config.target.pageType === 'generative') {
-    if (!normalizeGuid(config.target.pageId)) {
-      errors.push({ field: 'target.pageId', message: 'Page ID must be the GUID of a generative page.' });
-    }
-    try {
-      parseFormData(config.target.data);
-    } catch {
-      errors.push({ field: 'target.data', message: 'Page data must be a JSON object.' });
-    }
-    // The page receives recordId only together with entityName.
-    if (config.context.mode === 'Static') {
-      if (!normalizeGuid(config.context.staticRecordId)) {
-        errors.push({ field: 'context.staticRecordId', message: 'A valid record ID (GUID) is required for Static record context.' });
-      } else if (!config.context.entityName.trim()) {
-        errors.push({ field: 'context.entityName', message: "Select the record's table: a generative page receives recordId only together with entityName." });
-      }
-    }
-    if (config.trigger.kind === 'LookupTagClick' || config.context.mode !== 'None' || config.target.data.trim()) {
-      warnings.push({ field: 'target.pageType', message: 'recordId, entityName and data reach the page only if its prompt sets it up to accept input parameters.' });
-    }
-  }
+  validateGenerativeTarget(config, errors, warnings);
 
-  // Create mode opens a blank form, so nothing may name a record to open.
-  if (config.target.pageType === 'entityrecord' && config.target.createNew) {
-    if (config.trigger.kind === 'LookupTagClick') {
-      errors.push({ field: 'target.createNew', message: 'Create mode opens a blank form, so it cannot open the clicked lookup record. Choose Open existing record or another trigger.' });
-    } else if (config.context.mode === 'RelatedRecord') {
-      errors.push({ field: 'target.createNew', message: 'Create mode opens a blank form, so it cannot open a related record. Choose Open existing record or another context mode.' });
-    } else if (config.context.mode !== 'None' && !config.target.createFromCurrent) {
-      warnings.push({ field: 'target.createNew', message: 'Create mode ignores record context.' });
-    }
-    // The generator ignores pre-fill on console and lookup triggers, and the panel hides it there.
-    if (config.target.createFromCurrent && config.trigger.kind !== 'ManualJS' && config.trigger.kind !== 'LookupTagClick') {
-      if (GRID_TRIGGERS.includes(config.trigger.kind) && !isValidLogicalName(config.context.entityName.trim())) {
-        errors.push({ field: 'target.createFromCurrent', message: "Pre-fill from a grid row needs the row's table. Set Context mode to Selected row and choose the table." });
-      } else {
-        warnings.push({ field: 'target.createFromCurrent', message: 'Pre-fill copies only the columns that a relationship mapping between the two tables defines.' });
-      }
-    }
-  }
+  validateCreateMode(config, errors, warnings);
 
   // Error: entityrecord navigation that resolves its ID from configuration rather than
   // from the trigger. Mirrors buildConfiguredRecordIdExpression in CodeGenerationService —
