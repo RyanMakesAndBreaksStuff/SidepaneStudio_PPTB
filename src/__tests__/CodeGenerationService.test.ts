@@ -1083,3 +1083,211 @@ return TestNs.open;`)({}, xrm) as (arg: unknown) => void;
     expect(generateLibraryScript(cfg({ trigger: { kind: 'FormOnLoad' }, behavior: { toggleIfOpen: true } }))).not.toContain('toggleIfOpen');
   });
 });
+
+describe('form-event record and pre-fill expressions', () => {
+  type FormEvent = 'FormOnLoad' | 'FormOnChange';
+  const recordConfig = (kind: FormEvent) => cfg({
+    pane: { paneId: 'p' },
+    trigger: { kind, namespace: 'TestNs', functionName: 'open', fieldName: 'name' },
+    target: { pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '' },
+    context: { mode: 'CurrentRecord', entityName: 'account' },
+  });
+  const prefillConfig = (kind: FormEvent) => cfg({
+    pane: { paneId: 'p' },
+    trigger: { kind, namespace: 'TestNs', functionName: 'open', fieldName: 'name' },
+    target: { pageType: 'entityrecord', entityName: 'contact', formId: '', tabName: '', data: '', createNew: true, createFromCurrent: true },
+    context: { mode: 'CurrentRecord', entityName: 'account' },
+  });
+  const BASIC_RECORD = 'entityId: formContext.data.entity.getId()';
+  const LIBRARY_RECORD = 'entityId: executionContext.getFormContext().data.entity.getId()';
+  const BASIC_PREFILL = 'createFromEntity: { entityType: formContext.data.entity.getEntityName(), id: formContext.data.entity.getId() }';
+  const LIBRARY_PREFILL = 'createFromEntity: { entityType: executionContext.getFormContext().data.entity.getEntityName(), id: executionContext.getFormContext().data.entity.getId() }';
+  const RECORD_NAV = { pageType: 'entityrecord', entityName: 'account', entityId: '{A1}' };
+  const PREFILL_NAV = { pageType: 'entityrecord', entityName: 'contact', createFromEntity: { entityType: 'account', id: '{A1}' } };
+  const LIBRARY_RECORD_OPEN = { paneId: 'p', title: 'Related Records', pageType: 'entityrecord', entityName: 'account', entityId: '{A1}' };
+  const LIBRARY_PREFILL_OPEN = { paneId: 'p', title: 'Related Records', pageType: 'entityrecord', entityName: 'contact', createFromEntity: { entityType: 'account', id: '{A1}' } };
+
+  function occurrences(code: string, needle: string): number {
+    return code.split(needle).length - 1;
+  }
+
+  function formProbe() {
+    const events: string[] = [];
+    const executionContext = {
+      getFormContext: () => {
+        events.push('getFormContext');
+        return { data: { entity: {
+          getEntityName: () => { events.push('getEntityName'); return 'account'; },
+          getId: () => { events.push('getId'); return '{A1}'; },
+        } } };
+      },
+    };
+    return { events, executionContext };
+  }
+
+  function loadBasic(config: PaneDefinitionConfig, events: string[]) {
+    const pane = { navigate: vi.fn(async () => { events.push('navigate'); }), select: vi.fn() };
+    const xrm = { App: { sidePanes: {
+      getPane: vi.fn(() => { events.push('getPane'); return null; }),
+      createPane: vi.fn(async () => { events.push('createPane'); return pane; }),
+      getAllPanes: vi.fn(() => []),
+    } }, Navigation: { openErrorDialog: vi.fn(), openAlertDialog: vi.fn() } };
+    const open = new Function('window', 'Xrm', `${generateBasicScript(config)}\nreturn TestNs.open;`)({}, xrm) as (arg: unknown) => Promise<void> | void;
+    return { open, pane };
+  }
+
+  function loadLibrary(config: PaneDefinitionConfig, events: string[]) {
+    const open = vi.fn(() => { events.push('open'); });
+    const handler = new Function('Xrm', 'SidePaneHelper', `${generateLibraryScript(config)}\nreturn TestNs.open;`)({}, { open }) as (arg: unknown) => void;
+    return { handler, open };
+  }
+
+  async function withFakeTimers(run: () => Promise<void>) {
+    vi.useFakeTimers();
+    try {
+      await run();
+    } finally {
+      vi.useRealTimers();
+    }
+  }
+
+  it.each(['FormOnLoad', 'FormOnChange'] as const)('Basic %s reads the captured formContext for the record id', kind => {
+    const code = generateBasicScript(recordConfig(kind));
+    expect(isValidJS(code)).toBe(true);
+    expect(occurrences(code, BASIC_RECORD)).toBe(2);
+    expect(occurrences(code, 'executionContext.getFormContext()')).toBe(2);
+    expect(code).toContain('var formContext = executionContext.getFormContext();');
+    expect(code).not.toContain('executionContext.getFormContext().data');
+    expect(code).not.toContain('primaryControl');
+    expect(code).not.toContain('selectedRecordId');
+    if (kind === 'FormOnChange') {
+      expect(code).toContain('clearTimeout(__spstudio_tmr_p)');
+      expect(code).toContain('setTimeout(async function()');
+      expect(code).toContain(', 150);');
+    } else {
+      expect(code).not.toContain('setTimeout');
+    }
+  });
+
+  it.each(['FormOnLoad', 'FormOnChange'] as const)('Shared Library %s reads executionContext.getFormContext() once for the record id', kind => {
+    const code = generateLibraryScript(recordConfig(kind));
+    expect(isValidJS(code)).toBe(true);
+    expect(occurrences(code, LIBRARY_RECORD)).toBe(1);
+    expect(occurrences(code, 'executionContext.getFormContext()')).toBe(1);
+    expect(code).not.toContain('formContext.');
+    expect(code).not.toContain('setTimeout');
+    expect(code).not.toContain('primaryControl');
+    expect(code).not.toContain('selectedRecordId');
+  });
+
+  it.each(['FormOnLoad', 'FormOnChange'] as const)('Basic %s pre-fill reads the captured formContext once per field', kind => {
+    const code = generateBasicScript(prefillConfig(kind));
+    expect(isValidJS(code)).toBe(true);
+    expect(occurrences(code, BASIC_PREFILL)).toBe(2);
+    expect(occurrences(code, 'formContext.data.entity.getEntityName()')).toBe(2);
+    expect(occurrences(code, 'formContext.data.entity.getId()')).toBe(2);
+    expect(occurrences(code, 'executionContext.getFormContext()')).toBe(2);
+    expect(code).not.toContain('entityId');
+    expect(code).not.toContain('executionContext.getFormContext().data');
+    if (kind === 'FormOnChange') expect(code).toContain(', 150);');
+    else expect(code).not.toContain('setTimeout');
+  });
+
+  it.each(['FormOnLoad', 'FormOnChange'] as const)('Shared Library %s pre-fill evaluates getFormContext once per createFromEntity field', kind => {
+    const code = generateLibraryScript(prefillConfig(kind));
+    expect(isValidJS(code)).toBe(true);
+    expect(occurrences(code, LIBRARY_PREFILL)).toBe(1);
+    expect(occurrences(code, 'executionContext.getFormContext()')).toBe(2);
+    expect(code).not.toContain('formContext.');
+    expect(code).not.toContain('entityId');
+    expect(code).not.toContain('setTimeout');
+    expect(code).not.toContain('primaryControl');
+    expect(code).not.toContain('selectedRecordId');
+  });
+
+  it('Basic FormOnLoad evaluates the captured form once, then checks staleness after navigate', async () => {
+    const { events, executionContext } = formProbe();
+    const { open, pane } = loadBasic(recordConfig('FormOnLoad'), events);
+    await open(executionContext);
+    expect(events).toEqual(['getFormContext', 'getPane', 'createPane', 'getId', 'navigate', 'getFormContext']);
+    expect(pane.navigate).toHaveBeenCalledWith(RECORD_NAV);
+  });
+
+  it('Basic FormOnChange debounces to one record read 150ms after the last call', async () => {
+    await withFakeTimers(async () => {
+      const { events, executionContext } = formProbe();
+      const { open, pane } = loadBasic(recordConfig('FormOnChange'), events);
+      open(executionContext);
+      open(executionContext);
+      expect(events).toEqual([]);
+      await vi.advanceTimersByTimeAsync(149);
+      expect(events).toEqual([]);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(events).toEqual(['getFormContext', 'getPane', 'createPane', 'getId', 'navigate', 'getFormContext']);
+      expect(pane.navigate).toHaveBeenCalledOnce();
+      expect(pane.navigate).toHaveBeenCalledWith(RECORD_NAV);
+    });
+  });
+
+  it('Shared Library FormOnLoad evaluates getFormContext once while building the record id', () => {
+    const { events, executionContext } = formProbe();
+    const { handler, open } = loadLibrary(recordConfig('FormOnLoad'), events);
+    handler(executionContext);
+    expect(events).toEqual(['getFormContext', 'getId', 'open']);
+    expect(open).toHaveBeenCalledWith(LIBRARY_RECORD_OPEN);
+  });
+
+  it('Shared Library FormOnChange does not debounce and evaluates the record id on every call', () => {
+    const { events, executionContext } = formProbe();
+    const { handler, open } = loadLibrary(recordConfig('FormOnChange'), events);
+    handler(executionContext);
+    handler(executionContext);
+    expect(events).toEqual(['getFormContext', 'getId', 'open', 'getFormContext', 'getId', 'open']);
+    expect(open).toHaveBeenCalledTimes(2);
+    expect(open).toHaveBeenNthCalledWith(1, LIBRARY_RECORD_OPEN);
+    expect(open).toHaveBeenNthCalledWith(2, LIBRARY_RECORD_OPEN);
+  });
+
+  it('Basic FormOnLoad pre-fill evaluates getEntityName and getId once on the captured form', async () => {
+    const { events, executionContext } = formProbe();
+    const { open, pane } = loadBasic(prefillConfig('FormOnLoad'), events);
+    await open(executionContext);
+    expect(events).toEqual(['getFormContext', 'getPane', 'createPane', 'getEntityName', 'getId', 'navigate', 'getFormContext']);
+    expect(pane.navigate).toHaveBeenCalledWith(PREFILL_NAV);
+  });
+
+  it('Basic FormOnChange pre-fill debounces to one createFromEntity read', async () => {
+    await withFakeTimers(async () => {
+      const { events, executionContext } = formProbe();
+      const { open, pane } = loadBasic(prefillConfig('FormOnChange'), events);
+      open(executionContext);
+      open(executionContext);
+      await vi.advanceTimersByTimeAsync(150);
+      expect(events).toEqual(['getFormContext', 'getPane', 'createPane', 'getEntityName', 'getId', 'navigate', 'getFormContext']);
+      expect(pane.navigate).toHaveBeenCalledOnce();
+      expect(pane.navigate).toHaveBeenCalledWith(PREFILL_NAV);
+    });
+  });
+
+  it('Shared Library FormOnLoad pre-fill evaluates getFormContext once per createFromEntity field', () => {
+    const { events, executionContext } = formProbe();
+    const { handler, open } = loadLibrary(prefillConfig('FormOnLoad'), events);
+    handler(executionContext);
+    expect(events).toEqual(['getFormContext', 'getEntityName', 'getFormContext', 'getId', 'open']);
+    expect(open).toHaveBeenCalledWith(LIBRARY_PREFILL_OPEN);
+  });
+
+  it('Shared Library FormOnChange pre-fill does not debounce, so each call reads the form twice', () => {
+    const { events, executionContext } = formProbe();
+    const { handler, open } = loadLibrary(prefillConfig('FormOnChange'), events);
+    handler(executionContext);
+    handler(executionContext);
+    expect(events).toEqual([
+      'getFormContext', 'getEntityName', 'getFormContext', 'getId', 'open',
+      'getFormContext', 'getEntityName', 'getFormContext', 'getId', 'open',
+    ]);
+    expect(open).toHaveBeenCalledTimes(2);
+    expect(open).toHaveBeenNthCalledWith(1, LIBRARY_PREFILL_OPEN);
+    expect(open).toHaveBeenNthCalledWith(2, LIBRARY_PREFILL_OPEN);
+  });
+});
