@@ -6,10 +6,11 @@
 /coverage/node_modules
 /.claude
 /art assets
-/docs
 /data
 /coverage
+.superpwoers
 /package-lock.json
+docs
 /tasks
 /AGENTS.md
 /AGENTS.md.bak
@@ -29,3 +30,7 @@ secrets/
 /.codegraph
 /brand
 /dist
+/DESIGN.md
+/task6-narrow-related-grid.png
+/task6-workbench-narrow-grid.png
+/adapter-review.md

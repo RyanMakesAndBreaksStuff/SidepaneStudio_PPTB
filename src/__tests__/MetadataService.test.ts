@@ -606,12 +606,16 @@ describe('view metadata', () => {
   });
 
   it('retrieves lookup columns through the guarded metadata cast endpoint', async () => {
-    const lookups = [{ LogicalName: 'primarycontactid', DisplayName: { UserLocalizedLabel: { Label: 'Primary Contact' } } }];
+    const lookups = [
+      { LogicalName: 'primarycontactid', DisplayName: { UserLocalizedLabel: { Label: 'Primary Contact' } }, Targets: ['contact'] },
+      { LogicalName: 'customerid', DisplayName: { UserLocalizedLabel: { Label: 'Customer' } }, Targets: ['account', 'contact'] },
+    ];
     const webApiGet = vi.fn().mockResolvedValue(lookups);
     const service = new MetadataService({ webApiGet });
-    expect(await service.listLookupAttributes('account')).toEqual(lookups);
+    const result = await service.listLookupAttributes('account');
     expect(webApiGet).toHaveBeenCalledWith(
-      "EntityDefinitions(LogicalName='account')/Attributes/Microsoft.Dynamics.CRM.LookupAttributeMetadata?$select=LogicalName,DisplayName");
+      "EntityDefinitions(LogicalName='account')/Attributes/Microsoft.Dynamics.CRM.LookupAttributeMetadata?$select=LogicalName,DisplayName,Targets");
+    expect(result).toEqual(lookups);
     await expect(service.listLookupAttributes("account'bad")).rejects.toThrow('Invalid table logical name.');
     expect(webApiGet).toHaveBeenCalledTimes(1);
   });

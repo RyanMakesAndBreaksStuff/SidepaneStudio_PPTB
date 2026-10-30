@@ -62,5 +62,5 @@ export function buildAttributeLabelsPath(entityLogicalName: string): string | nu
 export function buildLookupAttributesPath(entityLogicalName: string): string | null {
   if (!isValidLogicalName(entityLogicalName)) return null;
   return `EntityDefinitions(LogicalName='${entityLogicalName}')/Attributes/Microsoft.Dynamics.CRM.LookupAttributeMetadata` +
-    '?$select=LogicalName,DisplayName';
+    '?$select=LogicalName,DisplayName,Targets';
 }

@@ -493,6 +493,42 @@ describe('ConfigurePanel — record context table name (CR-001)', () => {
 });
 
 describe('ConfigurePanel — related record context', () => {
+  it('reapplies resolved lookup target when switching to Table record and loads that table forms', async () => {
+    const listLookupAttributes = vi.fn().mockResolvedValue([
+      { LogicalName: 'primarycontactid', Targets: ['contact'] },
+    ]);
+    const metadataService = makeMetadataService({ listLookupAttributes });
+    const getFormsForEntityResult = vi.fn().mockResolvedValue({ ok: true, forms: [] });
+    const formXmlService = { getFormsForEntityResult } as any;
+    const initial: PaneDefinitionConfig = {
+      ...DEFAULT_CONFIG,
+      target: { pageType: 'custom', name: 'sample_page' },
+      context: { ...DEFAULT_CONFIG.context, mode: 'RelatedRecord', entityName: 'account', lookupAttribute: '' },
+    };
+    let current = initial;
+    function Workflow(): React.ReactElement {
+      const [config, setConfig] = useState(initial);
+      current = config;
+      return <ConfigurePanel config={config} onChange={updater => setConfig(prev => updater(prev))}
+        validation={validate(config)} metadataService={metadataService}
+        formXmlService={formXmlService} />;
+    }
+    await render(<Workflow />);
+    await expandSection('Record context');
+    const lookup = host!.querySelector<HTMLSelectElement>('select[aria-label="Lookup column"]')!;
+    await act(async () => {
+      lookup.value = 'primarycontactid';
+      lookup.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    expect(host!.textContent).toContain('Destination table: contact');
+    expect(current.target).toMatchObject({ pageType: 'custom', name: 'sample_page' });
+    await expandSection('What opens in the pane');
+    await act(async () => { getChoiceButton('Table record')!.click(); });
+
+    expect(current.target).toMatchObject({ pageType: 'entityrecord', entityName: 'contact' });
+    expect(getFormsForEntityResult).toHaveBeenCalledWith('contact');
+  });
+
   it('lists the source table lookup columns and stores the chosen column', async () => {
     const listLookupAttributes = vi.fn().mockResolvedValue([
       { LogicalName: 'primarycontactid', DisplayName: { UserLocalizedLabel: { Label: 'Primary Contact' } } },
@@ -518,6 +554,138 @@ describe('ConfigurePanel — related record context', () => {
     const updater = onChange.mock.calls[onChange.mock.calls.length - 1][0] as
       (prev: PaneDefinitionConfig) => PaneDefinitionConfig;
     expect(updater(config).context.lookupAttribute).toBe('primarycontactid');
+  });
+
+  it('derives a single lookup destination and clears incompatible form and tab selections', async () => {
+    const listLookupAttributes = vi.fn().mockResolvedValue([
+      { LogicalName: 'primarycontactid', Targets: ['contact'], DisplayName: { UserLocalizedLabel: { Label: 'Primary Contact' } } },
+    ]);
+    const config: PaneDefinitionConfig = {
+      ...DEFAULT_CONFIG,
+      target: { pageType: 'entityrecord', entityName: 'account', formId: 'old-form', tabName: 'old-tab', data: '' },
+      context: { ...DEFAULT_CONFIG.context, mode: 'RelatedRecord', entityName: 'account', lookupAttribute: '' },
+    };
+    await render(<StatefulConfigurePanel initialConfig={config} metadataService={makeMetadataService({ listLookupAttributes })} />);
+    await expandSection('Record context');
+    const select = host!.querySelector<HTMLSelectElement>('select[aria-label="Lookup column"]')!;
+    await act(async () => {
+      select.value = 'primarycontactid';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await expandSection('What opens in the pane');
+    expect(host!.textContent).toContain('Destination table: contact');
+    const tabField = Array.from(host!.querySelectorAll('label')).find(label => label.textContent?.includes('Tab name'))?.parentElement;
+    expect(tabField?.querySelector('input')?.disabled).toBe(false);
+    expect(host!.textContent).toContain('Primary Contact (primarycontactid)');
+  });
+
+  it('shows every possible customer target and disables table-specific form and tab controls', async () => {
+    const listLookupAttributes = vi.fn().mockResolvedValue([
+      { LogicalName: 'parentcustomerid', Targets: ['account', 'contact'], DisplayName: { UserLocalizedLabel: { Label: 'Parent Customer' } } },
+    ]);
+    const config: PaneDefinitionConfig = {
+      ...DEFAULT_CONFIG,
+      target: { pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '' },
+      context: { ...DEFAULT_CONFIG.context, mode: 'RelatedRecord', entityName: 'account', lookupAttribute: 'parentcustomerid' },
+    };
+    await render(<StatefulConfigurePanel initialConfig={config} metadataService={makeMetadataService({ listLookupAttributes })} />);
+    await expandSection('Record context');
+    await expandSection('What opens in the pane');
+    expect(host!.textContent).toContain('Possible destination tables: account, contact.');
+    expect(host!.textContent).toContain('Determined by the selected row');
+    expect(Array.from(host!.querySelectorAll('label')).some(label => label.textContent?.trim() === 'Table name *')).toBe(false);
+    const tabField = Array.from(host!.querySelectorAll('label')).find(label => label.textContent?.includes('Tab name'))?.parentElement;
+    expect(tabField?.querySelector('input')?.disabled).toBe(true);
+  });
+
+  it('ignores a delayed response for the prior source table', async () => {
+    let resolveAccount!: (value: Array<{ LogicalName: string; Targets: string[] }>) => void;
+    const listLookupAttributes = vi.fn((entity: string) => entity === 'account'
+      ? new Promise<Array<{ LogicalName: string; Targets: string[] }>>(resolve => { resolveAccount = resolve; })
+      : Promise.resolve([{ LogicalName: 'contactlookup', Targets: ['contact'] } as { LogicalName: string; Targets: string[] }])
+    );
+    const current: PaneDefinitionConfig = {
+      ...DEFAULT_CONFIG,
+      target: { pageType: 'entityrecord', entityName: 'account', formId: 'old-form', tabName: 'old-tab', data: '' },
+      context: { ...DEFAULT_CONFIG.context, mode: 'RelatedRecord', entityName: 'account', lookupAttribute: '' },
+    };
+    const metadataService = makeMetadataService({
+      listLookupAttributes,
+      listAccessibleTables: vi.fn().mockResolvedValue({ status: 'ok', tables: [
+        { logicalName: 'account', displayName: 'Account', objectTypeCode: 1 },
+        { logicalName: 'contact', displayName: 'Contact', objectTypeCode: 2 },
+      ] }),
+    });
+    await render(<StatefulConfigurePanel initialConfig={current} metadataService={metadataService} />);
+    await expandSection('Record context');
+    expect(host!.textContent).toContain('Loading lookup columns');
+    const sourcePicker = Array.from(host!.querySelectorAll<HTMLSelectElement>('select'))[1];
+    expect(sourcePicker).toBeTruthy();
+    await act(async () => {
+      sourcePicker!.value = 'contact';
+      sourcePicker!.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    resolveAccount([{ LogicalName: 'staleaccountlookup', Targets: ['account'] }]);
+    await act(async () => { await Promise.resolve(); });
+    expect(host!.textContent).not.toContain('staleaccountlookup');
+    const selects = Array.from(host!.querySelectorAll<HTMLSelectElement>('select'));
+    const lookupOptions = selects[selects.length - 1]?.options;
+    expect(Array.from(lookupOptions ?? []).map(option => option.value)).not.toContain('staleaccountlookup');
+    expect(host!.textContent).toContain('contactlookup');
+  });
+
+  it('preserves saved destination fields on lookup error and retries into the resolved target', async () => {
+    const listLookupAttributes = vi.fn()
+      .mockRejectedValueOnce(new Error('connection unavailable'))
+      .mockResolvedValueOnce([
+        { LogicalName: 'primarycontactid', Targets: ['contact'], DisplayName: { UserLocalizedLabel: { Label: 'Primary Contact' } } },
+      ]);
+    const config: PaneDefinitionConfig = {
+      ...DEFAULT_CONFIG,
+      target: { pageType: 'entityrecord', entityName: 'account', formId: 'saved-form', tabName: 'saved-tab', data: '' },
+      context: { ...DEFAULT_CONFIG.context, mode: 'RelatedRecord', entityName: 'account', lookupAttribute: 'primarycontactid' },
+    };
+    await render(<StatefulConfigurePanel initialConfig={config} metadataService={makeMetadataService({ listLookupAttributes })} />);
+    await expandSection('Record context');
+    await expandSection('What opens in the pane');
+    expect(host!.querySelector('[role="alert"]')?.textContent).toContain('connection unavailable');
+    const tabField = Array.from(host!.querySelectorAll('label')).find(label => label.textContent?.includes('Tab name'))?.parentElement;
+    expect(tabField?.querySelector('input')?.value).toBe('saved-tab');
+    expect(host!.textContent).toContain('Saved table selection “account” is unconfirmed');
+
+    await act(async () => {
+      Array.from(host!.querySelectorAll('button')).find(button => button.textContent === 'Retry')?.click();
+    });
+    expect(host!.textContent).toContain('Destination table: contact');
+    expect(tabField?.querySelector('input')?.value).toBe('');
+    expect(listLookupAttributes).toHaveBeenCalledTimes(2);
+  });
+
+  it('ignores lookup metadata returned by a replaced metadata service instance', async () => {
+    let resolveOld!: (value: Array<{ LogicalName: string; Targets: string[] }>) => void;
+    const oldService = makeMetadataService({
+      listLookupAttributes: vi.fn(() => new Promise<Array<{ LogicalName: string; Targets: string[] }>>(resolve => { resolveOld = resolve; })),
+    });
+    const newService = makeMetadataService({
+      listLookupAttributes: vi.fn().mockResolvedValue([
+        { LogicalName: 'newservice_lookup', Targets: ['contact'] },
+      ]),
+    });
+    const config: PaneDefinitionConfig = {
+      ...DEFAULT_CONFIG,
+      target: { pageType: 'entityrecord', entityName: '', formId: '', tabName: '', data: '' },
+      context: { ...DEFAULT_CONFIG.context, mode: 'RelatedRecord', entityName: 'account', lookupAttribute: '' },
+    };
+    const onChange = vi.fn();
+    await render(<ConfigurePanel config={config} onChange={onChange} validation={validate(config)} metadataService={oldService} />);
+    await expandSection('Record context');
+    await act(async () => {
+      root?.render(<ThemeProvider><ConfigurePanel config={config} onChange={onChange} validation={validate(config)} metadataService={newService} /></ThemeProvider>);
+    });
+    resolveOld([{ LogicalName: 'oldservice_lookup', Targets: ['account'] }]);
+    await act(async () => { await Promise.resolve(); });
+    expect(host!.textContent).not.toContain('oldservice_lookup');
+    expect(host!.textContent).toContain('newservice_lookup');
   });
 });
 

@@ -1,12 +1,13 @@
 // src/components/ConfigurePanel.tsx
 import * as React from 'react';
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 import { theme } from '../theme/tokens';
 import { PaneDefinitionConfig, TargetConfig, PageType, LOOKUP_TAG_TARGETS } from '../types/PaneDefinitionConfig';
 import { MetadataFilterConfig } from '../types/MetadataFilterConfig';
 import { ValidationResult } from '../services/ValidationService';
-import { MetadataService } from '../services/MetadataService';
+import { LookupAttributeInfo, MetadataService } from '../services/MetadataService';
+import { applyRelatedLookup, changeRelatedSource } from '../services/relatedRecordConfig';
 import { FormXmlService } from '../services/FormXmlService';
 import { Section } from './Section';
 import { Field } from './Field';
@@ -134,6 +135,12 @@ export function ConfigurePanel({
 }: ConfigurePanelProps): React.ReactElement {
   const { isDark } = useTheme();
   const T = theme(isDark);
+  const [resolvedRelatedLookup, setResolvedRelatedLookup] = useState<{
+    service: MetadataService;
+    source: string;
+    lookupName: string;
+    metadata?: LookupAttributeInfo;
+  } | null>(null);
 
   const patch = useCallback(<S extends keyof PaneDefinitionConfig>(
     section: S,
@@ -148,6 +155,16 @@ export function ConfigurePanel({
 
   const { pane, target, trigger, context, behavior } = config;
   const creating = target.pageType === 'entityrecord' && target.createNew === true;
+  const relatedTarget = context.mode === 'RelatedRecord' && target.pageType === 'entityrecord';
+  const currentResolvedLookup = resolvedRelatedLookup?.service === metadataService &&
+    resolvedRelatedLookup.source === context.entityName &&
+    resolvedRelatedLookup.lookupName === context.lookupAttribute
+    ? resolvedRelatedLookup.metadata
+    : undefined;
+  const resolvedTargets = Array.isArray(currentResolvedLookup?.Targets)
+    ? [...new Set(currentResolvedLookup.Targets)]
+    : [];
+  const hasSingleRelatedTarget = !!currentResolvedLookup && resolvedTargets.length === 1;
   const vErrors: Record<string, string> = Object.fromEntries(
     validation.errors.map(e => [e.field, e.message])
   );
@@ -165,7 +182,12 @@ export function ConfigurePanel({
             name="pageType"
             options={PAGE_TYPE_OPTIONS}
             value={target.pageType}
-            onChange={v => onChange(prev => ({ ...prev, target: resetTarget(v as PageType) }))}
+            onChange={v => onChange(prev => {
+              const next = { ...prev, target: resetTarget(v as PageType) };
+              return v === 'entityrecord' && currentResolvedLookup
+                ? applyRelatedLookup(next, context.entityName, currentResolvedLookup)
+                : next;
+            })}
           />
         </Field>
 
@@ -187,8 +209,19 @@ export function ConfigurePanel({
         )}
 
         {(target.pageType === 'entityrecord' || target.pageType === 'entitylist') && (
-          <Field label="Table name" required hint="Logical name of the Dataverse table" error={vErrors['target.entityName']}>
-            <TablePicker
+          <Field label={relatedTarget ? 'Related record destination' : 'Table name'} required={!relatedTarget}
+            hint={relatedTarget ? 'Derived from the selected source lookup' : 'Logical name of the Dataverse table'} error={vErrors['target.entityName']}>
+            {relatedTarget ? (
+              <div role="status" aria-live="polite" style={{ color: T.fg2, fontFamily: T.font, fontSize: 13 }}>
+                {resolvedTargets.length === 1
+                  ? `Destination table: ${resolvedTargets[0]}`
+                  : resolvedTargets.length > 1
+                    ? `Possible destination tables: ${resolvedTargets.join(', ')}. Determined by the selected row.`
+                    : target.entityName
+                      ? `Saved table selection “${target.entityName}” is unconfirmed until the lookup is resolved.`
+                      : 'Select a source lookup to determine the destination table.'}
+              </div>
+            ) : <TablePicker
               value={(target.pageType === 'entityrecord' || target.pageType === 'entitylist') ? target.entityName : ''}
               onChange={v =>
                 onChange(prev => {
@@ -204,7 +237,7 @@ export function ConfigurePanel({
               error={!!vErrors['target.entityName']}
               disabled={readOnly}
               onAccessibleTablesChange={onAccessibleTablesChange}
-            />
+            />}
           </Field>
         )}
 
@@ -227,16 +260,16 @@ export function ConfigurePanel({
             {vErrors['target.createFromCurrent'] && <Callout type="err" icon="✕">{vErrors['target.createFromCurrent']}</Callout>}
             {vWarnings['target.createFromCurrent'] && <Callout type="warn" icon="⚠">{vWarnings['target.createFromCurrent']}</Callout>}
           </>}
-          {formXmlService && <Field label="Form" error={vErrors['target.formId']}>
+          {formXmlService && <Field label="Form" error={vErrors['target.formId']} hint={relatedTarget && !hasSingleRelatedTarget ? 'Choose a lookup with one confirmed target table to select a form.' : undefined}>
             <FormSelector entityName={target.entityName} onEntityNameChange={() => undefined}
-              selectedFormId={target.formId} hideEntityPicker disabled={readOnly}
+              selectedFormId={target.formId} hideEntityPicker disabled={readOnly || (relatedTarget && !hasSingleRelatedTarget)}
               formXmlService={formXmlService} metadataService={metadataService}
               onFormSelected={selection => onChange(prev => patchEntityRecordTarget(prev, {
                 formId: selection?.formId ?? '', tabName: '',
               }))} />
           </Field>}
-          <Field label="Tab name" hint="Logical name of the form tab to focus">
-            <Input value={target.tabName} disabled={readOnly} onChange={tabName => onChange(prev => patchEntityRecordTarget(prev, { tabName }))} />
+          <Field label="Tab name" hint={relatedTarget && !hasSingleRelatedTarget ? 'Available after a single lookup target is confirmed.' : 'Logical name of the form tab to focus'}>
+            <Input value={target.tabName} disabled={readOnly || (relatedTarget && !hasSingleRelatedTarget)} onChange={tabName => onChange(prev => patchEntityRecordTarget(prev, { tabName }))} />
           </Field>
           <JsonDataField label="Form data" value={target.data} disabled={readOnly} placeholder={FORM_DATA_EXAMPLE} error={vErrors['target.data']}
             hint="Optional JSON object of extra form parameters. Keys are column logical names (e.g. name) or pre-registered custom params. Lookups need a pair/triple: primarycontactid + primarycontactidname, or parentcustomerid + parentcustomeridname + parentcustomeridtype (account|contact|systemuser|team)."
@@ -444,10 +477,11 @@ export function ConfigurePanel({
         >
             <TablePicker
               value={context.entityName}
-              onChange={entityName => onChange(prev =>
-                prev.context.entityName === entityName ? prev : {
+              onChange={entityName => onChange(prev => prev.context.mode === 'RelatedRecord'
+                ? changeRelatedSource(prev, entityName)
+                : prev.context.entityName === entityName ? prev : {
                   ...prev,
-                  context: { ...prev.context, entityName, staticRecordId: '', lookupAttribute: '' },
+                  context: { ...prev.context, entityName, staticRecordId: '' },
                 })}
               metadataService={metadataService}
               error={!!vErrors['context.entityName']}
@@ -461,7 +495,19 @@ export function ConfigurePanel({
             <LookupPicker
               entityName={context.entityName}
               value={context.lookupAttribute}
-              onChange={v => patch('context', 'lookupAttribute', v)}
+              onChange={(v, selected) => onChange(prev => applyRelatedLookup(prev, context.entityName,
+                selected ?? (v ? { LogicalName: v } : null)))}
+              onSelectionChange={lookup => setResolvedRelatedLookup({
+                service: metadataService, source: context.entityName,
+                lookupName: lookup?.LogicalName ?? '', metadata: lookup,
+              })}
+              onResolvedSelection={lookup => {
+                setResolvedRelatedLookup({
+                  service: metadataService, source: context.entityName,
+                  lookupName: context.lookupAttribute, metadata: lookup,
+                });
+                if (lookup) onChange(prev => applyRelatedLookup(prev, context.entityName, lookup));
+              }}
               metadataService={metadataService}
               error={!!vErrors['context.lookupAttribute']}
               disabled={readOnly}

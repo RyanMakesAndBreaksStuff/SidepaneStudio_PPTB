@@ -30,7 +30,6 @@ vi.mock('../components/ConfigurePanel', async () => {
 });
 vi.mock('../components/PreviewPanel', () => ({ PreviewPanel: () => null }));
 vi.mock('../components/OutputPanel', () => ({ OutputPanel: () => null }));
-vi.mock('../components/CommandBar', () => ({ CommandBar: () => null }));
 
 type Handler = (event: unknown, payload: ToolBoxAPI.ToolBoxEventPayload) => void;
 let handler: Handler;

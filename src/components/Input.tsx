@@ -34,7 +34,7 @@ export function Input({ value, onChange, placeholder, type = 'text', disabled, e
         borderRadius: T.rM,
         fontFamily: T.font, fontSize: 13, color: T.fg1,
         background: disabled ? T.surface3 : T.pageBg,
-        width: '100%', outline: 'none',
+        width: '100%', boxSizing: 'border-box', outline: 'none',
         transition: 'border-color 80ms, box-shadow 80ms',
       }}
     />

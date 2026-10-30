@@ -77,7 +77,7 @@ The [user instruction manual](documentation/user-manual.md) starts with an
 installed tool and covers configuration, deployment, and troubleshooting.
 For installation and source builds, see [How-To-Build.md](How-To-Build.md).
 
-See [Change-Log.md](Change-Log.md) for the `v1.1.1` change summary.
+See [Change-Log.md](Change-Log.md) for the `v1.3.1` change summary.
 
 ## Requirements
 

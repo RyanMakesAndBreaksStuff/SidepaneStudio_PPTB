@@ -203,15 +203,24 @@ function buildRelatedRecordPreamble(config: PaneDefinitionConfig, indent: string
   );
 }
 
-function buildTargetParameterParts(target: PaneDefinitionConfig['target']): string[] {
+function buildTargetParameterParts(
+  target: PaneDefinitionConfig['target'],
+  contextMode: PaneDefinitionConfig['context']['mode'],
+): string[] {
   const parts: string[] = [];
   if (target.pageType === 'entitylist' && target.viewId.trim()) {
     parts.push(`viewId: ${JSON.stringify(normalizeGuid(target.viewId) ?? target.viewId)}`);
     parts.push(`viewType: ${JSON.stringify(target.viewType)}`);
   }
   if (target.pageType === 'entityrecord') {
-    if (target.formId.trim()) parts.push(`formId: ${JSON.stringify(normalizeGuid(target.formId) ?? target.formId)}`);
-    if (target.tabName.trim()) parts.push(`tabName: ${JSON.stringify(target.tabName.trim())}`);
+    const formTabParts: string[] = [];
+    if (target.formId.trim()) formTabParts.push(`formId: ${JSON.stringify(normalizeGuid(target.formId) ?? target.formId)}`);
+    if (target.tabName.trim()) formTabParts.push(`tabName: ${JSON.stringify(target.tabName.trim())}`);
+    if (formTabParts.length && contextMode === 'RelatedRecord' && !target.createNew) {
+      parts.push(`...(relatedRecord.entityType === ${JSON.stringify(target.entityName)} ? { ${formTabParts.join(', ')} } : {})`);
+    } else {
+      parts.push(...formTabParts);
+    }
   }
   if (target.pageType === 'generative') {
     parts.push(`pageId: ${JSON.stringify(normalizeGuid(target.pageId) ?? target.pageId)}`);
@@ -245,7 +254,7 @@ function buildNavigateInput(config: PaneDefinitionConfig): string {
         return `{ ${[
           `pageType: ${JSON.stringify(target.pageType)}`,
           `entityName: ${JSON.stringify(target.entityName)}`,
-          ...buildTargetParameterParts(target),
+          ...buildTargetParameterParts(target, config.context.mode),
           ...(createFrom ? [`createFromEntity: ${createFrom}`] : []),
         ].join(', ')} }`;
       }
@@ -254,14 +263,14 @@ function buildNavigateInput(config: PaneDefinitionConfig): string {
         `pageType: ${JSON.stringify(target.pageType)}`,
         `entityName: ${rc.entityExpr ?? '""'}`,
         `entityId: ${entityIdExpr}`,
-        ...buildTargetParameterParts(target),
+        ...buildTargetParameterParts(target, config.context.mode),
       ].join(', ')} }`;
     }
     case 'entitylist':
       return `{ ${[
         `pageType: ${JSON.stringify(target.pageType)}`,
         `entityName: ${rc.entityExpr ?? '""'}`,
-        ...buildTargetParameterParts(target),
+        ...buildTargetParameterParts(target, config.context.mode),
       ].join(', ')} }`;
     case 'webresource': {
       const parts = [
@@ -282,7 +291,7 @@ function buildNavigateInput(config: PaneDefinitionConfig): string {
         ? `{ pageType: ${JSON.stringify(target.pageType)}, searchText: ${JSON.stringify(target.searchText)} }`
         : `{ pageType: ${JSON.stringify(target.pageType)} }`;
     case 'generative': {
-      const parts = [`pageType: ${JSON.stringify(target.pageType)}`, ...buildTargetParameterParts(target)];
+      const parts = [`pageType: ${JSON.stringify(target.pageType)}`, ...buildTargetParameterParts(target, config.context.mode)];
       if (rc.idExpr && rc.entityExpr) {
         parts.push(`entityName: ${rc.entityExpr}`);
         parts.push(`recordId: ${bareGuidExpr(rc.idExpr)}`);
@@ -559,7 +568,7 @@ export function generateLibraryScript(config: PaneDefinitionConfig): string {
     optLines.push(`    recordId: ${bareGuidExpr(libIdExpr)}`);
   }
 
-  optLines.push(...buildTargetParameterParts(target).map(part => `    ${part}`));
+  optLines.push(...buildTargetParameterParts(target, config.context.mode).map(part => `    ${part}`));
 
   // Appearance + behavior keys — contract C4. isResizable is deliberately absent.
   if (width !== DEFAULT_CONFIG.pane.width) optLines.push(`    width: ${width}`);

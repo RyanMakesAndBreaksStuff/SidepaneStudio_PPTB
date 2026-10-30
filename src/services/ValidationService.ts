@@ -106,7 +106,8 @@ export function validate(config: PaneDefinitionConfig, accessibleTables?: Set<st
   // Error: entityrecord/entitylist with empty entityName
   if (
     (config.target.pageType === 'entityrecord' || config.target.pageType === 'entitylist') &&
-    !config.target.entityName.trim()
+    !config.target.entityName.trim() &&
+    !(config.target.pageType === 'entityrecord' && !config.target.createNew && config.context.mode === 'RelatedRecord')
   ) {
     errors.push({
       field: 'target.entityName',

@@ -93,14 +93,52 @@ export function getRelatedLookup(config: PaneDefinitionConfig): string {
 export interface PreviewRecord {
   id: string;
   name: string;
+  entityName?: string;
 }
+
+const LOOKUP_LOGICAL_NAME = '@Microsoft.Dynamics.CRM.lookuplogicalname';
 
 export function relatedRecordOf(row: Record<string, unknown>, lookupAttribute: string): PreviewRecord | null {
   const key = `_${lookupAttribute}_value`;
   const id = row[key];
   if (typeof id !== 'string' || !id) return null;
   const name = row[`${key}${FORMATTED}`];
-  return { id, name: typeof name === 'string' ? name : '' };
+  const entityName = row[`${key}${LOOKUP_LOGICAL_NAME}`];
+  return { id, name: typeof name === 'string' ? name : '',
+    ...(typeof entityName === 'string' && isValidLogicalName(entityName) ? { entityName } : {}) };
+}
+
+export type RelatedRecordResolution =
+  | { status: 'empty' }
+  | { status: 'resolved'; record: PreviewRecord }
+  | { status: 'unresolved'; reason: 'table-unknown' | 'table-not-allowed' };
+
+/** Resolve a populated lookup using its row annotation or one confirmed metadata target. */
+export function resolveRelatedRecord(
+  row: Record<string, unknown>,
+  lookupAttribute: string,
+  targets?: readonly string[] | null
+): RelatedRecordResolution {
+  const record = relatedRecordOf(row, lookupAttribute);
+  if (!record) return { status: 'empty' };
+
+  const rawAnnotation = row[`_${lookupAttribute}_value${LOOKUP_LOGICAL_NAME}`];
+  if (rawAnnotation !== undefined && rawAnnotation !== null &&
+      (typeof rawAnnotation !== 'string' || !isValidLogicalName(rawAnnotation))) {
+    return { status: 'unresolved', reason: 'table-not-allowed' };
+  }
+
+  const knownTargets = [...new Set((targets ?? []).filter(isValidLogicalName))];
+  if (record.entityName) {
+    if (knownTargets.length > 0 && !knownTargets.includes(record.entityName)) {
+      return { status: 'unresolved', reason: 'table-not-allowed' };
+    }
+    return { status: 'resolved', record };
+  }
+  if (knownTargets.length === 1) {
+    return { status: 'resolved', record: { ...record, entityName: knownTargets[0] } };
+  }
+  return { status: 'unresolved', reason: 'table-unknown' };
 }
 
 /** One source record whose lookup is set: the Form preview's RelatedRecord sample. */

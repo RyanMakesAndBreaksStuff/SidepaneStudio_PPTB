@@ -845,6 +845,59 @@ describe('generated scripts — RelatedRecord context', () => {
     await vi.waitFor(() => expect(open).toHaveBeenCalled());
     expect(open.mock.calls[0][0]).toMatchObject({ entityName: 'contact', entityId: '{C2}' });
   });
+
+  it('adds configured form and tab only when the Basic lookup resolves to the configured table', async () => {
+    const config = related('MainGridOnSelect');
+    if (config.target.pageType !== 'entityrecord') throw new Error('Expected an entity record target.');
+    config.target.entityName = 'account';
+    config.target.formId = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+    config.target.tabName = 'details';
+    const retrieveRecord = vi.fn()
+      .mockResolvedValueOnce({ ...accountRow, '_primarycontactid_value@Microsoft.Dynamics.CRM.lookuplogicalname': 'account' })
+      .mockResolvedValueOnce(accountRow);
+    const { open, pane } = load(config, retrieveRecord);
+
+    open(gridRow);
+    await vi.waitFor(() => expect(pane.navigate).toHaveBeenCalledTimes(1));
+    open(gridRow);
+    await vi.waitFor(() => expect(pane.navigate).toHaveBeenCalledTimes(2));
+
+    expect(pane.navigate).toHaveBeenNthCalledWith(1, {
+      pageType: 'entityrecord', entityName: 'account', entityId: 'c1',
+      formId: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee', tabName: 'details',
+    });
+    expect(pane.navigate).toHaveBeenNthCalledWith(2, {
+      pageType: 'entityrecord', entityName: 'contact', entityId: 'c1',
+    });
+  });
+
+  it('adds configured form and tab only when the Shared Library lookup resolves to the configured table', async () => {
+    const config = related('MainGridOnSelect');
+    if (config.target.pageType !== 'entityrecord') throw new Error('Expected an entity record target.');
+    config.target.entityName = 'account';
+    config.target.formId = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+    config.target.tabName = 'details';
+    const retrieveRecord = vi.fn()
+      .mockResolvedValueOnce({ ...accountRow, '_primarycontactid_value@Microsoft.Dynamics.CRM.lookuplogicalname': 'account' })
+      .mockResolvedValueOnce(accountRow);
+    const open = vi.fn();
+    const handler = new Function('Xrm', 'SidePaneHelper',
+      `${generateLibraryScript(config)}\nreturn TestNs.open;`)(
+      { WebApi: { retrieveRecord }, Navigation: { openErrorDialog: vi.fn() } }, { open }) as (arg: unknown) => void;
+
+    handler(gridRow);
+    await vi.waitFor(() => expect(open).toHaveBeenCalledTimes(1));
+    handler(gridRow);
+    await vi.waitFor(() => expect(open).toHaveBeenCalledTimes(2));
+
+    expect(open).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      pageType: 'entityrecord', entityName: 'account', entityId: 'c1',
+      formId: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee', tabName: 'details',
+    }));
+    expect(open.mock.calls[1][0]).toMatchObject({ pageType: 'entityrecord', entityName: 'contact', entityId: 'c1' });
+    expect(open.mock.calls[1][0]).not.toHaveProperty('formId');
+    expect(open.mock.calls[1][0]).not.toHaveProperty('tabName');
+  });
 });
 
 describe('entityrecord create mode', () => {

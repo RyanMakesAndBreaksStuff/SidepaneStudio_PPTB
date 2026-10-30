@@ -1,6 +1,6 @@
 # Side Pane Studio User Instruction Manual
 
-This manual assumes Power Platform ToolBox and Side Pane Studio are already installed. Start by selecting your Dataverse connection, then configure, preview, and deploy a side pane. The steps cover Side Pane Studio 1.1.1.
+This manual assumes Power Platform ToolBox and Side Pane Studio are already installed. Start by selecting your Dataverse connection, then configure, preview, and deploy a side pane. The steps cover Side Pane Studio 1.3.1.
 
 For installation and local development, see [How-To-Build.md](../How-To-Build.md). A shorter workflow is in [usage.md](usage.md).
 
@@ -33,7 +33,7 @@ Expected output: the environment name you chose is selected, and opening Side Pa
 
 1. Click **Tools** or **Installed Tools**.
 2. Click **Side Pane Studio**.
-3. Wait until the header and the three panels (or the three tabs) appear.
+3. Wait until the three panels (or the three tabs) appear.
 
 **Explanation**:
 
@@ -42,7 +42,7 @@ Expected output: the environment name you chose is selected, and opening Side Pa
 
 **Verification**:
 
-The header shows **Side Pane Studio** and a **Reset** button.
+The Configure header shows **Reset** on the right. The ToolBox tab carries the tool name.
 
 Expected output: the workbench is interactive. The center preview is on the **Mock** tab.
 
@@ -50,7 +50,7 @@ Expected output: the workbench is interactive. The center preview is on the **Mo
 
 Work in the ToolBox window with Side Pane Studio open. On a wide window you get three columns: **Configure** (left), **Preview** (center), and **Output** (right). Below 900 pixels, use the **Configure**, **Preview**, and **Output** tabs instead. The steps use the same fields either way.
 
-The studio writes the current configuration to ToolBox settings and restores it the next time you open the tool. **Reset** in the header asks you to confirm `Reset all configuration? This cannot be undone.` and then restores the defaults below.
+The studio writes the current configuration to ToolBox settings and restores it the next time you open the tool. **Reset** on the right of the Configure header asks you to confirm `Reset all configuration? This cannot be undone.` and then restores the defaults below. Below 900 pixels, **Reset** is on the Configure tab.
 
 | Setting             | Default                                |
 | ------------------- | -------------------------------------- |
@@ -79,6 +79,8 @@ The studio writes the current configuration to ToolBox settings and restores it 
 - The mock host is a fixed Account sample. It shows the pane title, width, and header so you can judge the layout. It does not load your custom page.
 
 ![Side Pane Studio workbench with content type, mock preview, and Basic Script](images/workbench-overview.png)
+
+Recapture `documentation/images/workbench-overview.png`: no studio title bar, and **Reset** on the right of the Configure header.
 
 **Verification**:
 
@@ -190,6 +192,7 @@ Expected output: **Basic Script** is still visible, and there is no `Pane ID is 
 - For a custom page or web resource, an empty **Table name** omits record context. The pane still opens, with no record. The studio says: `Without a table name the generated script omits record context entirely — the pane opens with no record.`
 - **Selected row (subgrid)** is valid for main-grid and subgrid triggers. On any other trigger the studio blocks generation with: `Selected row context is only available from a main grid or subgrid. Choose a different context mode or trigger.`
 - **Static record ID** embeds a GUID. That GUID belongs to one environment. Reconfigure it after you import the setup somewhere else.
+- **Related record (lookup on source record)** opens the record a lookup column points to. Pick the **Source table** — the table whose form or view holds the lookup — and its **Lookup column**; the picker lists lookup, customer, and owner columns. A form trigger reads the lookup from the form record, and a grid trigger reads it from the selected row. Works with custom page, table record, web resource, and generative page targets. When the lookup is empty at runtime, the script returns without opening a pane.
 - **None — pane opens independently** sends no record.
 - **Reuse open pane** navigates the existing pane to the new page and then selects it. Turning it off closes and recreates the pane when it is already open.
 - **Lookup tag click** is special: for a custom page, table record, or generative page, the clicked tag supplies `entityType` and `id` at runtime. The context mode you picked stays selected in the form, and the tag identity wins when the script runs.
@@ -320,7 +323,7 @@ Solution:
 2. Start Power Platform ToolBox.
 3. Launch **Side Pane Studio** from **Installed Tools**.
 
-Verify the fix: the header **Side Pane Studio** and the **Mock** preview appear.
+Verify the fix: the **Configure**, **Preview**, and **Output** panels appear, and the **Mock** preview is visible.
 
 **Error 2: No active Dataverse connection**
 
@@ -582,7 +585,7 @@ Recommended resources:
 | --------------------------- | ------------------------------------------------------------------------------------ |
 | Marketplace name            | Side Pane Studio                                                                     |
 | Package                     | `@ryanmakes/side-pane-studio`                                                        |
-| Version                     | 1.1.1                                                                                |
+| Version                     | 1.3.1                                                                                |
 | Shared runtime web resource | `spstudio_/scripts/sidepane.runtime.js`                                              |
 | Wide layout                 | Window width ≥ 900 px                                                                |
 | Pane width                  | 300–1200 px, default 480                                                             |
@@ -593,7 +596,7 @@ Recommended resources:
 | Action           | Where                                                  | Description                      |
 | ---------------- | ------------------------------------------------------ | -------------------------------- |
 | Open the studio  | ToolBox → Installed Tools → Side Pane Studio           | Needs an active connection       |
-| Restore defaults | Header → **Reset** → confirm                           | Clears `lastConfig`              |
+| Restore defaults | Configure → **Reset** → confirm                        | Clears `lastConfig`              |
 | Copy the script  | Output → **Basic Script** → **Copy**                   | Self-contained handler           |
 | Deploy steps     | Output → **Command Steps**                             | Function name plus wiring        |
 | Download helper  | Output → **Shared Library** → **Download runtime**     | Only for the shared-library path |
@@ -649,6 +652,8 @@ spstudio_/scripts/sidepane.runtime.js
 | Selected row context is only available from a main grid or subgrid. | Selected row on a form trigger     | Use Current record, or switch to a grid trigger                     |
 | Console / Manual scripts run outside a form or grid…                | Manual trigger plus current record | Use None or a static GUID                                           |
 | A valid record ID (GUID) is required…                               | Table record with no runtime id    | Paste a GUID or use a form trigger                                  |
+| Related record context reads a lookup from the triggering form or grid row. | Related record on a manual or lookup-tag trigger | Use a form or grid trigger, or another context mode       |
+| Related record context opens one record.                            | Related record on a list or dashboard target | Choose a custom page, table record, web resource, or generative page |
 | Prerequisite not detected: `spstudio_/scripts/sidepane.runtime.js`  | Shared Library without the helper  | Use Basic Script, or upload the runtime                             |
 | Clipboard access blocked.                                           | Browser clipboard permission       | Select the text and copy with Ctrl+C or Cmd+C                       |
 | Could not load dashboards                                           | Metadata call failed               | Check the connection and dashboard privilege                        |
@@ -662,7 +667,7 @@ spstudio_/scripts/sidepane.runtime.js
 | ---------------------- | ----------------------------------------------------------------------------------------------------------- |
 | Basic Script           | Self-contained JavaScript on the Output panel. Does not need the shared runtime.                            |
 | Command Designer       | Model-driven app designer where a command runs a JavaScript function.                                       |
-| Context mode           | Where the record id comes from: current form record, selected grid row, a fixed GUID, or nowhere.           |
+| Context mode           | Where the record id comes from: current form record, a related record's lookup, the selected grid row, a fixed GUID, or nowhere. |
 | Custom page            | Canvas page in a solution, opened by its logical name.                                                      |
 | Dataverse              | The environment that holds tables, pages, dashboards, and web resources.                                    |
 | Logical name           | The schema name of a table, column, or control, such as `account` or `parentaccountid`.                     |
