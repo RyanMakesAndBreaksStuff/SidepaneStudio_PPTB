@@ -12,6 +12,7 @@ import {
   buildSystemDashboardsPath,
   buildUserDashboardsPath,
   buildViewsForEntityPath,
+  isValidLogicalName,
 } from './odataGuards';
 
 export interface TableInfo {
@@ -38,6 +39,10 @@ export interface ViewInfo {
 export interface AttributeLabel {
   LogicalName: string;
   DisplayName?: { UserLocalizedLabel?: { Label?: string | null } | null } | null;
+}
+
+export interface LookupAttributeInfo extends AttributeLabel {
+  Targets?: string[] | null;
 }
 
 export type ViewsForEntityResult =
@@ -224,10 +229,16 @@ export class MetadataService {
   /** Lookup, customer, and owner columns — the columns whose value names a related record. */
   async listLookupAttributes(
     entityLogicalName: string
-  ): Promise<AttributeLabel[]> {
+  ): Promise<LookupAttributeInfo[]> {
     const path = buildLookupAttributesPath(entityLogicalName);
     if (!path) throw new Error('Invalid table logical name.');
-    return this.xrm.webApiGet<AttributeLabel[]>(path);
+    const lookups = await this.xrm.webApiGet<LookupAttributeInfo[]>(path);
+    return lookups.map(lookup => ({
+      ...lookup,
+      ...(Array.isArray(lookup.Targets)
+        ? { Targets: lookup.Targets.filter(isValidLogicalName) }
+        : {}),
+    }));
   }
 
   invalidate(): void {

@@ -4,6 +4,7 @@ import { createRoot, Root } from 'react-dom/client';
 import { afterEach, describe, expect, it } from 'vitest';
 import { PaneOverlay } from '../components/PaneOverlay';
 import { getPreviewPaneWidth, getSafePreviewImageSrc } from '../components/previewHelpers';
+import type { PreviewRecord } from '../services/GridViewModel';
 import { DEFAULT_CONFIG } from '../types/PaneDefinitionConfig';
 
 let root: Root | undefined;
@@ -84,5 +85,21 @@ describe('PaneOverlay', () => {
       />
     );
     expect(host?.textContent).toContain('New contact');
+  });
+
+  it('uses the resolved runtime table and record identity ahead of configured destination metadata', async () => {
+    const record: PreviewRecord = { id: 'actual-contact-id', name: 'Pat Lee', entityName: 'contact' };
+    await render(
+      <PaneOverlay
+        pane={DEFAULT_CONFIG.pane}
+        target={{ pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '' }}
+        record={record}
+        validation={{ isValid: true, errors: [], warnings: [] }}
+      />
+    );
+
+    const recordIdentity = host?.querySelector('[title="actual-contact-id"]');
+    expect(recordIdentity?.previousElementSibling?.textContent?.trim()).toBe('contact');
+    expect(recordIdentity?.textContent).toContain('Pat Lee · actual-contact-id');
   });
 });

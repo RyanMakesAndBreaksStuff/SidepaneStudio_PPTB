@@ -85,12 +85,19 @@ Choose how the target receives record context:
 
 - **Current record** - uses the record from the form trigger.
 - **Selected row** - uses the selected grid or subgrid row.
+- **Related record (lookup on source record)** - reads the lookup column you
+  choose on the source record and opens the related record it points to.
+  Needs a form or grid trigger and a single-record target (custom page, table
+  record, web resource, or generative page); pick the source table and lookup
+  column in the Configure panel.
 - **Static** - uses a fixed record ID.
 - **None** - opens the pane independently.
 
 Enable **Reuse open pane** when the same pane should stay loaded instead of
 being recreated. Reuse will navigate the existing pane to the new page, then
-select it. For a Lookup tag click targeting a custom page, table record, or generative page,
+select it. For a command bar button, **Close if already open** closes the
+pane instead of opening it again when the pane is already open. For a Lookup
+tag click targeting a custom page, table record, or generative page,
 the clicked tag supplies `tag.entityType` and `tag.id`, overriding Current
 record, Static, or None context at runtime. Use **Expand on open** when the
 pane should become visible immediately after the trigger runs.

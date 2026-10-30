@@ -19,6 +19,7 @@ import type { PreviewRecord } from '../services/GridViewModel';
 
 export interface PreviewPanelProps {
   config: PaneDefinitionConfig;
+  onChange?: (updater: (prev: PaneDefinitionConfig) => PaneDefinitionConfig) => void;
   validation: ValidationResult;
   /**
    * Shared MetadataService — the cache is the same one Configure's TablePicker
@@ -51,6 +52,7 @@ function getConfiguredHostEntity(config: PaneDefinitionConfig): string {
 
 const PreviewPanelContent = React.memo(function PreviewPanelContent({
   config,
+  onChange,
   validation,
   metadataService,
   xrm,
@@ -149,7 +151,8 @@ const PreviewPanelContent = React.memo(function PreviewPanelContent({
     }
   };
 
-  const gridEntity = configuredHostEntity || previewHostEntity;
+  const relatedRecordMode = config.context.mode === 'RelatedRecord';
+  const gridEntity = relatedRecordMode ? config.context.entityName.trim() : previewHostEntity || configuredHostEntity;
   const tabStyle = (active: boolean): React.CSSProperties => ({
     padding: '6px 14px',
     border: 'none',
@@ -197,10 +200,12 @@ const PreviewPanelContent = React.memo(function PreviewPanelContent({
         {/* Grid mode */}
         {mode === 'grid' && gridEligible && <GridPreview
           key={JSON.stringify([gridEntity,
-            config.target.pageType === 'entitylist' ? config.target.viewId : '',
-            config.target.pageType === 'entitylist' ? config.target.viewType : ''])}
+            !relatedRecordMode && config.target.pageType === 'entitylist' ? config.target.viewId : '',
+            !relatedRecordMode && config.target.pageType === 'entitylist' ? config.target.viewType : '',
+            relatedRecordMode ? config.context.lookupAttribute : ''])}
           config={config} validation={validation} metadataService={metadataService} xrm={xrm}
-          entityName={gridEntity} allowEntityChange={!configuredHostEntity} onEntityNameChange={setPreviewHostEntity}
+          onConfigChange={onChange}
+          entityName={gridEntity} allowEntityChange onEntityNameChange={setPreviewHostEntity}
         />}
 
         {/* Form mode */}

@@ -8,7 +8,6 @@ import { IXrmContext } from '../adapters/PptbContextAdapter';
 import { MetadataService } from '../services/MetadataService';
 import { FormXmlService } from '../services/FormXmlService';
 import { validate } from '../services/ValidationService';
-import { CommandBar } from './CommandBar';
 import { ConfigurePanel } from './ConfigurePanel';
 import { PreviewPanel } from './PreviewPanel';
 import { OutputPanel } from './OutputPanel';
@@ -83,13 +82,11 @@ function WorkbenchShellContent({
     onSaveMetadataFilterConfig,
     onResetMetadataFilterConfig,
   };
-  const previewPanelProps = { config, validation, metadataService, xrm };
+  const previewPanelProps = { config, onChange, validation, metadataService, xrm };
   const outputPanelProps = { config, xrm, validation };
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden', background: T.pageBg }}>
-      <CommandBar onReset={onReset} />
-
       {layoutMode === 'wide' && (
         <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
           <aside
@@ -105,7 +102,10 @@ function WorkbenchShellContent({
               background: T.pageBg,
             }}
           >
-            <PanelHeader title={configPanelOpen ? 'Configure' : undefined}>
+            <PanelHeader
+              title={configPanelOpen ? 'Configure' : undefined}
+              actions={configPanelOpen ? <ResetConfigButton onReset={onReset} /> : undefined}
+            >
               <RailToggle
                 label={configPanelOpen ? 'Collapse config panel' : 'Expand config panel'}
                 expanded={configPanelOpen}
@@ -187,9 +187,25 @@ function WorkbenchShellContent({
             ))}
           </div>
           <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-            {narrowTab === 'configure' && <ConfigurePanel {...configurePanelProps} />}
-            {narrowTab === 'preview'   && <PreviewPanel {...previewPanelProps} />}
-            {narrowTab === 'output'    && <OutputPanel {...outputPanelProps} />}
+            {narrowTab === 'configure' && (
+              <>
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'flex-end',
+                  alignItems: 'center',
+                  minHeight: COLLAPSED_RAIL_WIDTH,
+                  borderBottom: `1px solid ${T.stroke1}`,
+                  background: T.surface2,
+                  paddingRight: 8,
+                  flexShrink: 0,
+                }}>
+                  <ResetConfigButton onReset={onReset} />
+                </div>
+                <ConfigurePanel {...configurePanelProps} />
+              </>
+            )}
+            {narrowTab === 'preview' && <PreviewPanel {...previewPanelProps} />}
+            {narrowTab === 'output'  && <OutputPanel {...outputPanelProps} />}
           </div>
         </div>
       )}
@@ -244,8 +260,49 @@ function RailToggle({
   );
 }
 
+function ResetConfigButton({ onReset }: { onReset: () => void }): React.ReactElement {
+  const { isDark } = useTheme();
+  const T = theme(isDark);
+  const [hoverReset, setHoverReset] = useState(false);
+
+  const handleReset = () => {
+    if (!window.confirm('Reset all configuration? This cannot be undone.')) return;
+    onReset();
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={handleReset}
+      onMouseEnter={() => setHoverReset(true)}
+      onMouseLeave={() => setHoverReset(false)}
+      style={{
+        padding: '4px 12px',
+        border: `1px solid ${T.stroke1}`,
+        borderRadius: T.rS,
+        background: hoverReset ? T.surface1 : 'transparent',
+        color: T.fg2,
+        fontFamily: T.font,
+        fontSize: 12,
+        cursor: 'pointer',
+        transition: 'background 80ms',
+      }}
+    >
+      ↺ Reset
+    </button>
+  );
+}
+
 /** Wide-layout counterpart of the narrow tab strip: keeps each panel's title visible. */
-function PanelHeader({ title, children }: { title?: string; children?: React.ReactNode }): React.ReactElement {
+function PanelHeader({
+  title,
+  children,
+  actions,
+}: {
+  title?: string;
+  children?: React.ReactNode;
+  actions?: React.ReactNode;
+}): React.ReactElement {
   const { isDark } = useTheme();
   const T = theme(isDark);
 
@@ -270,6 +327,11 @@ function PanelHeader({ title, children }: { title?: string; children?: React.Rea
         }}>
           {title}
         </h2>
+      )}
+      {actions && (
+        <div style={{ marginLeft: 'auto', paddingRight: 8, display: 'flex', alignItems: 'center' }}>
+          {actions}
+        </div>
       )}
     </div>
   );

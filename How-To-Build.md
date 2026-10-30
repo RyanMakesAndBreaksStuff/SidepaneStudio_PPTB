@@ -175,12 +175,12 @@ Use an environment where you can read the tables your pane will show, and where 
 
 1. In ToolBox, click **Tools Marketplace**.
 2. Search for `Side Pane Studio`.
-3. Open the tool whose package is `@ryanmakes/side-pane-studio`, author Ryan Rettinger, version **1.1.1**.
+3. Open the tool whose package is `@ryanmakes/side-pane-studio`, author Ryan Rettinger, version **1.3.1**.
 4. Click **Install**.
 5. If ToolBox asks for permission consent, read the request and accept it only if it matches a side-pane builder that reads Dataverse metadata. Declining consent prevents the tool from loading.
 6. Open **Installed Tools** and click **Side Pane Studio**.
 
-**Verification**: the studio header reads **Side Pane Studio**. You do not see **Dataverse API + Toolbox API unavailable** or **Connection unavailable**. The preview shows a mock Account form and a pane titled **Related Records**.
+**Verification**: the workbench shows **Configure**, **Preview**, and **Output**. You do not see **Dataverse API + Toolbox API unavailable** or **Connection unavailable**. The preview shows a mock Account form and a pane titled **Related Records**.
 
 Developer-only alternatives, after you enable **Show Debug Setting** in the ToolBox settings menu:
 

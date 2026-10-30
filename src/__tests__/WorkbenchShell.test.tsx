@@ -8,10 +8,6 @@ import { DEFAULT_CONFIG } from '../types/PaneDefinitionConfig';
 import { DEFAULT_METADATA_FILTER_CONFIG } from '../types/MetadataFilterConfig';
 import { xrmStub } from './testHelpers';
 
-vi.mock('../components/CommandBar', () => ({
-  CommandBar: () => <div>Command bar</div>,
-}));
-
 vi.mock('../components/ConfigurePanel', () => ({
   ConfigurePanel: () => <div>Configure panel</div>,
 }));
@@ -43,6 +39,7 @@ afterEach(async () => {
     });
   }
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
   host?.remove();
   root = undefined;
   host = undefined;
@@ -54,12 +51,12 @@ const GENERATOR_COL_WIDTH = '420px';
 const GENERATOR_COL_MIN_W = '360px';
 const COLLAPSED_RAIL_WIDTH = '44px';
 
-function shell(layoutMode: 'wide' | 'narrow' = 'wide') {
+function shell(layoutMode: 'wide' | 'narrow' = 'wide', onReset: () => void = () => {}) {
   return (
     <WorkbenchShell
       config={DEFAULT_CONFIG}
       onChange={() => {}}
-      onReset={() => {}}
+      onReset={onReset}
       xrm={xrmStub()}
       layoutMode={layoutMode}
       metadataService={{} as MetadataService}
@@ -75,6 +72,18 @@ function shell(layoutMode: 'wide' | 'narrow' = 'wide') {
 function button(label: string): HTMLButtonElement | undefined {
   return Array.from(host?.querySelectorAll('button') ?? []).find(
     b => b.getAttribute('aria-label') === label
+  ) as HTMLButtonElement | undefined;
+}
+
+function resetButton(): HTMLButtonElement | undefined {
+  return Array.from(host?.querySelectorAll('button') ?? []).find(
+    b => (b.textContent ?? '').includes('Reset')
+  ) as HTMLButtonElement | undefined;
+}
+
+function tab(label: string): HTMLButtonElement | undefined {
+  return Array.from(host?.querySelectorAll('[role="tab"]') ?? []).find(
+    b => b.textContent === label
   ) as HTMLButtonElement | undefined;
 }
 
@@ -168,5 +177,86 @@ describe('WorkbenchShell', () => {
 
     const labels = Array.from(host?.querySelectorAll('button') ?? []).map(b => b.textContent ?? '');
     expect(labels.some(l => l.includes('Light') || l.includes('Dark'))).toBe(false);
+  });
+
+  it('puts Reset on the right of the open Configure header and omits the studio title bar', async () => {
+    await render(shell());
+
+    expect(host?.querySelector('header')).toBeNull();
+    expect(host?.textContent).not.toContain('Side Pane Studio');
+
+    const panel = host?.querySelector('aside[aria-label="Config panel"]');
+    const reset = resetButton();
+    expect(panel?.contains(reset ?? null)).toBe(true);
+    expect(reset?.parentElement?.style.marginLeft).toBe('auto');
+
+    await act(async () => {
+      button('Collapse config panel')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(resetButton()).toBeUndefined();
+
+    await act(async () => {
+      button('Expand config panel')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(host?.querySelector('aside[aria-label="Config panel"]')?.contains(resetButton() ?? null)).toBe(true);
+  });
+
+  it('shows Reset only on the narrow Configure tab', async () => {
+    await render(shell('narrow'));
+
+    expect(resetButton()).toBeTruthy();
+
+    await act(async () => {
+      tab('Preview')?.click();
+    });
+    expect(resetButton()).toBeUndefined();
+
+    await act(async () => {
+      tab('Configure')?.click();
+    });
+    expect(resetButton()).toBeTruthy();
+  });
+
+  it('confirms and resets on Reset click', async () => {
+    vi.stubGlobal('confirm', vi.fn().mockReturnValue(true));
+    const onReset = vi.fn();
+    await render(shell('wide', onReset));
+
+    await act(async () => {
+      resetButton()?.click();
+    });
+
+    expect(window.confirm).toHaveBeenCalledWith('Reset all configuration? This cannot be undone.');
+    expect(onReset).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not itself report a success notification on reset', async () => {
+    const showNotification = vi.fn();
+    vi.stubGlobal('toolboxAPI', {
+      utils: { getCurrentTheme: vi.fn().mockResolvedValue('dark'), showNotification },
+      events: { on: vi.fn(), off: vi.fn() },
+    });
+    vi.stubGlobal('confirm', vi.fn().mockReturnValue(true));
+    const onReset = vi.fn();
+    await render(shell('wide', onReset));
+
+    await act(async () => {
+      resetButton()?.click();
+    });
+
+    expect(onReset).toHaveBeenCalledTimes(1);
+    expect(showNotification).not.toHaveBeenCalled();
+  });
+
+  it('does not reset when the confirm dialog is declined', async () => {
+    vi.stubGlobal('confirm', vi.fn().mockReturnValue(false));
+    const onReset = vi.fn();
+    await render(shell('wide', onReset));
+
+    await act(async () => {
+      resetButton()?.click();
+    });
+
+    expect(onReset).not.toHaveBeenCalled();
   });
 });

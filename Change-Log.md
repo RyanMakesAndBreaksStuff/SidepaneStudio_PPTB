@@ -1,9 +1,15 @@
 # Change Log
 
-## Unreleased
+## v1.3.1
 
 ### Added
 
+- **Related record (lookup on source record)** context mode: pick a lookup,
+  customer, or owner column on the source table, and the pane opens the record
+  it points to. Form triggers read the lookup from the form record; grid
+  triggers read it from the selected row's source view. The grid preview
+  simulates the related record from a row's lookup column, and the form
+  preview reveals a sample related record.
 - Generative page target: page ID, optional JSON page data, record context
   sent as `entityName` + `recordId` (braces stripped), Shared Library support,
   a generative-page preview, and an Output **Page prompt** tab that writes the
@@ -24,6 +30,24 @@
   TypeScript copy are removed.
 - Documented unsupported options: `createPane.hidden`, collapsing the rail,
   six `entityrecord` page inputs, and `navigateTo` dialogs.
+- The studio title bar is removed. **Reset** sits on the right of the Configure
+  header, and on the Configure tab when the window is narrow.
+
+### Fixed
+
+- Mounted table pickers refresh when metadata table filters change.
+- The dashboard picker shows an explicit placeholder when no dashboard is
+  selected.
+- The preview mounted guard is restored so form layouts complete under React
+  StrictMode.
+
+### Development and maintenance
+
+- Hardened the PPTB context adapter: guarded `queryData` response shapes and
+  normalised non-`Error` Dataverse rejections. Routed `fetchXmlQuery` through
+  the adapter and removed unused host extensions, the WhoAmI cache, and the
+  unused `connectionTarget` parameter.
+- Bumped `@pptb/types` to 1.2.7.
 
 ## v1.1.1
 

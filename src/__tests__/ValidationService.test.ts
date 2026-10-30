@@ -332,6 +332,32 @@ describe('validate — related record context', () => {
       expect(result.errors).toEqual([]);
     });
 
+  it('allows an empty table for an existing RelatedRecord entity record destination', () => {
+    const result = validate(cfg({
+      trigger: { kind: 'FormButton' },
+      context,
+      target: { pageType: 'entityrecord', entityName: '', formId: '', tabName: '', data: '' },
+    }));
+    expect(result.errors).toEqual([]);
+  });
+
+  it('still requires a table for ordinary entity record destinations', () => {
+    const result = validate(cfg({
+      target: { pageType: 'entityrecord', entityName: '', formId: '', tabName: '', data: '' },
+    }));
+    expect(result.errors.map(error => error.field)).toContain('target.entityName');
+  });
+
+  it('keeps the table requirement and create-new restriction for RelatedRecord create mode', () => {
+    const result = validate(cfg({
+      trigger: { kind: 'FormButton' },
+      context,
+      target: { pageType: 'entityrecord', entityName: '', formId: '', tabName: '', data: '', createNew: true },
+    }));
+    expect(result.errors.map(error => error.field)).toContain('target.entityName');
+    expect(result.errors.map(error => error.field)).toContain('target.createNew');
+  });
+
   it.each(['ManualJS', 'LookupTagClick'] as const)('blocks %s, which has no source record', kind => {
     const result = validate(cfg({ trigger: { kind, fieldName: 'parentaccountid' }, context,
       target: { pageType: 'custom', name: 'sps_Page' } }));
