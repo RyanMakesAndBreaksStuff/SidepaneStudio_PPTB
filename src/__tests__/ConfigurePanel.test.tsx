@@ -449,26 +449,23 @@ describe('ConfigurePanel — record context table name (CR-001)', () => {
 
   it('offers a table name picker on the shipped default (custom + CurrentRecord)', async () => {
     await renderPanel(withMode('CurrentRecord') as any);
-    expect(Array.from(host!.querySelectorAll('button'))
-      .some(button => button.textContent === 'Only Custom Tables')).toBe(true);
+    expect(host!.querySelector('[aria-label="Show custom tables only"]')).toBeTruthy();
+    expect(host!.textContent).not.toContain('Only Custom Tables');
   });
 
   it('offers a table name picker for SelectedRow', async () => {
     await renderPanel(withMode('SelectedRow') as any);
-    expect(Array.from(host!.querySelectorAll('button'))
-      .some(button => button.textContent === 'Only Custom Tables')).toBe(true);
+    expect(host!.querySelector('[aria-label="Show custom tables only"]')).toBeTruthy();
   });
 
   it('offers a table name picker for Static', async () => {
     await renderPanel(withMode('Static') as any);
-    expect(Array.from(host!.querySelectorAll('button'))
-      .some(button => button.textContent === 'Only Custom Tables')).toBe(true);
+    expect(host!.querySelector('[aria-label="Show custom tables only"]')).toBeTruthy();
   });
 
   it('hides the table name picker for None, which emits no record fields', async () => {
     await renderPanel(withMode('None') as any);
-    expect(Array.from(host!.querySelectorAll('button'))
-      .some(button => button.textContent === 'Only Custom Tables')).toBe(false);
+    expect(host!.querySelector('[aria-label="Show custom tables only"]')).toBeNull();
   });
 
   it('shows the Record ID input only for Static', async () => {
@@ -619,11 +616,14 @@ describe('ConfigurePanel — related record context', () => {
     await render(<StatefulConfigurePanel initialConfig={current} metadataService={metadataService} />);
     await expandSection('Record context');
     expect(host!.textContent).toContain('Loading lookup columns');
-    const sourcePicker = Array.from(host!.querySelectorAll<HTMLSelectElement>('select'))[1];
+    const sourcePicker = host!.querySelector<HTMLInputElement>('[role="combobox"]');
     expect(sourcePicker).toBeTruthy();
+    await act(async () => { sourcePicker!.focus(); });
+    const contactOption = Array.from(host!.querySelectorAll<HTMLElement>('[role="option"]'))
+      .find(option => option.textContent?.includes('contact'));
+    expect(contactOption).toBeTruthy();
     await act(async () => {
-      sourcePicker!.value = 'contact';
-      sourcePicker!.dispatchEvent(new Event('change', { bubbles: true }));
+      contactOption!.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
     });
     resolveAccount([{ LogicalName: 'staleaccountlookup', Targets: ['account'] }]);
     await act(async () => { await Promise.resolve(); });

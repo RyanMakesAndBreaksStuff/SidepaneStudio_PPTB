@@ -20,6 +20,16 @@ async function render(element: React.ReactElement) {
   });
 }
 
+async function chooseTable(input: HTMLInputElement, logicalName: string) {
+  await act(async () => { await Promise.resolve(); });
+  expect(input.disabled).toBe(false);
+  await act(async () => { input.focus(); input.click(); });
+  const option = Array.from(host!.querySelectorAll<HTMLElement>('[role="option"]'))
+    .find(item => item.textContent?.includes(logicalName));
+  expect(option, logicalName).toBeTruthy();
+  await act(async () => { option!.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })); });
+}
+
 afterEach(async () => {
   if (root) {
     await act(async () => {
@@ -258,11 +268,8 @@ describe('PreviewPanel — RelatedRecord Grid source controls', () => {
     await act(async () => { generate().click(); });
     expect(fetchXml).toHaveBeenCalledTimes(1);
 
-    const sourceSelect = host!.querySelector<HTMLSelectElement>('[aria-label="Related record source"] select')!;
-    await act(async () => {
-      sourceSelect.value = 'contact';
-      sourceSelect.dispatchEvent(new Event('change', { bubbles: true }));
-    });
+    const sourceInput = host!.querySelector<HTMLInputElement>('[aria-label="Source table"]')!;
+    await chooseTable(sourceInput, 'contact');
     expect(host!.querySelector('[aria-label="current config"]')?.textContent).toBe('contact||||');
     expect(listViewsForEntity).toHaveBeenCalledWith('contact');
     expect(listLookupAttributes).toHaveBeenCalledWith('contact');
@@ -318,11 +325,8 @@ describe('PreviewPanel — RelatedRecord Grid source controls', () => {
     await render(<PreviewPanel config={config} validation={{ isValid: true, errors: [], warnings: [] }}
       metadataService={metadataService} xrm={{ ...xrmStub(), fetchXml }} />);
     await act(async () => { Array.from(host!.querySelectorAll('button')).find(button => button.textContent === 'Grid')!.click(); });
-    const sourceSelect = host!.querySelector<HTMLSelectElement>('[aria-label="Preview entity"] select')!;
-    await act(async () => {
-      sourceSelect.value = 'contact';
-      sourceSelect.dispatchEvent(new Event('change', { bubbles: true }));
-    });
+    const sourceInput = host!.querySelector<HTMLInputElement>('input[aria-label="Preview entity"]')!;
+    await chooseTable(sourceInput, 'contact');
     const viewSelect = host!.querySelector<HTMLSelectElement>('select[aria-label="View"]')!;
     await act(async () => {
       viewSelect.value = 'savedquery:contact-view';
@@ -367,8 +371,8 @@ describe('PreviewPanel — RelatedRecord Grid source controls', () => {
     await act(async () => { Array.from(host!.querySelectorAll('button')).find(button => button.textContent === 'Generate grid preview')!.click(); });
     await act(async () => { host!.querySelector<HTMLInputElement>('input[aria-label="Select row 1"]')!.click(); });
     expect(host!.textContent).toContain('Pat Lee · contact-id');
-    const source = host!.querySelector<HTMLSelectElement>('[aria-label="Related record source"] select')!;
-    await act(async () => { source.value = 'contact'; source.dispatchEvent(new Event('change', { bubbles: true })); });
+    const source = host!.querySelector<HTMLInputElement>('[aria-label="Source table"]')!;
+    await chooseTable(source, 'contact');
     expect(host!.textContent).not.toContain('Pat Lee · contact-id');
     expect(host!.textContent).not.toContain('SelectedRow: row 1');
     expect(host!.querySelector<HTMLSelectElement>('select[aria-label="View"]')!.value).toBe('');
