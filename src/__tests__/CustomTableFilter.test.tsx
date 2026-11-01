@@ -210,6 +210,68 @@ it('drops old forms, loads only the chosen custom table, and allows explicit res
   expect(getForms).toHaveBeenLastCalledWith('account');
 });
 
+function relatedConfig(source: string): PaneDefinitionConfig {
+  return {
+    ...DEFAULT_CONFIG,
+    target: { pageType: 'entityrecord', entityName: 'account', formId: 'saved-form', tabName: 'saved-tab', data: '' },
+    context: { ...DEFAULT_CONFIG.context, mode: 'RelatedRecord', entityName: source, lookupAttribute: 'parentid' },
+  };
+}
+const relatedView = {
+  id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+  name: 'Active records',
+  viewType: 'savedquery' as const,
+  fetchXml: '<fetch><entity name="new_event"><attribute name="name"/></entity></fetch>',
+  layoutXml: '<grid><row><cell name="name"/></row></grid>',
+};
+function relatedService() {
+  const service = metadata();
+  vi.spyOn(service, 'listLookupAttributes').mockResolvedValue([
+    { LogicalName: 'parentid', Targets: ['account'] },
+  ]);
+  vi.spyOn(service, 'listViewsForEntity').mockResolvedValue({ status: 'ok', views: [relatedView] });
+  return service;
+}
+function RelatedGrid({ initial, service }: { initial: PaneDefinitionConfig; service: MetadataService }) {
+  const [config, setConfig] = React.useState(initial);
+  return <>
+    <output aria-label="related config">{config.context.entityName}|{config.context.lookupAttribute}|{config.target.entityName}|{config.target.formId}|{config.target.tabName}</output>
+    <PreviewSessionProvider><GridPreview config={config} validation={validation} metadataService={service}
+      xrm={xrmStub()} entityName={config.context.entityName} allowEntityChange={false}
+      onEntityNameChange={() => undefined} onConfigChange={updater => setConfig(previous => updater(previous))} /></PreviewSessionProvider>
+  </>;
+}
+
+it('keeps a custom related source, lookup, and view when enabling the custom-only filter', async () => {
+  const service = relatedService();
+  await render(<RelatedGrid initial={relatedConfig('new_event')} service={service} />);
+  const lookup = host.querySelector<HTMLSelectElement>('select[aria-label="Lookup column"]')!;
+  const view = host.querySelector<HTMLSelectElement>('select[aria-label="View"]')!;
+  await choose(view, `savedquery:${relatedView.id}`);
+
+  await click(filter());
+
+  expect(filter().getAttribute('aria-pressed')).toBe('true');
+  expect(host.querySelector<HTMLSelectElement>('[aria-label="Related record source"] select')?.value).toBe('new_event');
+  expect(lookup.value).toBe('parentid');
+  expect(view.value).toBe(`savedquery:${relatedView.id}`);
+  expect(host.querySelector('[aria-label="related config"]')?.textContent).toBe('new_event|parentid|account|saved-form|saved-tab');
+});
+
+it('clears a standard related source and resets its dependent lookup and view when enabling the custom-only filter', async () => {
+  const service = relatedService();
+  await render(<RelatedGrid initial={relatedConfig('account')} service={service} />);
+  const view = host.querySelector<HTMLSelectElement>('select[aria-label="View"]')!;
+  await choose(view, `savedquery:${relatedView.id}`);
+
+  await click(filter());
+
+  expect(host.querySelector<HTMLSelectElement>('[aria-label="Related record source"] select')?.value).toBe('');
+  expect(host.querySelector<HTMLSelectElement>('select[aria-label="Lookup column"]')?.value).toBe('');
+  expect(host.querySelector<HTMLSelectElement>('select[aria-label="View"]')?.value).toBe('');
+  expect(host.querySelector('[aria-label="related config"]')?.textContent).toBe('||||');
+});
+
 it('retains the grid filter through the entity-keyed remount', async () => {
   const service = metadata();
   function GridHost() {
