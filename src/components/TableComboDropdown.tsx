@@ -4,11 +4,14 @@ import { theme } from '../theme/tokens';
 import { FilteredEntry } from './previewHelpers';
 
 export interface TableComboDropdownProps {
+  id: string;
+  optionIdPrefix: string;
   loading?: boolean;
   error?: string;
   onRetry?: () => void;
   filtered: FilteredEntry[];
   query: string;
+  customOnly?: boolean;
   highlight: number;
   value: string;
   onCommit: (logicalName: string) => void;
@@ -17,11 +20,14 @@ export interface TableComboDropdownProps {
 }
 
 export function TableComboDropdown({
+  id,
+  optionIdPrefix,
   loading,
   error,
   onRetry,
   filtered,
   query,
+  customOnly,
   highlight,
   value,
   onCommit,
@@ -64,22 +70,19 @@ export function TableComboDropdown({
     if (filtered.length === 0) {
       return (
         <div style={{ padding: 10, color: T.fg3, fontSize: 12, textAlign: 'center' }}>
-          {query ? `No tables match "${query}"` : 'No accessible tables found'}
+          {query ? `No tables match "${query}"` : customOnly ? 'No custom tables found' : 'No accessible tables found'}
         </div>
       );
     }
     return (
-      <div
-        ref={listRef}
-        role="listbox"
-        style={{ maxHeight: 280, overflowY: 'auto' }}
-      >
+      <div style={{ maxHeight: 280, overflowY: 'auto' }}>
         {filtered.map((entry, idx) => {
           const isHighlighted = idx === highlight;
           const isSelected = entry.table.logicalName === value;
           return (
             <button
               key={entry.table.logicalName}
+              id={`${optionIdPrefix}-${idx}`}
               type="button"
               role="option"
               data-idx={idx}
@@ -121,7 +124,9 @@ export function TableComboDropdown({
 
   return (
     <div
-      id="tablecombo-listbox"
+      id={id}
+      ref={listRef}
+      role="listbox"
       style={{
         position: 'absolute',
         top: 'calc(100% + 4px)',
