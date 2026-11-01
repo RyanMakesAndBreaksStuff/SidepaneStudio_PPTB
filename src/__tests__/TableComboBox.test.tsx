@@ -34,8 +34,9 @@ async function focus(input: HTMLInputElement) {
 
 async function type(input: HTMLInputElement, value: string) {
   await act(async () => {
-    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
-    setter?.call(input, value);
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.bind(input);
+    if (!setter) throw new Error('input value setter is unavailable');
+    setter(value);
     input.dispatchEvent(new Event('input', { bubbles: true }));
   });
 }
