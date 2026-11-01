@@ -53,6 +53,7 @@ export function TableComboBox({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [highlight, setHighlight] = useState(0);
+  const isOpen = open && !disabled;
   const rootRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
@@ -71,12 +72,20 @@ export function TableComboBox({
   );
   const filtered = useMemo(() => filterTables(customTables, query), [customTables, query]);
 
+  // Close and clear transient search when the picker becomes unavailable.
+  useEffect(() => {
+    if (disabled) {
+      setOpen(false);
+      setQuery('');
+    }
+  }, [disabled]);
+
   // Reset highlight whenever query, visible choices, or picker visibility changes.
-  useEffect(() => { setHighlight(0); }, [query, customOnly, open]);
+  useEffect(() => { setHighlight(0); }, [query, customOnly, isOpen]);
 
   // Click-outside closes the panel.
   useEffect(() => {
-    if (!open) return;
+    if (!isOpen) return;
     const handler = (e: MouseEvent) => {
       if (!rootRef.current?.contains(e.target as Node)) {
         setOpen(false);
@@ -85,14 +94,14 @@ export function TableComboBox({
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
-  }, [open]);
+  }, [isOpen]);
 
   // Scroll the highlighted row into view.
   useEffect(() => {
-    if (!open || !listRef.current) return;
+    if (!isOpen || !listRef.current) return;
     const item = listRef.current.querySelector<HTMLElement>(`[data-idx="${highlight}"]`);
     if (item) item.scrollIntoView({ block: 'nearest' });
-  }, [highlight, open]);
+  }, [highlight, isOpen]);
 
   const commit = useCallback((logicalName: string) => {
     onChange(logicalName);
@@ -102,17 +111,18 @@ export function TableComboBox({
   }, [onChange]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (disabled) return;
     if (e.key === 'ArrowDown') {
       e.preventDefault();
-      if (!open) setOpen(true);
+      if (!isOpen) setOpen(true);
       setHighlight(h => Math.min(h + 1, filtered.length - 1));
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
-      if (!open) setOpen(true);
+      if (!isOpen) setOpen(true);
       setHighlight(h => Math.max(h - 1, 0));
     } else if (e.key === 'Enter') {
       e.preventDefault();
-      if (open && filtered[highlight]) commit(filtered[highlight].table.logicalName);
+      if (isOpen && filtered[highlight]) commit(filtered[highlight].table.logicalName);
     } else if (e.key === 'Escape') {
       e.preventDefault();
       setOpen(false);
@@ -120,7 +130,7 @@ export function TableComboBox({
       inputRef.current?.blur();
     } else if (e.key === 'Tab') {
       // Tab commits the highlighted match if filtering, else just closes.
-      if (open && query && filtered[highlight]) commit(filtered[highlight].table.logicalName);
+      if (isOpen && query && filtered[highlight]) commit(filtered[highlight].table.logicalName);
       else setOpen(false);
     }
   };
@@ -135,7 +145,7 @@ export function TableComboBox({
     border: `1px solid ${error ? T.error : T.stroke1}`,
     borderRadius: T.rS,
     background: T.surface1,
-    boxShadow: open && !error ? `inset 0 -2px ${T.accent}` : 'none',
+    boxShadow: isOpen && !error ? `inset 0 -2px ${T.accent}` : 'none',
     fontFamily: T.font,
     fontSize: 13,
     boxSizing: 'border-box',
@@ -162,16 +172,16 @@ export function TableComboBox({
         <input
           ref={inputRef}
           type="text"
-          value={open ? query : displayValue}
+          value={isOpen ? query : displayValue}
           placeholder={value ? '' : (placeholder ?? 'Select a table…')}
           onChange={e => { setOpen(true); setQuery(e.target.value); }}
           onFocus={() => { if (!disabled) setOpen(true); }}
           onKeyDown={handleKeyDown}
           aria-label={ariaLabel}
           aria-autocomplete="list"
-          aria-expanded={open}
+          aria-expanded={isOpen}
           aria-controls={listboxId}
-          aria-activedescendant={open && filtered[highlight] ? `${id}-option-${highlight}` : undefined}
+          aria-activedescendant={isOpen && filtered[highlight] ? `${id}-option-${highlight}` : undefined}
           role="combobox"
           style={{
             flex: 1,
@@ -264,7 +274,7 @@ export function TableComboBox({
           <path d="M4 6l4 4 4-4" />
         </svg>
       </div>
-      {open && (
+      {isOpen && (
         <TableComboDropdown
           id={listboxId}
           optionIdPrefix={`${id}-option`}
