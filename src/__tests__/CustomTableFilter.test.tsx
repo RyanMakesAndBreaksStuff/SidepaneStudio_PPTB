@@ -205,7 +205,10 @@ it('drops old forms, loads only the chosen custom table, and allows explicit res
   }
   await render(<Selector />);
   expect(host.querySelector('select[aria-label="Form"]')?.textContent).toContain('account form');
+  await openTablePicker();
   await click(filter());
+  expect(host.querySelector<HTMLInputElement>('[role="combobox"]')?.getAttribute('aria-expanded')).toBe('true');
+  expect(choices()).toEqual(['new_event']);
   expect(host.querySelector('select[aria-label="Form"]')).toBeNull();
   expect(selected).toHaveBeenLastCalledWith(null);
   expect(getForms).toHaveBeenCalledTimes(1);

@@ -4,7 +4,6 @@ import { useTheme } from '../contexts/ThemeContext';
 import { theme } from '../theme/tokens';
 import { FormXmlService, FormMeta } from '../services/FormXmlService';
 import { TableComboBox } from './TableComboBox';
-import { CustomTableFilterButton } from './CustomTableFilterButton';
 import { usePreviewSessionState } from '../contexts/PreviewSessionContext';
 import { useAccessibleTables, type AccessibleTablesService } from './useAccessibleTables';
 
@@ -249,13 +248,7 @@ export function FormSelector({
               </button>
             )}
           </div>
-          <CustomTableFilterButton
-            pressed={customOnly}
-            disabled={disabled || !tablesLoaded}
-            onClick={toggleCustomOnly}
-          />
           <TableComboBox
-            key={String(customOnly)}
             value={formEntity}
             onChange={commitEntity}
             tables={visibleTables}
@@ -264,6 +257,9 @@ export function FormSelector({
             onRetry={retryTables}
             placeholder={entityNameHint ? `e.g. ${entityNameHint}` : 'Select a table…'}
             ariaLabel="Preview entity"
+            customOnly={customOnly}
+            onCustomOnlyChange={toggleCustomOnly}
+            filterDisabled={disabled || !tablesLoaded}
           />
         </div>
       )}
