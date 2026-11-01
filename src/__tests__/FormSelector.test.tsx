@@ -94,8 +94,7 @@ async function flush() {
 }
 
 function customOnlyButtons() {
-  return Array.from(host?.querySelectorAll('button') ?? [])
-    .filter(button => button.textContent === 'Only Custom Tables');
+  return Array.from(host?.querySelectorAll<HTMLButtonElement>('button[aria-label="Show custom tables only"]') ?? []);
 }
 
 async function openCombo(index = 0) {
