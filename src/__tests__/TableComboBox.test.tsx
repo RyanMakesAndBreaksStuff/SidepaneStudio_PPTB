@@ -176,6 +176,23 @@ describe('TableComboBox', () => {
     expect(host!.querySelector<HTMLButtonElement>('[aria-label="Show custom tables only"]')?.disabled).toBe(true);
   });
 
+  it('closes an open popup and blocks keyboard commits when disabled becomes true', async () => {
+    const onChange = vi.fn();
+    const props = { value: '', onChange, tables };
+    await render(<TableComboBox {...props} />);
+    const input = combo();
+    await focus(input);
+    expect(input.getAttribute('aria-expanded')).toBe('true');
+    expect(host?.querySelectorAll('[role="option"]')).toHaveLength(3);
+
+    await update(<TableComboBox {...props} disabled />);
+    expect(combo().disabled).toBe(true);
+    expect(combo().getAttribute('aria-expanded')).toBe('false');
+    expect(host?.querySelector('[role="listbox"]')).toBeNull();
+    await key(combo(), 'Enter');
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
   it('uses the Fluent field geometry and theme token colors in both themes', async () => {
     const dark = theme(true);
     const light = theme(false);
