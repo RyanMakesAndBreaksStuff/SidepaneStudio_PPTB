@@ -234,8 +234,14 @@ function relatedService() {
 }
 function RelatedGrid({ initial, service }: { initial: PaneDefinitionConfig; service: MetadataService }) {
   const [config, setConfig] = React.useState(initial);
+  const target = config.target;
+  const targetState = target.pageType === 'entityrecord'
+    ? `${target.entityName}|${target.formId}|${target.tabName}`
+    : target.pageType === 'entitylist'
+      ? `${target.entityName}|${target.viewId}|${target.viewType}`
+      : JSON.stringify(target);
   return <>
-    <output aria-label="related config">{config.context.entityName}|{config.context.lookupAttribute}|{config.target.entityName}|{config.target.formId}|{config.target.tabName}</output>
+    <output aria-label="related config">{config.context.entityName}|{config.context.lookupAttribute}|{targetState}</output>
     <PreviewSessionProvider><GridPreview config={config} validation={validation} metadataService={service}
       xrm={xrmStub()} entityName={config.context.entityName} allowEntityChange={false}
       onEntityNameChange={() => undefined} onConfigChange={updater => setConfig(previous => updater(previous))} /></PreviewSessionProvider>
