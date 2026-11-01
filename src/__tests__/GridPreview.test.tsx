@@ -539,6 +539,30 @@ describe('related-record lookup metadata remounts', () => {
   });
 });
 describe('related-record cross-component transitions', () => {
+  it('does not change the related source or custom-only state when the Source table label is clicked', async () => {
+    const relatedConfig = cfg({
+      context: { mode: 'RelatedRecord', entityName: 'new_event', lookupAttribute: '' },
+    });
+    const service = {
+      ...metadata(),
+      listAccessibleTables: vi.fn().mockResolvedValue({ status: 'ok', tables: [
+        { logicalName: 'account', displayName: 'Account', objectTypeCode: 1, isCustomEntity: false },
+        { logicalName: 'new_event', displayName: 'Event', objectTypeCode: 10001, isCustomEntity: true },
+      ] }),
+    } as unknown as MetadataService;
+    await render(<GridPreview config={relatedConfig} validation={validation} metadataService={service} xrm={xrm}
+      entityName="new_event" allowEntityChange={false} onEntityNameChange={() => undefined} />);
+
+    const sourceLabel = Array.from(host!.querySelectorAll('label'))
+      .find(label => label.textContent?.startsWith('Source table'))!;
+    await act(async () => { sourceLabel.click(); });
+
+    expect(host!.querySelector<HTMLSelectElement>('[aria-label="Related record source"] select')?.value).toBe('new_event');
+    expect(Array.from(host!.querySelectorAll<HTMLButtonElement>('button'))
+      .find(button => button.textContent === 'Only Custom Tables')?.getAttribute('aria-pressed')).toBe('false');
+  });
+
+
   const tables = [
     { logicalName: 'account', displayName: 'Account', objectTypeCode: 1 },
     { logicalName: 'contact', displayName: 'Contact', objectTypeCode: 2 },
