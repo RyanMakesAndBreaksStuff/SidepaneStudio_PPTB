@@ -91,15 +91,23 @@ async function emit(event: ToolBoxAPI.ToolBoxEventPayload['event']) {
 }
 
 function options() {
-  return Array.from(host.querySelectorAll('option')).map(option => option.value);
+  return Array.from(host.querySelectorAll<HTMLElement>('[role="option"]'))
+    .map(option => option.querySelectorAll('span')[1]?.textContent ?? '').filter(Boolean);
+}
+
+async function openTablePicker() {
+  const input = host.querySelector<HTMLInputElement>('[role="combobox"]');
+  if (input && !input.disabled) await act(async () => { input.focus(); input.click(); });
 }
 
 it('replaces org A table choices after a connection update', async () => {
   await mount();
+  await openTablePicker();
   expect(options()).toContain('new_a');
   org = 'b';
   getActiveConnection.mockResolvedValue({ id: 'b' });
   await emit('connection:updated');
+  await openTablePicker();
   expect(options()).toContain('new_b');
   expect(options()).not.toContain('new_a');
   expect(on).toHaveBeenCalledTimes(1);
@@ -116,10 +124,11 @@ function storeTargetTable(entityName: string) {
 it('clears the old org table selection when the connection switches orgs', async () => {
   storeTargetTable('new_a');
   await mount();
-  expect(host.querySelector('select')?.value).toBe('new_a');
+  expect(host.querySelector<HTMLInputElement>('[role="combobox"]')?.value).toBe('Org a (new_a)');
   org = 'b';
   getActiveConnection.mockResolvedValue({ id: 'b' });
   await emit('connection:updated');
+  await openTablePicker();
   expect(options()).toContain('new_b');
   expect(options()).not.toContain('new_a');
   expect(host.textContent).not.toContain('no longer accessible');
@@ -128,8 +137,9 @@ it('clears the old org table selection when the connection switches orgs', async
 it('keeps the table selection when the same connection is updated', async () => {
   storeTargetTable('new_a');
   await mount();
+  expect(host.querySelector<HTMLInputElement>('[role="combobox"]')?.value).toBe('Org a (new_a)');
   await emit('connection:updated');
-  expect(host.querySelector('select')?.value).toBe('new_a');
+  expect(host.querySelector<HTMLInputElement>('[role="combobox"]')?.value).toBe('Org a (new_a)');
 });
 
 it('clears the related-record lookup column when the connection switches orgs', async () => {
@@ -162,6 +172,7 @@ it('reloads the remaining active org after a connection is deleted', async () =>
   org = 'b';
   getActiveConnection.mockResolvedValue({ id: 'b' });
   await emit('connection:deleted');
+  await openTablePicker();
   expect(options()).toContain('new_b');
   expect(options()).not.toContain('new_a');
 });
@@ -187,6 +198,7 @@ it('ignores an older failed event check after a newer successful check', async (
   await emit('connection:updated');
   await act(async () => { older.reject(new Error('old check failed')); });
   expect(getActiveConnection).toHaveBeenCalledTimes(3);
+  await openTablePicker();
   expect(options()).toContain('new_b');
   expect(host.textContent).not.toContain('old check failed');
 });

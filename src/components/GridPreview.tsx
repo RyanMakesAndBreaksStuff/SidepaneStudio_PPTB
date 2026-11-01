@@ -139,7 +139,7 @@ export function GridPreview(props: Props): React.ReactElement {
       style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10, marginBottom: 10, color: T.fg2, fontFamily: T.font, fontSize: 12 }}>
       <div style={{ gridColumn: '1 / -1', fontWeight: 600 }}>Related record source — changes update configuration</div>
       <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>Source table
-        <TablePicker value={entityName} metadataService={metadataService}
+        <TablePicker ariaLabel="Source table" value={entityName} metadataService={metadataService}
           onChange={changeSource} customOnlyState={customOnlyState} />
       </label>
       <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>Related record lookup
@@ -155,9 +155,10 @@ export function GridPreview(props: Props): React.ReactElement {
     </div> : allowEntityChange ? (
       <div role="group" aria-label="Preview entity"
         style={{ color: T.fg2, fontFamily: T.font, fontSize: 12 }}>
-        <span>Preview entity</span>
-        <TablePicker value={entityName} metadataService={metadataService}
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>Preview entity
+        <TablePicker ariaLabel="Preview entity" value={entityName} metadataService={metadataService}
           onChange={changeSource} customOnlyState={customOnlyState} />
+        </label>
       </div>
     ) : <p style={{ color: T.fg2, fontFamily: T.font, fontSize: 12 }}>Preview entity: {entityName}</p>}
     {!relatedMode && <ViewPicker entityName={entityName} value={selection.id} viewType={selection.viewType}

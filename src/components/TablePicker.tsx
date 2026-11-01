@@ -1,11 +1,10 @@
 import * as React from 'react';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 import { theme } from '../theme/tokens';
-import { Select, SelectOption } from './Select';
 import { Callout } from './Callout';
-import { CustomTableFilterButton } from './CustomTableFilterButton';
 import { useAccessibleTables, type AccessibleTablesService } from './useAccessibleTables';
+import { TableComboBox } from './TableComboBox';
 
 export interface TablePickerProps {
   value: string;
@@ -13,6 +12,7 @@ export interface TablePickerProps {
   metadataService: AccessibleTablesService;
   error?: boolean;
   disabled?: boolean;
+  ariaLabel?: string;
   onAccessibleTablesChange?: (tables: Set<string> | undefined) => void;
   customOnlyState?: readonly [boolean, (enabled: boolean) => void];
 }
@@ -23,6 +23,7 @@ export function TablePicker({
   metadataService,
   error,
   disabled,
+  ariaLabel = 'Table',
   onAccessibleTablesChange,
   customOnlyState,
 }: TablePickerProps): React.ReactElement {
@@ -46,46 +47,31 @@ export function TablePicker({
       onChange('');
     }
   };
-
-  const options = useMemo<SelectOption[]>(() => {
-    if (loading) return [{ value: value || '', label: 'Loading tables...' }];
-    if (loadError !== undefined) return [{ value: value || '', label: 'Could not load table list' }];
-
-    const visibleTables = customOnly
-      ? tables.filter(table => table.isCustomEntity === true)
-      : tables;
-    const tableOptions = visibleTables.map(table => ({
-      value: table.logicalName,
-      label: `${table.displayName} (${table.logicalName})`,
-    }));
-    if (!customOnly && value && !tables.some(table => table.logicalName === value)) {
-      return [{ value, label: `${value} (no longer accessible)`, disabled: true }, ...tableOptions];
-    }
-    if (tableOptions.length === 0) {
-      return [{ value: '', label: customOnly ? 'No custom tables found' : 'No accessible tables found' }];
-    }
-    // Without an explicit placeholder, an unset value renders as whichever table is
-    // alphabetically first (often "account") — selecting that table then does nothing,
-    // since the <select> already displays it and fires no change event.
-    return !value || (customOnly && !visibleTables.some(table => table.logicalName === value))
-      ? [{ value: '', label: 'Select a table…' }, ...tableOptions]
-      : tableOptions;
-  }, [loading, loadError, tables, value, customOnly]);
+  const inaccessible = !loading && loadError === undefined && Boolean(value) &&
+    !tables.some(table => table.logicalName === value);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <CustomTableFilterButton
-        pressed={customOnly}
-        disabled={!loaded || disabled}
-        onClick={toggleCustomOnly}
-      />
-      <Select
-        value={customOnly && !options.some(option => option.value === value) ? '' : value}
+      <TableComboBox
+        value={value}
         onChange={onChange}
-        options={options}
+        tables={tables}
+        loading={loading}
+        error={loadError}
+        invalid={error}
+        onRetry={retry}
+        ariaLabel={ariaLabel}
+        placeholder={loading ? 'Loading tables...' : 'Select a table…'}
+        customOnly={customOnly}
+        onCustomOnlyChange={toggleCustomOnly}
+        filterDisabled={!loaded || disabled}
         disabled={!loaded || disabled}
-        error={error || loadError !== undefined}
       />
+      {inaccessible && (
+        <span role="status" aria-live="polite" style={{ color: T.accentAlt, fontFamily: T.font, fontSize: 11 }}>
+          Saved table “{value}” is no longer accessible.
+        </span>
+      )}
       {loadError !== undefined && (
         <Callout type="err" icon="x">
           <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>

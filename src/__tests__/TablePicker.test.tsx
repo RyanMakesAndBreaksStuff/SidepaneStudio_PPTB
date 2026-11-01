@@ -64,6 +64,25 @@ async function render(element: React.ReactElement) {
   });
 }
 
+function combo(): HTMLInputElement {
+  return host?.querySelector('[role="combobox"]') as HTMLInputElement;
+}
+
+function options(): HTMLElement[] {
+  return Array.from(host?.querySelectorAll<HTMLElement>('[role="option"]') ?? []);
+}
+
+async function openPicker() {
+  await act(async () => { combo().focus(); combo().click(); });
+}
+
+async function choose(logicalName: string) {
+  await openPicker();
+  const option = options().find(item => item.textContent?.includes(logicalName));
+  expect(option, logicalName).toBeTruthy();
+  await act(async () => { option!.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })); });
+}
+
 afterEach(async () => {
   if (root) {
     await act(async () => {
@@ -76,15 +95,14 @@ afterEach(async () => {
 });
 
 describe('TablePicker', () => {
-  it('shows a disabled loading select while tables load', async () => {
+  it('shows a disabled loading picker while tables load', async () => {
     const pending = deferred<{ status: 'ok'; tables: TableInfo[] }>();
     const service = makeService(pending.promise);
 
     await render(<TablePicker value="" onChange={() => { /* noop */ }} metadataService={service} />);
 
-    const select = host?.querySelector('select');
-    expect(select?.disabled).toBe(true);
-    expect(select?.textContent).toContain('Loading tables...');
+    expect(combo().disabled).toBe(true);
+    expect(combo().placeholder).toBe('Loading tables...');
   });
 
   it('renders loaded table options and emits logical name changes', async () => {
@@ -100,15 +118,13 @@ describe('TablePicker', () => {
     await render(<TablePicker value="account" onChange={onChange} metadataService={service} />);
     await act(async () => { await Promise.resolve(); });
 
-    const select = host?.querySelector('select') as HTMLSelectElement;
-    expect(select.disabled).toBe(false);
-    expect(select.textContent).toContain('Account (account)');
-    expect(select.textContent).toContain('Contact (contact)');
-
-    select.value = 'contact';
-    await act(async () => {
-      select.dispatchEvent(new Event('change', { bubbles: true }));
-    });
+    const input = combo();
+    expect(input.disabled).toBe(false);
+    expect(input.value).toBe('Account (account)');
+    await openPicker();
+    expect(options().map(option => option.textContent).join(' ')).toContain('Accountaccount');
+    expect(options().map(option => option.textContent).join(' ')).toContain('Contactcontact');
+    await choose('contact');
 
     expect(onChange).toHaveBeenCalledWith('contact');
   });
@@ -128,7 +144,7 @@ describe('TablePicker', () => {
     await render(<TablePicker value="" onChange={() => { /* noop */ }} metadataService={service} />);
     await act(async () => { await Promise.resolve(); });
 
-    expect(host?.querySelector('select')?.disabled).toBe(true);
+    expect(combo().disabled).toBe(true);
     expect(host?.textContent).toContain('Could not load table list');
 
     await act(async () => {
@@ -139,7 +155,8 @@ describe('TablePicker', () => {
 
     expect(service.invalidate).toHaveBeenCalledTimes(1);
     expect(service.listAccessibleTables).toHaveBeenCalledTimes(2);
-    expect(host?.textContent).toContain('Account (account)');
+    await openPicker();
+    expect(options().map(option => option.textContent).join(' ')).toContain('Accountaccount');
   });
 
   it('keeps a saved inaccessible table visible', async () => {
@@ -151,9 +168,10 @@ describe('TablePicker', () => {
     await render(<TablePicker value="account" onChange={() => { /* noop */ }} metadataService={service} />);
     await act(async () => { await Promise.resolve(); });
 
-    const select = host?.querySelector('select') as HTMLSelectElement;
-    expect(select.value).toBe('account');
-    expect(select.textContent).toContain('account (no longer accessible)');
+    expect(combo().value).toBe('account');
+    expect(host?.textContent).toContain('Saved table “account” is no longer accessible.');
+    await openPicker();
+    expect(options().some(option => option.textContent?.includes('account'))).toBe(false);
   });
 
   it('reloads mounted options when the filter configuration changes', async () => {
@@ -162,15 +180,17 @@ describe('TablePicker', () => {
     ) });
     await render(<TablePicker value="" onChange={() => { /* noop */ }} metadataService={metadata} />);
     await act(async () => { await Promise.resolve(); });
-    expect(host?.querySelector('option[value="contact"]')).not.toBeNull();
+    await openPicker();
+    expect(options().some(option => option.textContent?.includes('contact'))).toBe(true);
 
     await act(async () => {
       metadata.setFilterConfig({ ...DEFAULT_METADATA_FILTER_CONFIG, denyExact: ['contact'] });
     });
     await act(async () => { await Promise.resolve(); });
 
-    expect(host?.querySelector('option[value="contact"]')).toBeNull();
-    expect(host?.querySelector('option[value="account"]')).not.toBeNull();
+    await openPicker();
+    expect(options().some(option => option.textContent?.includes('contact'))).toBe(false);
+    expect(options().some(option => option.textContent?.includes('account'))).toBe(true);
   });
 
   it('reports undefined while tables are pending and every logical name after success, including tables hidden by the custom-only filter', async () => {
@@ -188,9 +208,8 @@ describe('TablePicker', () => {
       />
     );
 
-    const select = host?.querySelector('select') as HTMLSelectElement;
-    expect(select.disabled).toBe(true);
-    expect(select.textContent).toContain('Loading tables...');
+    expect(combo().disabled).toBe(true);
+    expect(combo().placeholder).toBe('Loading tables...');
     expect(onAccessibleTablesChange).toHaveBeenCalledTimes(1);
     expect(onAccessibleTablesChange).toHaveBeenCalledWith(undefined);
 
@@ -198,12 +217,12 @@ describe('TablePicker', () => {
       pending.resolve({ status: 'ok', tables: [accountTable, widgetTable] });
     });
 
-    const filterButton = Array.from(host?.querySelectorAll('button') ?? [])
-      .find(button => button.textContent === 'Only Custom Tables');
+    const filterButton = host?.querySelector<HTMLButtonElement>('[aria-label="Show custom tables only"]');
     expect(filterButton?.getAttribute('aria-pressed')).toBe('true');
-    expect(select.disabled).toBe(false);
-    expect(select.textContent).toContain('Widget (new_widget)');
-    expect(select.textContent).not.toContain('Account (account)');
+    expect(combo().disabled).toBe(false);
+    await openPicker();
+    expect(options().map(option => option.textContent).join(' ')).toContain('Widgetnew_widget');
+    expect(options().map(option => option.textContent).join(' ')).not.toContain('Accountaccount');
     expect(lastNotified(onAccessibleTablesChange)).toEqual(new Set(['account', 'new_widget']));
   });
 
@@ -291,22 +310,23 @@ describe('TablePicker', () => {
     await act(async () => { root?.render(element(secondCallback)); });
 
     expect(listAccessibleTables).toHaveBeenCalledTimes(2);
-    const select = host?.querySelector('select') as HTMLSelectElement;
-    expect(select.disabled).toBe(true);
-    expect(select.textContent).toContain('Loading tables...');
+    expect(combo().disabled).toBe(true);
+    expect(combo().placeholder).toBe('Loading tables...');
     expect(secondCallback).toHaveBeenCalledWith(undefined);
 
     await act(async () => {
       second.resolve({ status: 'ok', tables: [contactTable] });
     });
-    expect(select.textContent).toContain('Contact (contact)');
+    await openPicker();
+    expect(options().map(option => option.textContent).join(' ')).toContain('Contactcontact');
     expect(lastNotified(secondCallback)).toEqual(new Set(['contact']));
 
     await act(async () => {
       first.resolve({ status: 'ok', tables: [accountTable] });
     });
-    expect(select.textContent).toContain('Contact (contact)');
-    expect(select.textContent).not.toContain('Account (account)');
+    await openPicker();
+    expect(options().map(option => option.textContent).join(' ')).toContain('Contactcontact');
+    expect(options().map(option => option.textContent).join(' ')).not.toContain('Accountaccount');
     expect(firstCallback).not.toHaveBeenCalledWith(expect.any(Set));
     expect(lastNotified(secondCallback)).toEqual(new Set(['contact']));
     expect(secondCallback.mock.calls.filter(call => call[0] instanceof Set)).toEqual([[new Set(['contact'])]]);
@@ -324,21 +344,23 @@ describe('TablePicker', () => {
 
     await act(async () => { listeners.forEach(listener => listener()); });
     expect(results).toHaveLength(2);
-    expect(host?.querySelector('select')?.textContent).toContain('Loading tables...');
+    expect(combo().placeholder).toBe('Loading tables...');
     expect(onAccessibleTablesChange).toHaveBeenLastCalledWith(undefined);
 
     await act(async () => {
       results[1].resolve({ status: 'ok', tables: [contactTable] });
     });
-    expect(host?.textContent).toContain('Contact (contact)');
+    await openPicker();
+    expect(options().map(option => option.textContent).join(' ')).toContain('Contactcontact');
     expect(lastNotified(onAccessibleTablesChange)).toEqual(new Set(['contact']));
     const callsAfterNewer = onAccessibleTablesChange.mock.calls.length;
 
     await act(async () => {
       results[0].resolve({ status: 'ok', tables: [accountTable] });
     });
-    expect(host?.textContent).toContain('Contact (contact)');
-    expect(host?.textContent).not.toContain('Account (account)');
+    await openPicker();
+    expect(options().map(option => option.textContent).join(' ')).toContain('Contactcontact');
+    expect(options().map(option => option.textContent).join(' ')).not.toContain('Accountaccount');
     expect(onAccessibleTablesChange).toHaveBeenCalledTimes(callsAfterNewer);
   });
 
@@ -373,7 +395,9 @@ describe('TablePicker', () => {
 
     await render(<TablePicker value="" onChange={onChange} metadataService={first.service} />);
     await act(async () => { await Promise.resolve(); });
-    expect(host?.textContent).toContain('Account (account)');
+    expect(combo().value).toBe('');
+    await openPicker();
+    expect(options().map(option => option.textContent).join(' ')).toContain('Accountaccount');
     expect(first.listeners.size).toBe(1);
 
     await act(async () => {
@@ -383,8 +407,9 @@ describe('TablePicker', () => {
 
     expect(first.listeners.size).toBe(0);
     expect(second.listeners.size).toBe(1);
-    expect(host?.textContent).toContain('Contact (contact)');
-    expect(host?.textContent).not.toContain('Account (account)');
+    await openPicker();
+    expect(options().map(option => option.textContent).join(' ')).toContain('Contactcontact');
+    expect(options().map(option => option.textContent).join(' ')).not.toContain('Accountaccount');
   });
 
   it('ignores the StrictMode throwaway table result and keeps one subscription', async () => {
@@ -410,18 +435,20 @@ describe('TablePicker', () => {
     await act(async () => {
       results[1].resolve({ status: 'ok', tables: [contactTable] });
     });
-    expect(host?.textContent).toContain('Contact (contact)');
+    await openPicker();
+    expect(options().map(option => option.textContent).join(' ')).toContain('Contactcontact');
     expect(lastNotified(onAccessibleTablesChange)).toEqual(new Set(['contact']));
 
     await act(async () => { listeners.forEach(listener => listener()); });
     expect(results).toHaveLength(3);
-    expect(host?.querySelector('select')?.textContent).toContain('Loading tables...');
+    expect(combo().placeholder).toBe('Loading tables...');
 
     await act(async () => {
       results[2].resolve({ status: 'ok', tables: [widgetTable] });
     });
-    expect(host?.textContent).toContain('Widget (new_widget)');
-    expect(host?.textContent).not.toContain('Contact (contact)');
+    await openPicker();
+    expect(options().map(option => option.textContent).join(' ')).toContain('Widgetnew_widget');
+    expect(options().map(option => option.textContent).join(' ')).not.toContain('Contactcontact');
     expect(listeners.size).toBe(1);
     expect(lastNotified(onAccessibleTablesChange)).toEqual(new Set(['new_widget']));
   });

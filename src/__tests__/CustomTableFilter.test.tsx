@@ -36,7 +36,7 @@ async function render(element: React.ReactElement) {
 }
 function filter(index = 0) {
   const buttons = Array.from(host.querySelectorAll<HTMLButtonElement>('button'))
-    .filter(button => button.textContent === 'Only Custom Tables');
+    .filter(button => button.getAttribute('aria-label') === 'Show custom tables only' || button.textContent === 'Only Custom Tables');
   expect(buttons[index], 'custom-only button').toBeTruthy();
   return buttons[index];
 }
@@ -49,8 +49,20 @@ async function choose(select: HTMLSelectElement, value: string) {
     select.dispatchEvent(new Event('change', { bubbles: true }));
   });
 }
-function choices(select = host.querySelector('select')!) {
-  return Array.from(select.options).map(option => option.value).filter(Boolean);
+function choices() {
+  return Array.from(host.querySelectorAll<HTMLElement>('[role="option"]'))
+    .map(option => option.querySelectorAll('span')[1]?.textContent ?? '').filter(Boolean);
+}
+async function openTablePicker(index = 0) {
+  const input = host.querySelectorAll<HTMLInputElement>('[role="combobox"]')[index];
+  await act(async () => { input.focus(); input.click(); });
+}
+async function chooseTable(logicalName: string, index = 0) {
+  await openTablePicker(index);
+  const option = Array.from(host.querySelectorAll<HTMLElement>('[role="option"]'))
+    .find(item => item.textContent?.includes(logicalName));
+  expect(option, logicalName).toBeTruthy();
+  await act(async () => { option!.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })); });
 }
 afterEach(async () => {
   await act(async () => { root?.unmount(); });
@@ -96,15 +108,18 @@ it('clears excluded values, restores choices, and reports full accessibility', a
       metadataService={service} onAccessibleTablesChange={accessible} />;
   }
   await render(<Picker />);
+  await openTablePicker();
   expect(choices()).toEqual(['account', 'new_event', 'new_unknown']);
   await click(filter());
   expect(filter().getAttribute('aria-pressed')).toBe('true');
-  expect(host.querySelector('select')!.value).toBe('');
+  expect(host.querySelector<HTMLInputElement>('[role="combobox"]')!.value).toBe('');
   expect(choices()).toEqual(['new_event']);
   expect(accessible).toHaveBeenLastCalledWith(new Set(tables.map(table => table.logicalName)));
-  await choose(host.querySelector('select')!, 'new_event');
+  await chooseTable('new_event');
   await click(filter());
-  expect(host.querySelector('select')!.value).toBe('new_event');
+  await openTablePicker();
+  expect(Array.from(host.querySelectorAll<HTMLElement>('[role="option"]'))
+    .some(option => option.textContent?.includes('new_event') && option.getAttribute('aria-selected') === 'true')).toBe(true);
   expect(choices()).toEqual(['account', 'new_event', 'new_unknown']);
   expect(listAccessibleTables).toHaveBeenCalledTimes(1);
 });
@@ -114,7 +129,8 @@ it('keeps a selected custom table and handles an empty custom subset', async () 
   const service = metadata();
   await render(<TablePicker value="new_event" onChange={onChange} metadataService={service} />);
   await click(filter());
-  expect(host.querySelector('select')!.value).toBe('new_event');
+  expect(Array.from(host.querySelectorAll<HTMLElement>('[role="option"]'))
+    .some(option => option.textContent?.includes('new_event') && option.getAttribute('aria-selected') === 'true')).toBe(true);
   expect(onChange).not.toHaveBeenCalled();
   await act(async () => {
     root!.render(<TablePicker key="empty" value="" onChange={onChange}
@@ -193,7 +209,7 @@ it('drops old forms, loads only the chosen custom table, and allows explicit res
   expect(host.querySelector('select[aria-label="Form"]')).toBeNull();
   expect(selected).toHaveBeenLastCalledWith(null);
   expect(getForms).toHaveBeenCalledTimes(1);
-  await act(async () => { host.querySelector<HTMLInputElement>('[role="combobox"]')!.focus(); });
+  await openTablePicker();
   const options = Array.from(host.querySelectorAll<HTMLElement>('[role="option"]'));
   expect(options).toHaveLength(1);
   // TableComboDropdown commits on mousedown.
@@ -258,7 +274,8 @@ it('keeps a custom related source, lookup, and view when enabling the custom-onl
   await click(filter());
 
   expect(filter().getAttribute('aria-pressed')).toBe('true');
-  expect(host.querySelector<HTMLSelectElement>('[aria-label="Related record source"] select')?.value).toBe('new_event');
+  expect(Array.from(host.querySelectorAll<HTMLElement>('[role="option"]'))
+    .some(option => option.textContent?.includes('new_event') && option.getAttribute('aria-selected') === 'true')).toBe(true);
   expect(lookup.value).toBe('parentid');
   expect(view.value).toBe(`savedquery:${relatedView.id}`);
   expect(host.querySelector('[aria-label="related config"]')?.textContent).toBe('new_event|parentid|account|saved-form|saved-tab');
@@ -272,7 +289,7 @@ it('clears a standard related source and resets its dependent lookup and view wh
 
   await click(filter());
 
-  expect(host.querySelector<HTMLSelectElement>('[aria-label="Related record source"] select')?.value).toBe('');
+  expect(host.querySelector<HTMLInputElement>('[aria-label="Source table"]')?.value).toBe('');
   expect(host.querySelector<HTMLSelectElement>('select[aria-label="Lookup column"]')?.value).toBe('');
   expect(host.querySelector<HTMLSelectElement>('select[aria-label="View"]')?.value).toBe('');
   expect(host.querySelector('[aria-label="related config"]')?.textContent).toBe('||||');
@@ -289,9 +306,11 @@ it('retains the grid filter through the entity-keyed remount', async () => {
   }
   await render(<GridHost />);
   await click(filter());
+  await openTablePicker();
   expect(filter().getAttribute('aria-pressed')).toBe('true');
   expect(choices()).toEqual(['new_event']);
-  await choose(host.querySelector('select')!, 'new_event');
+  await chooseTable('new_event');
   expect(filter().getAttribute('aria-pressed')).toBe('true');
+  await openTablePicker();
   expect(choices()).toEqual(['new_event']);
 });

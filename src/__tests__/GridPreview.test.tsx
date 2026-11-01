@@ -50,6 +50,13 @@ async function click(text: string) {
   expect(button, text).toBeTruthy();
   await act(async () => { button!.click(); });
 }
+async function chooseTable(input: HTMLInputElement, logicalName: string) {
+  await act(async () => { input.focus(); input.click(); });
+  const option = Array.from(host!.querySelectorAll<HTMLElement>('[role="option"]'))
+    .find(item => item.textContent?.includes(logicalName));
+  expect(option, logicalName).toBeTruthy();
+  await act(async () => { option!.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })); });
+}
 function preview(service = metadata(), key = 'account') {
   return <GridPreview key={key} config={config} validation={validation} metadataService={service} xrm={xrm}
     entityName="account" allowEntityChange={false} onEntityNameChange={() => undefined} />;
@@ -245,12 +252,9 @@ describe('grid preview', () => {
       validation={validation} metadataService={service} xrm={xrm} />);
     await click('Grid');
     const entityGroup = host!.querySelector('[role="group"][aria-label="Preview entity"]');
-    const entitySelect = entityGroup?.querySelector('select');
-    expect(entitySelect).toBeTruthy();
-    await act(async () => {
-      entitySelect!.value = 'account';
-      entitySelect!.dispatchEvent(new Event('change', { bubbles: true }));
-    });
+    const entityInput = entityGroup?.querySelector<HTMLInputElement>('[role="combobox"]');
+    expect(entityInput).toBeTruthy();
+    await chooseTable(entityInput!, 'account');
     const viewOption = Array.from(host!.querySelectorAll('option')).find(option => option.textContent?.includes(view.name));
     expect(viewOption).toBeTruthy();
     await act(async () => {
@@ -557,9 +561,10 @@ describe('related-record cross-component transitions', () => {
       .find(label => label.textContent?.startsWith('Source table'))!;
     await act(async () => { sourceLabel.click(); });
 
-    expect(host!.querySelector<HTMLSelectElement>('[aria-label="Related record source"] select')?.value).toBe('new_event');
+    expect(Array.from(host!.querySelectorAll<HTMLElement>('[role="option"]'))
+      .some(option => option.textContent?.includes('new_event') && option.getAttribute('aria-selected') === 'true')).toBe(true);
     expect(Array.from(host!.querySelectorAll<HTMLButtonElement>('button'))
-      .find(button => button.textContent === 'Only Custom Tables')?.getAttribute('aria-pressed')).toBe('false');
+      .find(button => button.getAttribute('aria-label') === 'Show custom tables only')?.getAttribute('aria-pressed')).toBe('false');
   });
 
 
@@ -663,11 +668,8 @@ describe('related-record cross-component transitions', () => {
     expect(preview.textContent).toContain('Pat Lee');
     expect(preview.querySelector('[title="contact-id"]')?.previousElementSibling?.textContent?.trim()).toBe('contact');
 
-    const source = preview.querySelector<HTMLSelectElement>('[aria-label="Related record source"] select')!;
-    await act(async () => {
-      source.value = 'contact';
-      source.dispatchEvent(new Event('change', { bubbles: true }));
-    });
+    const source = preview.querySelector<HTMLInputElement>('[aria-label="Source table"]')!;
+    await chooseTable(source, 'contact');
     expect(host!.querySelector('[aria-label="shared config"]')?.textContent).toBe('contact||||');
     expect(configure.querySelector<HTMLSelectElement>('select[aria-label="Lookup column"]')!.value).toBe('');
     expect(configure.textContent).not.toContain('Destination table: contact');

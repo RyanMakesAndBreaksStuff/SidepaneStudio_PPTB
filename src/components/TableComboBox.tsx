@@ -17,6 +17,8 @@ export interface TableComboBoxProps {
   tables: TableInfo[];
   loading?: boolean;
   error?: string;
+  /** Mark the current selection as invalid without replacing available choices. */
+  invalid?: boolean;
   onRetry?: () => void;
   placeholder?: string;
   /** Optional aria-label for the input. */
@@ -37,6 +39,7 @@ export function TableComboBox({
   tables,
   loading,
   error,
+  invalid = false,
   onRetry,
   placeholder,
   ariaLabel,
@@ -100,7 +103,7 @@ export function TableComboBox({
   useEffect(() => {
     if (!isOpen || !listRef.current) return;
     const item = listRef.current.querySelector<HTMLElement>(`[data-idx="${highlight}"]`);
-    if (item) item.scrollIntoView({ block: 'nearest' });
+    item?.scrollIntoView?.({ block: 'nearest' });
   }, [highlight, isOpen]);
 
   const commit = useCallback((logicalName: string) => {
@@ -142,10 +145,10 @@ export function TableComboBox({
     width: '100%',
     height: 32,
     padding: '0 8px',
-    border: `1px solid ${error ? T.error : T.stroke1}`,
+    border: `1px solid ${error || invalid ? T.error : T.stroke1}`,
     borderRadius: T.rS,
     background: T.surface1,
-    boxShadow: isOpen && !error ? `inset 0 -2px ${T.accent}` : 'none',
+    boxShadow: isOpen && !error && !invalid ? `inset 0 -2px ${T.accent}` : 'none',
     fontFamily: T.font,
     fontSize: 13,
     boxSizing: 'border-box',
@@ -178,6 +181,7 @@ export function TableComboBox({
           onFocus={() => { if (!disabled) setOpen(true); }}
           onKeyDown={handleKeyDown}
           aria-label={ariaLabel}
+          aria-invalid={Boolean(error || invalid) || undefined}
           aria-autocomplete="list"
           aria-expanded={isOpen}
           aria-controls={listboxId}

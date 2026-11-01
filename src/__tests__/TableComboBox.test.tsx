@@ -176,6 +176,15 @@ describe('TableComboBox', () => {
     expect(host!.querySelector<HTMLButtonElement>('[aria-label="Show custom tables only"]')?.disabled).toBe(true);
   });
 
+  it('marks validation errors without hiding available table options', async () => {
+    await render(<TableComboBox value="" onChange={vi.fn()} tables={tables} invalid />);
+    const input = combo();
+    expect(input.getAttribute('aria-invalid')).toBe('true');
+    expect(input.parentElement?.style.borderColor).toBe(rgb(theme(true).error));
+    await focus(input);
+    expect(host?.querySelectorAll('[role="option"]')).toHaveLength(tables.length);
+  });
+
   it('closes an open popup and blocks keyboard commits when disabled becomes true', async () => {
     const onChange = vi.fn();
     const props = { value: '', onChange, tables };
