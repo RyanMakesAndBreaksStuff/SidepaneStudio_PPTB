@@ -115,8 +115,6 @@ export function validate(config: PaneDefinitionConfig, accessibleTables?: Set<st
   for (const sf of [
     { value: pane.paneId, field: 'pane.paneId', label: 'Pane ID' },
     { value: pane.title, field: 'pane.title', label: 'Title' },
-    { value: trigger.namespace, field: 'trigger.namespace', label: 'Namespace' },
-    { value: trigger.functionName, field: 'trigger.functionName', label: 'Function name' },
   ]) {
     if (sf.value && specialCharPattern.test(sf.value)) warnings.push({ field: sf.field, message: `${sf.label} contains special characters. These are safely escaped in generated code, but may indicate a copy-paste issue.` });
   }

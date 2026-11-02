@@ -58,7 +58,7 @@ export function getPreviewPaneWidth(configWidth: number): number {
 const SAFE_RELATIVE_IMAGE_PATH = /^[A-Za-z0-9_\-./]+$/;
 
 export function isSafeRelativeImagePath(value: string): boolean {
-  if (!SAFE_RELATIVE_IMAGE_PATH.test(value) || value.includes(':')) return false;
+  if (!SAFE_RELATIVE_IMAGE_PATH.test(value) || value.includes(':') || value.startsWith('/')) return false;
   return !value.split('/').includes('..');
 }
 

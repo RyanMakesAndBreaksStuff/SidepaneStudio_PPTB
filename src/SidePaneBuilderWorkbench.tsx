@@ -31,7 +31,9 @@ function reportSettingsFailure(action: string, err: unknown): void {
 }
 
 /** Target fields that only exist in the org they were picked from; exhaustive so a new page type must decide. */
-const ORG_SCOPED_TARGET_FIELDS = {
+const ORG_SCOPED_TARGET_FIELDS: {
+  readonly [P in PageType]: ReadonlyArray<Exclude<keyof Extract<TargetConfig, { pageType: P }>, 'pageType'>>;
+} = {
   entityrecord: ['entityName', 'formId', 'tabName'],
   entitylist: ['entityName', 'viewId', 'viewType'],
   dashboard: ['dashboardId', 'dashboardName'],
@@ -39,16 +41,17 @@ const ORG_SCOPED_TARGET_FIELDS = {
   custom: [],
   webresource: [],
   search: [],
-} as const satisfies Record<PageType, readonly string[]>;
+};
 
 /** Table, form, view, dashboard, page, and record selections only exist in the org they were picked from. */
 function clearOrgSelections(config: PaneDefinitionConfig): PaneDefinitionConfig {
   const { target, context: { source } } = config;
-  const cleared: Record<string, unknown> = { ...target };
-  for (const field of ORG_SCOPED_TARGET_FIELDS[target.pageType]) cleared[field] = '';
+  const cleared = { ...target };
+  // The field list is checked per page type above; the union of keys cannot be indexed on the union of variants.
+  for (const field of ORG_SCOPED_TARGET_FIELDS[target.pageType] as readonly string[]) (cleared as Record<string, unknown>)[field] = '';
   return coerceConfig({
     ...config,
-    target: cleared as TargetConfig,
+    target: cleared,
     host: { ...config.host, entityName: '', formId: '', viewId: '', viewType: '', attribute: '', lookupControls: [] },
     context: { ...config.context, source:
       source.kind === 'fixed' ? { kind: 'fixed', entityName: '', id: '' } :

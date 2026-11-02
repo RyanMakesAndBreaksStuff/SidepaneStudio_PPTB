@@ -36,6 +36,11 @@ describe('isSafeRelativeImagePath', () => {
     expect(isSafeRelativeImagePath('a/b c.png')).toBe(false);
   });
 
+  it('rejects root-absolute paths', () => {
+    expect(isSafeRelativeImagePath('/img/a.png')).toBe(false);
+    expect(isSafeRelativeImagePath('//host/a.png')).toBe(false);
+  });
+
   it('allows dots inside segment names', () => {
     expect(isSafeRelativeImagePath('a/b..c/x.png')).toBe(true);
   });

@@ -134,9 +134,9 @@ describe('ValidationService warnings', () => {
   it.each([
     ['namespace', { trigger: { namespace: 'My\\Ns' } }, 'trigger.namespace'],
     ['function name', { trigger: { functionName: 'open"Pane' } }, 'trigger.functionName'],
-  ] as const)('warns on special characters in the %s and blocks the invalid name', (_label, overrides, field) => {
+  ] as const)('blocks the invalid %s without a misleading escape warning', (_label, overrides, field) => {
     const r = validate(cfg(overrides));
-    expect(r.warnings.map(w => w.field)).toContain(field);
+    expect(r.warnings.map(w => w.field)).not.toContain(field);
     expect(r.errors.map(e => e.field)).toEqual([field]);
   });
 
