@@ -5,6 +5,7 @@ import { expect, it, vi } from 'vitest';
 import { ViewPicker } from '../components/ViewPicker';
 import { ThemeProvider } from '../contexts/ThemeContext';
 import type { ViewsForEntityResult } from '../services/MetadataService';
+import { chooseOption } from './testHelpers';
 
 it('ignores stale views and emits the complete personal view only after selection', async () => {
   let finishOld!: (result: ViewsForEntityResult) => void;
@@ -26,11 +27,7 @@ it('ignores stale views and emits the complete personal view only after selectio
     await act(async () => finishOld({ status: 'ok', views: [{ ...view, name: 'Stale accounts' }] }));
     expect(host.textContent).not.toContain('Stale accounts');
     expect(onChange).not.toHaveBeenCalled();
-    const select = host.querySelector('select')!;
-    await act(async () => {
-      select.value = `userquery:${view.id}`;
-      select.dispatchEvent(new Event('change', { bubbles: true }));
-    });
+    await chooseOption(host, 'View', 'My contacts');
     expect(onChange).toHaveBeenCalledWith(view);
   } finally {
     await act(async () => root.unmount());

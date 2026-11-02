@@ -1,9 +1,9 @@
 import * as React from 'react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 import { theme } from '../theme/tokens';
 import { MetadataService, DashboardInfo, AccessibleDashboardsResult } from '../services/MetadataService';
-import { Select, SelectOption } from './Select';
+import { TableComboBox } from './TableComboBox';
 import { Callout } from './Callout';
 
 type LoadState =
@@ -56,22 +56,6 @@ export function DashboardPicker({
     setReloadKey(k => k + 1);
   }, [metadataService]);
 
-  const options = useMemo<SelectOption[]>(() => {
-    if (loadState.status === 'loading') return [{ value: value || '', label: 'Loading dashboards...' }];
-    if (loadState.status === 'error') return [{ value: value || '', label: 'Could not load dashboards' }];
-    const opts = loadState.dashboards.map(d => ({
-      value: d.id,
-      label: d.isPersonal ? `${d.name} (Personal)` : d.name,
-    }));
-    if (value && !loadState.dashboards.some(d => d.id === value)) {
-      return [{ value, label: `${value} (no longer accessible)`, disabled: true }, ...opts];
-    }
-    if (opts.length === 0) return [{ value: '', label: 'No dashboards found' }];
-    // Without an explicit placeholder an unset value renders as the first dashboard,
-    // which then cannot be committed because choosing it fires no change event.
-    return value ? opts : [{ value: '', label: 'Select a dashboard…' }, ...opts];
-  }, [loadState, value]);
-
   const handleChange = useCallback((id: string) => {
     if (loadState.status !== 'loaded') return;
     const found = loadState.dashboards.find(d => d.id === id);
@@ -80,12 +64,18 @@ export function DashboardPicker({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <Select
+      <TableComboBox
+        ariaLabel="Dashboard"
+        noun="dashboards"
         value={value}
         onChange={handleChange}
-        options={options}
-        disabled={loadState.status !== 'loaded' || disabled}
-        error={error || loadState.status === 'error'}
+        items={loadState.status === 'loaded' ? loadState.dashboards.map(d => ({ logicalName: d.id, displayName: d.name, detail: d.isPersonal ? 'Personal' : 'System' })) : []}
+        disabled={disabled}
+        loading={loadState.status === 'loading'}
+        error={loadState.status === 'error' ? loadState.reason : undefined}
+        invalid={error || (loadState.status === 'loaded' && !!value && !loadState.dashboards.some(d => d.id === value))}
+        onRetry={retry}
+        placeholder="Select a dashboard…"
       />
       {loadState.status === 'error' && (
         <Callout type="err" icon="x">

@@ -1,20 +1,26 @@
-import { TableInfo } from '../services/MetadataService';
 import { normalizeConfigWidth } from '../services/configGuards';
 import { MAX_CONFIG_WIDTH, MIN_CONFIG_WIDTH } from '../types/PaneDefinitionConfig';
 
 export { MAX_CONFIG_WIDTH, MIN_CONFIG_WIDTH } from '../types/PaneDefinitionConfig';
 
-export interface FilteredEntry {
-  table: TableInfo;
+export interface ComboItem {
+  logicalName: string;
+  displayName: string;
+  detail?: string;
+  isCustomEntity?: boolean;
+}
+
+export interface FilteredEntry<T extends ComboItem = ComboItem> {
+  table: T;
   matchedOn: 'display' | 'logical' | 'both';
 }
 
-export function filterTables(tables: TableInfo[], query: string): FilteredEntry[] {
+export function filterTables<T extends ComboItem>(tables: T[], query: string): FilteredEntry<T>[] {
   const q = query.trim().toLowerCase();
   if (!q) {
     return tables.map(t => ({ table: t, matchedOn: 'display' as const }));
   }
-  const out: FilteredEntry[] = [];
+  const out: FilteredEntry<T>[] = [];
   for (const t of tables) {
     const inDisplay = t.displayName.toLowerCase().includes(q);
     const inLogical = t.logicalName.toLowerCase().includes(q);

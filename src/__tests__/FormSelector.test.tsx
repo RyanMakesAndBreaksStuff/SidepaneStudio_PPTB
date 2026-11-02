@@ -7,7 +7,7 @@ import { PreviewSessionProvider } from '../contexts/PreviewSessionContext';
 import { FormXmlService } from '../services/FormXmlService';
 import { MetadataService, TableInfo } from '../services/MetadataService';
 import { DEFAULT_METADATA_FILTER_CONFIG } from '../types/MetadataFilterConfig';
-import { deferred } from './testHelpers';
+import { chooseOption, deferred } from './testHelpers';
 
 let root: Root | undefined;
 let host: HTMLDivElement | undefined;
@@ -142,6 +142,7 @@ describe('FormSelector', () => {
     });
 
     expect(getFormsForEntityResult).toHaveBeenCalledTimes(2);
+    await act(async () => { host?.querySelector<HTMLInputElement>('[role="combobox"][aria-label="Form"]')?.focus(); });
     expect(host?.textContent).toContain('Main Form');
     expect(host?.textContent).not.toContain('Could not load main forms');
   });
@@ -188,15 +189,12 @@ describe('FormSelector', () => {
     await render(element(''));
     expect(onFormSelected).not.toHaveBeenCalled();
     expect(host?.textContent).not.toContain('Preview Entity');
-    const select = host!.querySelector<HTMLSelectElement>('select[aria-label="Form"]')!;
+    const select = host!.querySelector<HTMLInputElement>('[role="combobox"][aria-label="Form"]')!;
     expect(select.value).toBe('');
-    await act(async () => {
-      select.value = 'form-1';
-      select.dispatchEvent(new Event('change', { bubbles: true }));
-    });
+    await chooseOption(host!, 'Form', 'Main Form');
     expect(onFormSelected).toHaveBeenCalledWith({ entityLogicalName: 'account', formId: 'form-1' });
     await act(async () => root!.render(element('form-1')));
-    expect(select.value).toBe('form-1');
+    expect(select.value).toContain('Main Form');
     await act(async () => root!.render(element('')));
     expect(select.value).toBe('');
     expect(getFormsForEntityResult).toHaveBeenCalledTimes(1);
@@ -349,15 +347,16 @@ describe('FormSelector', () => {
     await act(async () => {
       pending.get('contact')?.resolve({ ok: true, forms: [{ id: 'contact-form', name: 'Contact Main' }] });
     });
-    const formSelect = () => host?.querySelector('select[aria-label="Form"]');
-    expect(formSelect()?.textContent).toContain('Contact Main');
+    const formSelect = () => host?.querySelector<HTMLInputElement>('[role="combobox"][aria-label="Form"]');
+    await act(async () => { formSelect()?.focus(); });
+    expect(host?.textContent).toContain('Contact Main');
     expect(onFormSelected).toHaveBeenCalledWith({ entityLogicalName: 'contact', formId: 'contact-form' });
 
     await act(async () => {
       pending.get('account')?.resolve({ ok: true, forms: [{ id: 'account-form', name: 'Account Main' }] });
     });
-    expect(formSelect()?.textContent).toContain('Contact Main');
-    expect(formSelect()?.textContent).not.toContain('Account Main');
+    expect(host?.textContent).toContain('Contact Main');
+    expect(host?.textContent).not.toContain('Account Main');
     expect(onFormSelected).not.toHaveBeenCalledWith({ entityLogicalName: 'account', formId: 'account-form' });
   });
 

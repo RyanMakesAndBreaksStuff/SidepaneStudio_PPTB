@@ -1,8 +1,7 @@
 import * as React from 'react';
 import { useEffect, useRef, useState } from 'react';
 import type { LookupAttributeInfo, MetadataService } from '../services/MetadataService';
-import { useTheme } from '../contexts/ThemeContext';
-import { theme } from '../theme/tokens';
+import { TableComboBox } from './TableComboBox';
 
 export interface LookupPickerProps {
   entityName: string;
@@ -25,8 +24,6 @@ function lookupLabel(lookup: LookupAttributeInfo): string {
 
 /** Lookup columns on the RelatedRecord source table. Same load/retry lifecycle as ViewPicker. */
 export function LookupPicker({ entityName, value, onChange, onSelectionChange, onResolvedSelection, onStatusChange, metadataService, disabled, error }: LookupPickerProps): React.ReactElement {
-  const { isDark } = useTheme();
-  const T = theme(isDark);
   const [result, setResult] = useState<LookupResult | null>(null);
   const [retry, setRetry] = useState(0);
   const [loadedRequest, setLoadedRequest] = useState<{
@@ -81,18 +78,17 @@ export function LookupPicker({ entityName, value, onChange, onSelectionChange, o
   const targetSummary = selectedLookup?.Targets;
   return (
     <div>
-      <select aria-label="Lookup column" value={value} disabled={disabled || !entityName || !current || current.status === 'error'}
-        style={{ width: '100%', color: T.fg1, background: T.surface1, border: `1px solid ${error ? T.error : T.stroke1}`, padding: 8, borderRadius: T.rS }}
-        onChange={event => {
-          const logicalName = event.target.value;
+      <TableComboBox ariaLabel="Lookup column" noun="lookup columns"
+        items={lookups.map(lookup => ({ logicalName: lookup.LogicalName, displayName: lookupLabel(lookup) }))}
+        value={value} onChange={logicalName => {
           const lookup = lookups.find(item => item.LogicalName === logicalName);
           onChange(logicalName, lookup);
           onSelectionChange?.(lookup);
-        }}>
-        <option value="">{!entityName ? 'Select a source table first' : !current ? 'Loading lookup columns…' : 'Select a lookup column'}</option>
-        {value && !lookups.some(lookup => lookup.LogicalName === value) && <option value={value}>{value} (unavailable)</option>}
-        {lookups.map(lookup => <option key={lookup.LogicalName} value={lookup.LogicalName}>{lookupLabel(lookup)}</option>)}
-      </select>
+        }} loading={!!entityName && !current}
+        error={current?.status === 'error' ? current.reason : undefined}
+        onRetry={() => setRetry(n => n + 1)} invalid={error || (!!value && !selectedLookup)}
+        disabled={disabled || !entityName}
+        placeholder={!entityName ? 'Select a source table first' : 'Select a lookup column'} />
       {!entityName && <div role="status" aria-live="polite">Select a source table to load lookup columns.</div>}
       {entityName && !current && <div role="status" aria-live="polite">Loading lookup columns…</div>}
       {current?.status === 'error' && <div role="alert">{current.reason} Lookup columns could not be checked, so the saved destination is unchanged. <button type="button" disabled={disabled} onClick={() => setRetry(n => n + 1)}>Retry</button></div>}
