@@ -104,12 +104,15 @@ describe('page parameter contract', () => {
     expect(validate(c).errors.map(e => e.field)).toContain('context.staticRecordId');
   });
   it('migrates legacy target ID without overriding the existing context ID', () => {
-    const legacy = config({ pageType: 'entityrecord', entityName: 'account', entityId: otherId });
-    expect(parseStoredConfig(JSON.stringify(legacy))?.context.staticRecordId).toBe(id);
+    const legacy = {
+      ...config({ pageType: 'entityrecord', entityName: 'account', entityId: otherId }),
+      context: { mode: 'Static', entityName: '', staticRecordId: id },
+    };
+    expect(parseStoredConfig(JSON.stringify(legacy))?.context.source).toEqual({ kind: 'fixed', entityName: '', id });
     legacy.context.staticRecordId = '';
     const migrated = parseStoredConfig(JSON.stringify(legacy));
-    expect(migrated?.context.staticRecordId).toBe(otherId);
-    expect(migrated?.target).toEqual({ pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '', createNew: false, createFromCurrent: false });
+    expect(migrated?.context.source).toEqual({ kind: 'fixed', entityName: '', id: otherId });
+    expect(migrated?.target).toEqual({ pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '', createNew: false });
     expect(parseStoredConfig(JSON.stringify(config({ pageType: 'entitylist', entityName: 'account' })))?.target).toEqual({ pageType: 'entitylist', entityName: 'account', viewId: '', viewType: '' });
   });
   it('rejects wrong-shaped new settings values', () => {

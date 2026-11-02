@@ -10,11 +10,11 @@ describe('parseStoredConfig', () => {
       .toEqual({ pageType: 'generative', pageId: '', data: '' });
   });
   it('loads entity record create mode and back-fills it as off for older configs', () => {
-    const target = { pageType: 'entityrecord', entityName: 'contact', formId: '', tabName: '', data: '' };
+    const target = { pageType: 'entityrecord', entityName: '', formId: '', tabName: '', data: '' };
     const load = (t: object) => parseStoredConfig(JSON.stringify({ ...DEFAULT_CONFIG, target: t }))?.target;
-    expect(load(target)).toEqual({ ...target, createNew: false, createFromCurrent: false });
-    expect(load({ ...target, createNew: true, createFromCurrent: true })).toEqual({ ...target, createNew: true, createFromCurrent: true });
-    expect(load({ ...target, createNew: 'yes', createFromCurrent: 1 })).toEqual({ ...target, createNew: false, createFromCurrent: false });
+    expect(load(target)).toEqual({ ...target, createNew: false });
+    expect(load({ ...target, createNew: true, createFromCurrent: true })).toEqual({ ...target, createNew: true });
+    expect(load({ ...target, createNew: 'yes', createFromCurrent: 1 })).toEqual({ ...target, createNew: false });
   });
   it('rejects malformed JSON', () => {
     expect(parseStoredConfig('{not json')).toBeNull();
@@ -37,7 +37,8 @@ describe('parseStoredConfig', () => {
   it('accepts a stored LookupTagClick trigger', () => {
     const config = {
       ...DEFAULT_CONFIG,
-      trigger: { ...DEFAULT_CONFIG.trigger, kind: 'LookupTagClick', fieldName: 'parentaccountid' },
+      trigger: { ...DEFAULT_CONFIG.trigger, kind: 'LookupTagClick' },
+      host: { ...DEFAULT_CONFIG.host, lookupControls: ['parentaccountid'] },
     };
     expect(parseStoredConfig(JSON.stringify(config))?.trigger.kind).toBe('LookupTagClick');
   });
@@ -60,12 +61,9 @@ describe('parseStoredConfig', () => {
     expect(load({ expandOnOpen: true, closeOthers: false, toggleIfOpen: true })).toBe(true);
   });
 
-  it('round-trips related record context and back-fills lookupAttribute for older configs', () => {
-    const context = { ...DEFAULT_CONFIG.context, mode: 'RelatedRecord', entityName: 'account', lookupAttribute: 'primarycontactid' };
+  it('round-trips a lookup record source', () => {
+    const context = { ...DEFAULT_CONFIG.context, source: { kind: 'lookup', attribute: 'primarycontactid' } };
     expect(parseStoredConfig(JSON.stringify({ ...DEFAULT_CONFIG, context }))?.context).toEqual(context);
-    const legacyContext: Record<string, unknown> = { ...DEFAULT_CONFIG.context };
-    delete legacyContext.lookupAttribute;
-    expect(parseStoredConfig(JSON.stringify({ ...DEFAULT_CONFIG, context: legacyContext }))?.context.lookupAttribute).toBe('');
   });
 
   it.each([
@@ -85,8 +83,9 @@ describe('parseStoredConfig', () => {
       pane: { ...DEFAULT_CONFIG.pane, title: 42, canClose: 'yes', badgeValue: {} },
       target: { pageType: 'custom', name: 7 },
       trigger: { ...DEFAULT_CONFIG.trigger, namespace: {}, functionName: null },
-      context: { ...DEFAULT_CONFIG.context, entityName: 7, reuseExistingPane: 'yes' },
-      behavior: { expandOnOpen: 'yes', closeOthers: 1 },
+      host: { ...DEFAULT_CONFIG.host, entityName: 7 },
+      context: { ...DEFAULT_CONFIG.context, variableName: 3 },
+      behavior: { expandOnOpen: 'yes', closeOthers: 1, reuseExistingPane: 'yes' },
     });
     const parsed = parseStoredConfig(raw);
     expect(parsed?.pane.title).toBe(DEFAULT_CONFIG.pane.title);
@@ -95,9 +94,52 @@ describe('parseStoredConfig', () => {
     expect(parsed?.target).toEqual({ pageType: 'custom', name: '' });
     expect(parsed?.trigger.namespace).toBe(DEFAULT_CONFIG.trigger.namespace);
     expect(parsed?.trigger.functionName).toBe(DEFAULT_CONFIG.trigger.functionName);
-    expect(parsed?.context.entityName).toBe('');
-    expect(parsed?.context.reuseExistingPane).toBe(DEFAULT_CONFIG.context.reuseExistingPane);
+    expect(parsed?.host.entityName).toBe('');
+    expect(parsed?.context.variableName).toBe('recordId');
+    expect(parsed?.behavior.reuseExistingPane).toBe(DEFAULT_CONFIG.behavior.reuseExistingPane);
     expect(parsed?.behavior).toEqual(DEFAULT_CONFIG.behavior);
+  });
+});
+
+describe('v1 migration', () => {
+  const v1 = (trigger: object, context: object, target: object = { pageType: 'custom', name: 'sps_Page' }) => JSON.stringify({
+    pane: DEFAULT_CONFIG.pane, behavior: { expandOnOpen: true, closeOthers: false, toggleIfOpen: false },
+    trigger: { functionName: 'open', namespace: 'Ns', fieldName: '', ...trigger }, context, target,
+  });
+  it('migrates all four grid trigger kinds and surfaces', () => {
+    for (const [legacy, kind, surface] of [
+      ['MainGridButton', 'GridButton', 'main'], ['SubgridButton', 'GridButton', 'subgrid'],
+      ['MainGridOnSelect', 'GridRowSelect', 'main'], ['SubgridOnSelect', 'GridRowSelect', 'subgrid'],
+    ]) {
+      expect(parseStoredConfig(v1({ kind: legacy }, { mode: 'CurrentRecord', entityName: 'account' })))
+        .toMatchObject({ trigger: { kind, surface }, host: { entityName: 'account' }, context: { source: { kind: 'selectedRow' } } });
+    }
+  });
+  it('migrates context modes and console records', () => {
+    const id = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+    expect(parseStoredConfig(v1({ kind: 'FormButton' }, { mode: 'CurrentRecord' }))?.context.source).toEqual({ kind: 'host' });
+    expect(parseStoredConfig(v1({ kind: 'FormButton' }, { mode: 'Static', entityName: 'account', staticRecordId: id }))?.context.source).toEqual({ kind: 'fixed', entityName: 'account', id });
+    expect(parseStoredConfig(v1({ kind: 'FormButton' }, { mode: 'RelatedRecord', entityName: 'account', lookupAttribute: 'primarycontactid' })))
+      .toMatchObject({ host: { entityName: 'account' }, context: { source: { kind: 'lookup', attribute: 'primarycontactid' } } });
+    expect(parseStoredConfig(v1({ kind: 'FormButton' }, { mode: 'None' }))?.context.source).toEqual({ kind: 'none' });
+    expect(parseStoredConfig(v1({ kind: 'ManualJS' }, { mode: 'CurrentRecord' }))?.context.source).toEqual({ kind: 'none' });
+    expect(parseStoredConfig(v1({ kind: 'ManualJS' }, { mode: 'CurrentRecord', staticRecordId: id }))?.context.source).toEqual({ kind: 'fixed', entityName: '', id });
+  });
+  it('moves watched columns, lookup controls and pane reuse', () => {
+    expect(parseStoredConfig(v1({ kind: 'FormOnChange', fieldName: 'name' }, { mode: 'CurrentRecord', entityName: 'account', reuseExistingPane: false })))
+      .toMatchObject({ host: { attribute: 'name', lookupControls: [] }, behavior: { reuseExistingPane: false } });
+    expect(parseStoredConfig(v1({ kind: 'LookupTagClick', fieldName: 'a, b ,a' }, { mode: 'CurrentRecord' })))
+      .toMatchObject({ host: { lookupControls: ['a', 'b'] }, context: { source: { kind: 'clickedTag' } } });
+  });
+  it('migrates create-mode prefill into the source', () => {
+    const create = { pageType: 'entityrecord', entityName: 'contact', formId: '', tabName: '', data: '', createNew: true };
+    expect(parseStoredConfig(v1({ kind: 'FormButton' }, { mode: 'CurrentRecord' }, { ...create, createFromCurrent: true }))?.context.source).toEqual({ kind: 'host' });
+    expect(parseStoredConfig(v1({ kind: 'FormButton' }, { mode: 'CurrentRecord' }, { ...create, createFromCurrent: false }))?.context.source).toEqual({ kind: 'none' });
+  });
+  it('round-trips v2 and rejects unknown source discriminants', () => {
+    const c = { ...DEFAULT_CONFIG, host: { ...DEFAULT_CONFIG.host, entityName: 'account', lookupControls: ['x'] }, context: { source: { kind: 'lookup', attribute: 'primarycontactid' }, variableName: 'rec' } };
+    expect(parseStoredConfig(JSON.stringify(c))).toEqual(c);
+    expect(parseStoredConfig(JSON.stringify({ ...DEFAULT_CONFIG, context: { source: { kind: 'wat' } } }))).toBeNull();
   });
 });
 
