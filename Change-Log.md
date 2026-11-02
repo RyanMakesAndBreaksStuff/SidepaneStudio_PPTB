@@ -1,5 +1,33 @@
 # Change Log
 
+## v1.4.0
+
+### Changed
+
+- The Configure panel is a sentence plus three sections: **Trigger & source**
+  (trigger, surface, table, form/view/column/lookup controls), **Destination**
+  (content, which record, form, tab, form data) and **Pane & behaviour**. The
+  summary at the top reads back exactly what the generated script does, and
+  every choice offered is legal for the trigger already chosen.
+- Record context is a record *source*: the form record, the selected row, the
+  clicked tag, a lookup on the host table, a specific record, or none. A trigger
+  change snaps the source and content to legal values instead of showing an
+  error. The generated script declares the record ID in a variable you name.
+- The four grid triggers are now **Grid button** and **Grid row select** with a
+  Main grid / Subgrid choice. Field change and Lookup tag click pick their
+  column and lookup controls from metadata instead of typed names.
+- With the form record or selected row as the source, the script reads the
+  record's table at runtime (`getEntityName()`), so a table name is only
+  required where a picker needs it.
+- Web resources also receive the clicked lookup tag as URL `data`.
+- Every picker (tables, forms, views, columns, lookup columns, dashboards) is
+  the searchable combobox with the custom-table filter inside the input.
+- The Form and Grid previews use the configured trigger table, form and view;
+  changes made in the preview update the configuration.
+- Stored configurations from earlier versions load unchanged in meaning: grid
+  trigger kinds, context modes, static IDs, lookup columns, typed field names
+  and pre-fill settings are migrated automatically.
+
 ## v1.3.1
 
 ### Added
