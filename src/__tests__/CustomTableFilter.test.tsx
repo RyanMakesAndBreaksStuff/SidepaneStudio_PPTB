@@ -10,7 +10,7 @@ import { PreviewSessionProvider } from '../contexts/PreviewSessionContext';
 import { MetadataService } from '../services/MetadataService';
 import { FormXmlService } from '../services/FormXmlService';
 import { DEFAULT_CONFIG, PaneDefinitionConfig } from '../types/PaneDefinitionConfig';
-import { xrmStub } from './testHelpers';
+import { chooseOption, xrmStub } from './testHelpers';
 
 const tables = [
   { logicalName: 'account', displayName: 'Account', objectTypeCode: 1, isCustomEntity: false },
@@ -42,12 +42,6 @@ function filter(index = 0) {
 }
 async function click(button: HTMLButtonElement) {
   await act(async () => { button.click(); });
-}
-async function choose(select: HTMLSelectElement, value: string) {
-  await act(async () => {
-    select.value = value;
-    select.dispatchEvent(new Event('change', { bubbles: true }));
-  });
 }
 function choices() {
   return Array.from(host.querySelectorAll<HTMLElement>('[role="option"]'))
@@ -161,8 +155,8 @@ it('keeps Configure filters independent and clears target dependencies atomicall
     ...DEFAULT_CONFIG,
     target: { pageType: 'entityrecord', entityName: 'account', formId: 'old-form',
       tabName: 'old-tab', data: '{"old":true}' },
-    context: { ...DEFAULT_CONFIG.context, mode: 'Static', entityName: 'account',
-      staticRecordId: 'old-record' },
+    host: { ...DEFAULT_CONFIG.host, entityName: 'account' },
+    context: { ...DEFAULT_CONFIG.context, source: { kind: 'fixed', entityName: 'account', id: 'old-record' } },
   };
   function Panel() {
     const [config, setConfig] = React.useState(latest);
@@ -171,19 +165,20 @@ it('keeps Configure filters independent and clears target dependencies atomicall
       validation={validation} metadataService={service} />;
   }
   await render(<Panel />);
-  for (const title of ['What opens in the pane', 'Record context']) {
+  for (const title of ['Trigger & source', 'Destination']) {
     const button = Array.from(host.querySelectorAll('button'))
       .find(item => item.textContent?.includes(title))!;
     if (button.getAttribute('aria-expanded') === 'false') await click(button);
   }
-  await click(filter(0));
-  expect(latest.target).toEqual({ pageType: 'entityrecord', entityName: '',
-    formId: '', tabName: '', data: '' });
-  expect(latest.context.entityName).toBe('account');
-  expect(filter(1).getAttribute('aria-pressed')).toBe('false');
+  // Pickers render in section order: Trigger table (host), then Destination table.
   await click(filter(1));
-  expect(latest.context.entityName).toBe('');
-  expect(latest.context.staticRecordId).toBe('');
+  // v2 clears the table-dependent form and tab but keeps the free-form data payload.
+  expect(latest.target).toEqual({ pageType: 'entityrecord', entityName: '',
+    formId: '', tabName: '', data: '{"old":true}' });
+  expect(latest.host.entityName).toBe('account');
+  expect(filter(0).getAttribute('aria-pressed')).toBe('false');
+  await click(filter(0));
+  expect(latest.host.entityName).toBe('');
 });
 
 it('drops old forms, loads only the chosen custom table, and allows explicit resync', async () => {
@@ -204,12 +199,12 @@ it('drops old forms, loads only the chosen custom table, and allows explicit res
       metadataService={service} formXmlService={forms} onFormSelected={selected} />;
   }
   await render(<Selector />);
-  expect(host.querySelector('select[aria-label="Form"]')?.textContent).toContain('account form');
+  expect(host.querySelector<HTMLInputElement>('[role="combobox"][aria-label="Form"]')?.value).toContain('account form');
   await openTablePicker();
   await click(filter());
   expect(host.querySelector<HTMLInputElement>('[role="combobox"]')?.getAttribute('aria-expanded')).toBe('true');
   expect(choices()).toEqual(['new_event']);
-  expect(host.querySelector('select[aria-label="Form"]')).toBeNull();
+  expect(host.querySelector('[role="combobox"][aria-label="Form"]')).toBeNull();
   expect(selected).toHaveBeenLastCalledWith(null);
   expect(getForms).toHaveBeenCalledTimes(1);
   await openTablePicker();
@@ -220,8 +215,8 @@ it('drops old forms, loads only the chosen custom table, and allows explicit res
     options[0].dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
   });
   expect(getForms).toHaveBeenLastCalledWith('new_event');
-  expect(host.querySelector('select[aria-label="Form"]')?.textContent).toContain('new_event form');
-  expect(host.querySelector('select[aria-label="Form"]')?.textContent).not.toContain('account form');
+  expect(host.querySelector<HTMLInputElement>('[role="combobox"][aria-label="Form"]')?.value).toContain('new_event form');
+  expect(host.querySelector<HTMLInputElement>('[role="combobox"][aria-label="Form"]')?.value).not.toContain('account form');
   const useConfigured = Array.from(host.querySelectorAll('button'))
     .find(button => button.textContent?.trim() === 'Use account')!;
   await click(useConfigured);
@@ -232,8 +227,10 @@ it('drops old forms, loads only the chosen custom table, and allows explicit res
 function relatedConfig(source: string): PaneDefinitionConfig {
   return {
     ...DEFAULT_CONFIG,
+    trigger: { ...DEFAULT_CONFIG.trigger, kind: 'GridRowSelect' },
+    host: { ...DEFAULT_CONFIG.host, entityName: source },
     target: { pageType: 'entityrecord', entityName: 'account', formId: 'saved-form', tabName: 'saved-tab', data: '' },
-    context: { ...DEFAULT_CONFIG.context, mode: 'RelatedRecord', entityName: source, lookupAttribute: 'parentid' },
+    context: { ...DEFAULT_CONFIG.context, source: { kind: 'lookup', attribute: 'parentid' } },
   };
 }
 const relatedView = {
@@ -259,52 +256,55 @@ function RelatedGrid({ initial, service }: { initial: PaneDefinitionConfig; serv
     : target.pageType === 'entitylist'
       ? `${target.entityName}|${target.viewId}|${target.viewType}`
       : JSON.stringify(target);
+  const attribute = config.context.source.kind === 'lookup' ? config.context.source.attribute : '';
   return <>
-    <output aria-label="related config">{config.context.entityName}|{config.context.lookupAttribute}|{targetState}</output>
+    <output aria-label="related config">{config.host.entityName}|{attribute}|{targetState}</output>
     <PreviewSessionProvider><GridPreview config={config} validation={validation} metadataService={service}
-      xrm={xrmStub()} entityName={config.context.entityName} allowEntityChange={false}
-      onEntityNameChange={() => undefined} onConfigChange={updater => setConfig(previous => updater(previous))} /></PreviewSessionProvider>
+      xrm={xrmStub()} onConfigChange={updater => setConfig(previous => updater(previous))} /></PreviewSessionProvider>
   </>;
 }
 
 it('keeps a custom related source, lookup, and view when enabling the custom-only filter', async () => {
   const service = relatedService();
   await render(<RelatedGrid initial={relatedConfig('new_event')} service={service} />);
-  const lookup = host.querySelector<HTMLSelectElement>('select[aria-label="Lookup column"]')!;
-  const view = host.querySelector<HTMLSelectElement>('select[aria-label="View"]')!;
-  await choose(view, `savedquery:${relatedView.id}`);
+  const lookup = host.querySelector<HTMLInputElement>('[role="combobox"][aria-label="Lookup column"]')!;
+  const view = host.querySelector<HTMLInputElement>('[role="combobox"][aria-label="View"]')!;
+  await chooseOption(host, 'View', 'Active records');
 
   await click(filter());
 
   expect(filter().getAttribute('aria-pressed')).toBe('true');
   expect(Array.from(host.querySelectorAll<HTMLElement>('[role="option"]'))
     .some(option => option.textContent?.includes('new_event') && option.getAttribute('aria-selected') === 'true')).toBe(true);
-  expect(lookup.value).toBe('parentid');
-  expect(view.value).toBe(`savedquery:${relatedView.id}`);
+  expect(lookup.value).toContain('parentid');
+  expect(view.value).toContain('Active records');
   expect(host.querySelector('[aria-label="related config"]')?.textContent).toBe('new_event|parentid|account|saved-form|saved-tab');
 });
 
 it('clears a standard related source and resets its dependent lookup and view when enabling the custom-only filter', async () => {
   const service = relatedService();
   await render(<RelatedGrid initial={relatedConfig('account')} service={service} />);
-  const view = host.querySelector<HTMLSelectElement>('select[aria-label="View"]')!;
-  await choose(view, `savedquery:${relatedView.id}`);
+  await chooseOption(host, 'View', 'Active records');
 
   await click(filter());
 
   expect(host.querySelector<HTMLInputElement>('[aria-label="Source table"]')?.value).toBe('');
-  expect(host.querySelector<HTMLSelectElement>('select[aria-label="Lookup column"]')?.value).toBe('');
-  expect(host.querySelector<HTMLSelectElement>('select[aria-label="View"]')?.value).toBe('');
+  expect(host.querySelector<HTMLInputElement>('[role="combobox"][aria-label="Lookup column"]')?.value).toBe('');
+  expect(host.querySelector<HTMLInputElement>('[role="combobox"][aria-label="View"]')?.value).toBe('');
   expect(host.querySelector('[aria-label="related config"]')?.textContent).toBe('||||');
 });
 
 it('retains the grid filter through the entity-keyed remount', async () => {
   const service = metadata();
   function GridHost() {
-    const [entity, setEntity] = React.useState('account');
-    return <PreviewSessionProvider><GridPreview key={entity}
-      config={DEFAULT_CONFIG} validation={validation} metadataService={service} xrm={xrmStub()}
-      entityName={entity} allowEntityChange onEntityNameChange={setEntity} />
+    const [config, setConfig] = React.useState<PaneDefinitionConfig>({
+      ...DEFAULT_CONFIG,
+      trigger: { ...DEFAULT_CONFIG.trigger, kind: 'GridButton' },
+      host: { ...DEFAULT_CONFIG.host, entityName: 'account' },
+    });
+    return <PreviewSessionProvider><GridPreview key={config.host.entityName}
+      config={config} validation={validation} metadataService={service} xrm={xrmStub()}
+      onConfigChange={updater => setConfig(previous => updater(previous))} />
     </PreviewSessionProvider>;
   }
   await render(<GridHost />);

@@ -84,9 +84,9 @@ export function gridCellText(row: Record<string, unknown>, column: GridColumn): 
   return typeof value === 'object' ? JSON.stringify(value) : String(value);
 }
 
-/** RelatedRecord lookup column the preview simulates; '' in every other context mode. */
+/** Lookup column a lookup-source preview simulates; '' for every other source. */
 export function getRelatedLookup(config: PaneDefinitionConfig): string {
-  return config.context.mode === 'RelatedRecord' ? config.context.lookupAttribute.trim() : '';
+  return config.context.source.kind === 'lookup' ? config.context.source.attribute.trim() : '';
 }
 
 /** The record a RelatedRecord pane opens, as a preview row's lookup value supplies it. */
@@ -98,8 +98,8 @@ export interface PreviewRecord {
 
 const LOOKUP_LOGICAL_NAME = '@Microsoft.Dynamics.CRM.lookuplogicalname';
 
-export function relatedRecordOf(row: Record<string, unknown>, lookupAttribute: string): PreviewRecord | null {
-  const key = `_${lookupAttribute}_value`;
+export function relatedRecordOf(row: Record<string, unknown>, lookupColumn: string): PreviewRecord | null {
+  const key = `_${lookupColumn}_value`;
   const id = row[key];
   if (typeof id !== 'string' || !id) return null;
   const name = row[`${key}${FORMATTED}`];
@@ -116,13 +116,13 @@ export type RelatedRecordResolution =
 /** Resolve a populated lookup using its row annotation or one confirmed metadata target. */
 export function resolveRelatedRecord(
   row: Record<string, unknown>,
-  lookupAttribute: string,
+  lookupColumn: string,
   targets?: readonly string[] | null
 ): RelatedRecordResolution {
-  const record = relatedRecordOf(row, lookupAttribute);
+  const record = relatedRecordOf(row, lookupColumn);
   if (!record) return { status: 'empty' };
 
-  const rawAnnotation = row[`_${lookupAttribute}_value${LOOKUP_LOGICAL_NAME}`];
+  const rawAnnotation = row[`_${lookupColumn}_value${LOOKUP_LOGICAL_NAME}`];
   if (rawAnnotation !== undefined && rawAnnotation !== null &&
       (typeof rawAnnotation !== 'string' || !isValidLogicalName(rawAnnotation))) {
     return { status: 'unresolved', reason: 'table-not-allowed' };
@@ -142,11 +142,11 @@ export function resolveRelatedRecord(
 }
 
 /** One source record whose lookup is set: the Form preview's RelatedRecord sample. */
-export function buildRelatedSampleFetchXml(entityName: string, lookupAttribute: string): string {
+export function buildRelatedSampleFetchXml(entityName: string, lookupColumn: string): string {
   // Names are interpolated into XML, so both must be plain logical names.
-  if (!isValidLogicalName(entityName) || !isValidLogicalName(lookupAttribute)) {
+  if (!isValidLogicalName(entityName) || !isValidLogicalName(lookupColumn)) {
     throw new Error('Select a valid source table and lookup column.');
   }
-  return `<fetch top="1"><entity name="${entityName}"><attribute name="${lookupAttribute}"/>` +
-    `<filter><condition attribute="${lookupAttribute}" operator="not-null"/></filter></entity></fetch>`;
+  return `<fetch top="1"><entity name="${entityName}"><attribute name="${lookupColumn}"/>` +
+    `<filter><condition attribute="${lookupColumn}" operator="not-null"/></filter></entity></fetch>`;
 }

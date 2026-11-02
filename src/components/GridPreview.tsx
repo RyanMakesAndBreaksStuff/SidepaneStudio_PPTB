@@ -15,11 +15,11 @@ import { MockGrid } from './MockGrid';
 import type { GridColumn } from '../services/GridViewModel';
 import { getRelatedLookup, resolveGridColumns, resolveRelatedRecord } from '../services/GridViewModel';
 import { usePreviewSessionState } from '../contexts/PreviewSessionContext';
-import { applyRelatedLookup, changeRelatedSource } from '../services/relatedRecordConfig';
+import { applyLookup, changeHostTable } from '../services/relatedRecordConfig';
 import type { LookupAttributeInfo } from '../services/MetadataService';
 import { isValidLogicalName } from '../services/odataGuards';
 
-export function capGridFetchXml(source: string, entityName: string, lookupAttribute = ''): string {
+export function capGridFetchXml(source: string, entityName: string, lookupColumn = ''): string {
   const doc = new DOMParser().parseFromString(source, 'text/xml');
   const fetch = doc.documentElement;
   const entities = Array.from(fetch.children).filter(child => child.tagName === 'entity');
@@ -32,10 +32,10 @@ export function capGridFetchXml(source: string, entityName: string, lookupAttrib
     throw new Error('This view has an invalid FetchXML row limit.');
   }
   // RelatedRecord previews read the lookup value even when the view does not display it.
-  if (lookupAttribute && !Array.from(entities[0].children).some(child => child.tagName === 'all-attributes' ||
-      (child.tagName === 'attribute' && child.getAttribute('name') === lookupAttribute))) {
+  if (lookupColumn && !Array.from(entities[0].children).some(child => child.tagName === 'all-attributes' ||
+      (child.tagName === 'attribute' && child.getAttribute('name') === lookupColumn))) {
     const column = doc.createElement('attribute');
-    column.setAttribute('name', lookupAttribute);
+    column.setAttribute('name', lookupColumn);
     entities[0].appendChild(column);
   }
   for (const attribute of ['page', 'count', 'paging-cookie', 'returntotalrecordcount']) fetch.removeAttribute(attribute);
@@ -48,32 +48,18 @@ interface Props {
   validation: ValidationResult;
   metadataService: MetadataService;
   xrm: Pick<IXrmContext, 'fetchXml'>;
-  entityName: string;
-  allowEntityChange: boolean;
-  onEntityNameChange: (name: string) => void;
   onConfigChange?: (updater: (prev: PaneDefinitionConfig) => PaneDefinitionConfig) => void;
 }
 
 export function GridPreview(props: Props): React.ReactElement {
-  const { config, entityName, allowEntityChange, metadataService, onEntityNameChange, onConfigChange } = props;
+  const { config, metadataService, onConfigChange } = props;
+  const entityName = config.host.entityName;
   const { isDark } = useTheme();
   const T = theme(isDark);
-  const relatedMode = config.context.mode === 'RelatedRecord';
+  const relatedMode = config.context.source.kind === 'lookup';
   const relatedLookup = getRelatedLookup(config);
-  const configured = !relatedMode && config.target.pageType === 'entitylist' && config.target.entityName.trim() === entityName ? config.target : undefined;
   type ViewSelection = { id: string; viewType: '' | 'savedquery' | 'userquery' };
-  const [relatedView, setRelatedView] = usePreviewSessionState<{ entityName: string; selection: ViewSelection }>(
-    'related-grid-view', { entityName, selection: { id: '', viewType: '' } });
-  const [regularSelection, setRegularSelection] = usePreviewSessionState<ViewSelection>(
-    JSON.stringify(['grid-view', entityName, configured?.viewId ?? '', configured?.viewType ?? '']),
-    { id: configured?.viewId ?? '', viewType: configured?.viewType ?? '' });
-  const emptySelection: ViewSelection = { id: '', viewType: '' };
-  const selection: ViewSelection = relatedMode
-    ? (relatedView.entityName === entityName ? relatedView.selection : emptySelection)
-    : regularSelection;
-  const setSelection = relatedMode
-    ? (next: ViewSelection) => setRelatedView({ entityName, selection: next })
-    : setRegularSelection;
+  const selection: ViewSelection = { id: config.host.viewId, viewType: config.host.viewType };
   const [relatedGeneration, setRelatedGeneration] = usePreviewSessionState<number>('related-grid-generation', 0);
   const [resolvedLookupIdentity, setResolvedLookupIdentity] = usePreviewSessionState<{
     service: MetadataService;
@@ -92,19 +78,15 @@ export function GridPreview(props: Props): React.ReactElement {
     if (!relatedMode || relatedContext.key === dependencyKey) return;
     setRelatedContext({ key: dependencyKey, generation: effectiveGeneration });
     setRelatedGeneration(effectiveGeneration);
-    if (relatedView.entityName !== entityName) setRelatedView({ entityName, selection: { id: '', viewType: '' } });
-  }, [relatedMode, relatedContext.key, dependencyKey, effectiveGeneration, relatedView.entityName,
-    entityName, setRelatedContext, setRelatedGeneration, setRelatedView]);
+  }, [relatedMode, relatedContext.key, dependencyKey, effectiveGeneration,
+    setRelatedContext, setRelatedGeneration]);
   const customOnlyState = usePreviewSessionState<boolean>('grid-custom-tables-only', false);
   const resetRelatedPreview = () => setRelatedGeneration(value => value + 1);
   const changeSource = (source: string) => {
-    if (relatedMode) {
-      setResolvedLookup(null);
-      setResolvedLookupIdentity(null);
-      setRelatedView({ entityName: source, selection: { id: '', viewType: '' } });
-      resetRelatedPreview();
-      onConfigChange?.(prev => changeRelatedSource(prev, source));
-    } else onEntityNameChange(source);
+    setResolvedLookup(null);
+    setResolvedLookupIdentity(null);
+    resetRelatedPreview();
+    onConfigChange?.(prev => changeHostTable(prev, source));
   };
   const changeLookup = (lookup: LookupAttributeInfo | undefined, userSelected = false) => {
     if (!relatedMode) return;
@@ -117,17 +99,17 @@ export function GridPreview(props: Props): React.ReactElement {
       (resolvedLookupIdentity.service !== metadataService || resolvedLookupIdentity.identity !== identity);
     setResolvedLookupIdentity({ service: metadataService, identity });
     if (userSelected || identityChanged) resetRelatedPreview();
-    onConfigChange?.(prev => applyRelatedLookup(prev, entityName, lookup));
+    onConfigChange?.(prev => applyLookup(prev, entityName, lookup));
   };
   const clearLookup = () => {
     if (!relatedMode) return;
     setResolvedLookup(null);
     setResolvedLookupIdentity(null);
     resetRelatedPreview();
-    onConfigChange?.(prev => applyRelatedLookup(prev, entityName, null));
+    onConfigChange?.(prev => applyLookup(prev, entityName, null));
   };
   const changeView = (view: ViewSelection) => {
-    setSelection(view);
+    onConfigChange?.(prev => ({ ...prev, host: { ...prev.host, viewId: view.id, viewType: view.viewType } }));
     if (relatedMode) resetRelatedPreview();
   };
   const toViewSelection = (view: ViewInfo | null): ViewSelection => ({
@@ -135,36 +117,26 @@ export function GridPreview(props: Props): React.ReactElement {
     viewType: view?.viewType === 'savedquery' || view?.viewType === 'userquery' ? view.viewType : '',
   });
   return <div style={{ flex: 1, overflow: 'auto', padding: 12, minWidth: 0, color: T.fg1, fontFamily: T.font }}>
-    {relatedMode ? <div role="group" aria-label="Related record source"
+    <div role="group" aria-label="Grid source"
       style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10, marginBottom: 10, color: T.fg2, fontFamily: T.font, fontSize: 12 }}>
-      <div style={{ gridColumn: '1 / -1', fontWeight: 600 }}>Related record source — changes update configuration</div>
+      <div style={{ gridColumn: '1 / -1', fontWeight: 600 }}>Grid source — changes update configuration</div>
       <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>Source table
         <TablePicker ariaLabel="Source table" value={entityName} metadataService={metadataService}
           onChange={changeSource} customOnlyState={customOnlyState} />
       </label>
-      <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>Related record lookup
+      {relatedMode && <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>Lookup column
         <LookupPicker entityName={entityName} value={relatedLookup} metadataService={metadataService}
           onChange={(logicalName, lookup) => lookup ? changeLookup(lookup, true) : !logicalName && clearLookup()}
           onResolvedSelection={changeLookup} onStatusChange={status => setLookupStatus(status)} />
-      </label>
-      <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>Source view
+      </label>}
+      <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>View
         <ViewPicker entityName={entityName} value={selection.id} viewType={selection.viewType}
           metadataService={metadataService} onChange={view => changeView(toViewSelection(view))}
           onStatusChange={status => setViewStatus(status)} />
       </label>
-    </div> : allowEntityChange ? (
-      <div role="group" aria-label="Preview entity"
-        style={{ color: T.fg2, fontFamily: T.font, fontSize: 12 }}>
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>Preview entity
-        <TablePicker ariaLabel="Preview entity" value={entityName} metadataService={metadataService}
-          onChange={changeSource} customOnlyState={customOnlyState} />
-        </label>
-      </div>
-    ) : <p style={{ color: T.fg2, fontFamily: T.font, fontSize: 12 }}>Preview entity: {entityName}</p>}
-    {!relatedMode && <ViewPicker entityName={entityName} value={selection.id} viewType={selection.viewType}
-      metadataService={metadataService} onChange={view => changeView(toViewSelection(view))} />}
+    </div>
     <GridData key={JSON.stringify([entityName, selection.viewType, selection.id, relatedLookup, effectiveGeneration])} {...props}
-      viewId={selection.id} viewType={selection.viewType} relatedLookup={relatedLookup}
+      entityName={entityName} viewId={selection.id} viewType={selection.viewType} relatedLookup={relatedLookup}
       relatedTargets={resolvedLookup?.entityName === entityName && resolvedLookup.lookup.LogicalName === relatedLookup
         ? resolvedLookup.lookup.Targets : undefined}
       relatedGeneration={relatedMode ? effectiveGeneration : 0}
@@ -177,7 +149,7 @@ type State = { status: 'idle' | 'loading' } | { status: 'error'; reason: string 
 
 function GridData({ config, validation, metadataService, xrm, entityName, viewId, viewType, relatedLookup,
   relatedTargets, relatedGeneration, relatedReady }: Props & {
-  viewId: string; viewType: '' | 'savedquery' | 'userquery'; relatedLookup: string;
+  entityName: string; viewId: string; viewType: '' | 'savedquery' | 'userquery'; relatedLookup: string;
   relatedTargets?: string[] | null;
   relatedGeneration: number; relatedReady: boolean;
 }): React.ReactElement {
@@ -191,7 +163,7 @@ function GridData({ config, validation, metadataService, xrm, entityName, viewId
   const [activeRow, setActiveRow] = usePreviewSessionState<number | null>(`${selectionKey}:active`, null);
   const onSelectionChange = (indices: number[]) => {
     setSelectedRows(indices);
-    const onSelect = config.trigger.kind === 'MainGridOnSelect' || config.trigger.kind === 'SubgridOnSelect';
+    const onSelect = config.trigger.kind === 'GridRowSelect';
     setActiveRow(onSelect && indices.length === 1 ? indices[0] : null);
   };
   const request = useRef(0);
