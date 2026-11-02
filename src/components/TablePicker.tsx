@@ -55,7 +55,7 @@ export function TablePicker({
       <TableComboBox
         value={value}
         onChange={onChange}
-        tables={tables}
+        items={tables}
         loading={loading}
         error={loadError}
         invalid={error}

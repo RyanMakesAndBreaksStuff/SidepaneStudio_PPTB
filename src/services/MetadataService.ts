@@ -45,6 +45,11 @@ export interface LookupAttributeInfo extends AttributeLabel {
   Targets?: string[] | null;
 }
 
+/** The user-localized label, trimmed, falling back to the logical name when it is missing or blank. */
+export function displayLabel(info: AttributeLabel): string {
+  return info.DisplayName?.UserLocalizedLabel?.Label?.trim() || info.LogicalName;
+}
+
 export type ViewsForEntityResult =
   | { status: 'ok'; views: ViewInfo[] }
   | { status: 'error'; reason: string };
@@ -155,7 +160,7 @@ export class MetadataService {
         .filter(e => keepEntity(e, this._filterConfig, this._denyExact, this._allowedStandardTables))
         .map(e => ({
           logicalName: e.LogicalName,
-          displayName: e.DisplayName?.UserLocalizedLabel?.Label ?? e.LogicalName,
+          displayName: displayLabel(e),
           objectTypeCode: e.ObjectTypeCode ?? 0,
           isCustomEntity: e.IsCustomEntity === true,
         }))

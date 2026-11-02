@@ -14,8 +14,6 @@ export interface TableComboBoxProps {
   onChange: (logicalName: string) => void;
   /** Items to list — pass [] while loading. */
   items?: ComboItem[];
-  /** Alias retained for existing table callers. */
-  tables?: ComboItem[];
   /** Plural noun used in loading and empty copy. */
   noun?: string;
   loading?: boolean;
@@ -40,7 +38,6 @@ export function TableComboBox({
   value,
   onChange,
   items,
-  tables,
   noun = 'tables',
   loading,
   error,
@@ -65,10 +62,10 @@ export function TableComboBox({
   const rootRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
-  const list = items ?? tables ?? [];
+  const list = items ?? [];
   const singular = noun.replace(/s$/, '');
 
-  // Resolve display label for the current value (may not be in `tables` yet during loading).
+  // Resolve display label for the current value (may not be in the list yet during loading).
   const currentTable = useMemo(
     () => list.find(t => t.logicalName === value),
     [list, value]

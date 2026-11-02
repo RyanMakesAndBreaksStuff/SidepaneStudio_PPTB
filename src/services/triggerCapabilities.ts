@@ -1,5 +1,5 @@
 import {
-  GRID_TRIGGERS, PageType, PaneDefinitionConfig, RECORD_TARGETS, RecordSource, RecordSourceKind, TargetConfig, TriggerKind,
+  PageType, PaneDefinitionConfig, RECORD_TARGETS, RecordSource, RecordSourceKind, TargetConfig, TriggerKind,
 } from '../types/PaneDefinitionConfig';
 
 export type HostPicker = 'form' | 'view' | 'lookup' | 'column' | null;
@@ -101,7 +101,12 @@ export function coerceConfig(config: PaneDefinitionConfig): PaneDefinitionConfig
   return next;
 }
 
-/** True for triggers whose script reads a grid row. */
-export function isGridTrigger(kind: TriggerKind): boolean {
-  return GRID_TRIGGERS.includes(kind);
+/** True when the target opens a blank table record rather than an existing one. */
+export function isCreating(target: TargetConfig): boolean {
+  return target.pageType === 'entityrecord' && target.createNew === true;
+}
+
+/** True when the script resolves a record id for the target: a record target with a source, not creating. */
+export function sendsRecord(config: Pick<PaneDefinitionConfig, 'target' | 'context'>): boolean {
+  return RECORD_TARGETS.includes(config.target.pageType) && config.context.source.kind !== 'none' && !isCreating(config.target);
 }

@@ -3,9 +3,9 @@ import { useState } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { theme } from '../../theme/tokens';
 import type { LookupAttributeInfo } from '../../services/MetadataService';
-import type { PaneDefinitionConfig, PageType, RecordSourceKind, TargetConfig } from '../../types/PaneDefinitionConfig';
+import type { PaneDefinitionConfig, PageType, RecordSource, RecordSourceKind, TargetConfig } from '../../types/PaneDefinitionConfig';
 import { RECORD_TARGETS } from '../../types/PaneDefinitionConfig';
-import { allowedSources, allowedTargets, defaultSource, destinationTable, resetTarget } from '../../services/triggerCapabilities';
+import { allowedSources, allowedTargets, defaultSource, destinationTable, isCreating, resetTarget, sendsRecord } from '../../services/triggerCapabilities';
 import { applyLookup } from '../../services/relatedRecordConfig';
 import { normalizeGuid } from '../../services/odataGuards';
 import type { ConfigurePanelProps } from '../ConfigurePanel';
@@ -60,6 +60,14 @@ function patchTarget<P extends TargetConfig['pageType']>(
   return { ...prev, target: { ...prev.target, ...fields } as TargetConfig };
 }
 
+type SourceFields<K extends RecordSourceKind> = Partial<Omit<Extract<RecordSource, { kind: K }>, 'kind'>>;
+function patchSource<K extends RecordSourceKind>(
+  prev: PaneDefinitionConfig, kind: K, fields: SourceFields<K>,
+): PaneDefinitionConfig {
+  if (prev.context.source.kind !== kind) return prev;
+  return { ...prev, context: { ...prev.context, source: { ...prev.context.source, ...fields } as RecordSource } };
+}
+
 function openDocsLink(event: React.MouseEvent<HTMLAnchorElement>): void {
   const open = window.toolboxAPI?.utils?.openInConnectionBrowser;
   if (!open) return;
@@ -73,8 +81,8 @@ export function DestinationSection({ config, onChange, metadataService, formXmlS
   const T = theme(isDark);
   const { target, trigger, host, context } = config;
   const { source } = context;
-  const creating = target.pageType === 'entityrecord' && target.createNew === true;
-  const sendsRecord = RECORD_TARGETS.includes(target.pageType) && source.kind !== 'none' && !creating;
+  const creating = isCreating(target);
+  const recordTarget = RECORD_TARGETS.includes(target.pageType);
   const [resolvedLookup, setResolvedLookup] = useState<{
     service: typeof metadataService;
     hostTable: string;
@@ -112,7 +120,7 @@ export function DestinationSection({ config, onChange, metadataService, formXmlS
             onChange={value => onChange(prev => patchTarget(prev, 'entityrecord', { createNew: value === 'create' }))} />
         </Field>
       )}
-      {RECORD_TARGETS.includes(target.pageType) && (
+      {recordTarget && (
         <Field label="Record source" error={errors['context.source']}
           hint={allowed.length === 1 ? 'Set by the trigger.' : undefined}>
           <ChoiceGroup name="recordSource"
@@ -124,7 +132,7 @@ export function DestinationSection({ config, onChange, metadataService, formXmlS
             }))} />
         </Field>
       )}
-      {source.kind === 'lookup' && RECORD_TARGETS.includes(target.pageType) && (
+      {source.kind === 'lookup' && recordTarget && (
         <Field label="Lookup column" required hint="Lookup on the trigger table whose value opens in the pane"
           error={errors['context.source.attribute']}>
           <LookupPicker entityName={host.entityName} value={source.attribute} metadataService={metadataService}
@@ -145,31 +153,28 @@ export function DestinationSection({ config, onChange, metadataService, formXmlS
             }} />
         </Field>
       )}
-      {source.kind === 'fixed' && RECORD_TARGETS.includes(target.pageType) && (
+      {source.kind === 'fixed' && recordTarget && (
         <>
           <Field label="Record ID" hint="GUID of the specific record" error={errors['context.source.id']}>
             <div onBlurCapture={event => {
               const normalized = normalizeGuid((event.target as HTMLInputElement).value);
-              if (normalized) onChange(prev => prev.context.source.kind !== 'fixed' ? prev
-                : { ...prev, context: { ...prev.context, source: { ...prev.context.source, id: normalized } } });
+              if (normalized) onChange(prev => patchSource(prev, 'fixed', { id: normalized }));
             }}>
               <Input value={source.id} disabled={readOnly} placeholder="00000000-0000-0000-0000-000000000000"
                 error={!!errors['context.source.id']}
-                onChange={id => onChange(prev => prev.context.source.kind !== 'fixed' ? prev
-                  : { ...prev, context: { ...prev.context, source: { ...prev.context.source, id } } })} />
+                onChange={id => onChange(prev => patchSource(prev, 'fixed', { id }))} />
             </div>
           </Field>
           {target.pageType !== 'entityrecord' && (
             <Field label="Record table" error={errors['context.source.entityName']}>
               <TablePicker ariaLabel="Record table" value={source.entityName} metadataService={metadataService}
                 disabled={readOnly} error={!!errors['context.source.entityName']}
-                onChange={entityName => onChange(prev => prev.context.source.kind !== 'fixed' ? prev
-                  : { ...prev, context: { ...prev.context, source: { ...prev.context.source, entityName } } })} />
+                onChange={entityName => onChange(prev => patchSource(prev, 'fixed', { entityName }))} />
             </Field>
           )}
         </>
       )}
-      {sendsRecord && (
+      {sendsRecord(config) && (
         <Field label="Variable name" hint="Name used for the resolved record ID in generated JavaScript"
           error={errors['context.variableName']}>
           <Input value={context.variableName} disabled={readOnly} placeholder="recordId"
@@ -187,8 +192,8 @@ export function DestinationSection({ config, onChange, metadataService, formXmlS
             {creating || source.kind === 'fixed' ? (
               <TablePicker ariaLabel="Destination table" value={target.entityName} metadataService={metadataService}
                 disabled={readOnly} error={!!errors['target.entityName']} onAccessibleTablesChange={onAccessibleTablesChange}
-                onChange={entityName => onChange(prev => prev.target.pageType !== 'entityrecord' || prev.target.entityName === entityName ? prev
-                  : { ...prev, target: { ...prev.target, entityName, formId: '', tabName: '', data: '' } })} />
+                onChange={entityName => onChange(prev => prev.target.pageType === 'entityrecord' && prev.target.entityName === entityName ? prev
+                  : patchTarget(prev, 'entityrecord', { entityName, formId: '', tabName: '', data: '' }))} />
             ) : (
               <div role="status" aria-live="polite" style={{ color: T.fg2, fontFamily: T.font, fontSize: 13 }}>
                 {relatedTarget
@@ -246,14 +251,12 @@ export function DestinationSection({ config, onChange, metadataService, formXmlS
           <Field label="Destination table" required error={errors['target.entityName']}>
             <TablePicker ariaLabel="Destination table" value={target.entityName} metadataService={metadataService}
               disabled={readOnly} error={!!errors['target.entityName']} onAccessibleTablesChange={onAccessibleTablesChange}
-              onChange={entityName => onChange(prev => prev.target.pageType !== 'entitylist' ? prev
-                : { ...prev, target: { ...prev.target, entityName, viewId: '', viewType: '' } })} />
+              onChange={entityName => onChange(prev => patchTarget(prev, 'entitylist', { entityName, viewId: '', viewType: '' }))} />
           </Field>
           <Field label="View" error={errors['target.viewId'] || errors['target.viewType']}>
             <ViewPicker entityName={target.entityName} value={target.viewId} viewType={target.viewType}
               metadataService={metadataService} disabled={readOnly}
-              onChange={view => onChange(prev => prev.target.pageType !== 'entitylist' ? prev
-                : { ...prev, target: { ...prev.target, viewId: view?.id ?? '', viewType: view?.viewType ?? '' } })} />
+              onChange={view => onChange(prev => patchTarget(prev, 'entitylist', { viewId: view?.id ?? '', viewType: view?.viewType ?? '' }))} />
           </Field>
         </>
       )}

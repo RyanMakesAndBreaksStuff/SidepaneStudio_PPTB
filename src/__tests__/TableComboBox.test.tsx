@@ -58,7 +58,7 @@ function rgb(hex: string): string {
 
 function PickerHarness({ value = '', onChange = vi.fn() }: { value?: string; onChange?: (next: string) => void }) {
   const [customOnly, setCustomOnly] = React.useState(false);
-  return <TableComboBox value={value} onChange={onChange} tables={tables} customOnly={customOnly}
+  return <TableComboBox value={value} onChange={onChange} items={tables} customOnly={customOnly}
     onCustomOnlyChange={setCustomOnly} ariaLabel="Table" />;
 }
 
@@ -108,13 +108,13 @@ describe('TableComboBox', () => {
 
   it('shows the custom-only empty state and resets highlight when query changes', async () => {
     const onCustomOnlyChange = vi.fn();
-    await render(<TableComboBox value="" onChange={vi.fn()} tables={tables.filter(table => !table.isCustomEntity)}
+    await render(<TableComboBox value="" onChange={vi.fn()} items={tables.filter(table => !table.isCustomEntity)}
       customOnly onCustomOnlyChange={onCustomOnlyChange} />);
     const input = combo();
     await focus(input);
     expect(host?.textContent).toContain('No custom tables found');
 
-    await update(<TableComboBox value="" onChange={vi.fn()} tables={tables} onCustomOnlyChange={onCustomOnlyChange} />);
+    await update(<TableComboBox value="" onChange={vi.fn()} items={tables} onCustomOnlyChange={onCustomOnlyChange} />);
     const nextInput = combo();
     await focus(nextInput);
     await key(nextInput, 'ArrowDown');
@@ -125,7 +125,7 @@ describe('TableComboBox', () => {
 
   it('supports ArrowDown, Enter, and Escape', async () => {
     const onChange = vi.fn();
-    await render(<TableComboBox value="" onChange={onChange} tables={tables} ariaLabel="Table" />);
+    await render(<TableComboBox value="" onChange={onChange} items={tables} ariaLabel="Table" />);
     const input = combo();
     await focus(input);
     await key(input, 'ArrowDown');
@@ -160,8 +160,8 @@ describe('TableComboBox', () => {
 
   it('gives each instance unique listbox and option ids and wires aria-controls', async () => {
     await render(<div>
-      <TableComboBox value="" onChange={vi.fn()} tables={tables} ariaLabel="First table" />
-      <TableComboBox value="" onChange={vi.fn()} tables={tables} ariaLabel="Second table" />
+      <TableComboBox value="" onChange={vi.fn()} items={tables} ariaLabel="First table" />
+      <TableComboBox value="" onChange={vi.fn()} items={tables} ariaLabel="Second table" />
     </div>);
     const inputs = [combo(0), combo(1)];
     await focus(inputs[0]);
@@ -177,7 +177,7 @@ describe('TableComboBox', () => {
   });
 
   it('disables the filter during loading, error, and disabled state', async () => {
-    const props = { value: '', onChange: vi.fn(), tables, onCustomOnlyChange: vi.fn() };
+    const props = { value: '', onChange: vi.fn(), items: tables, onCustomOnlyChange: vi.fn() };
     await render(<TableComboBox {...props} loading />);
     expect(host!.querySelector<HTMLButtonElement>('[aria-label="Show custom tables only"]')?.disabled).toBe(true);
     await update(<TableComboBox {...props} error="offline" />);
@@ -187,7 +187,7 @@ describe('TableComboBox', () => {
   });
 
   it('marks validation errors without hiding available table options', async () => {
-    await render(<TableComboBox value="" onChange={vi.fn()} tables={tables} invalid />);
+    await render(<TableComboBox value="" onChange={vi.fn()} items={tables} invalid />);
     const input = combo();
     expect(input.getAttribute('aria-invalid')).toBe('true');
     expect(input.parentElement?.style.borderColor).toBe(rgb(theme(true).error));
@@ -197,7 +197,7 @@ describe('TableComboBox', () => {
 
   it('closes an open popup and blocks keyboard commits when disabled becomes true', async () => {
     const onChange = vi.fn();
-    const props = { value: '', onChange, tables };
+    const props = { value: '', onChange, items: tables };
     await render(<TableComboBox {...props} />);
     const input = combo();
     await focus(input);
@@ -216,7 +216,7 @@ describe('TableComboBox', () => {
     const dark = theme(true);
     const light = theme(false);
     const picker = (isDark: boolean) => <ThemeContext.Provider value={{ isDark }}>
-      <TableComboBox value="" onChange={vi.fn()} tables={tables} />
+      <TableComboBox value="" onChange={vi.fn()} items={tables} />
     </ThemeContext.Provider>;
     await render(picker(true));
     const input = combo();

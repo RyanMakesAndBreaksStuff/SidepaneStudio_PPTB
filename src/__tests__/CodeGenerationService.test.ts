@@ -2,7 +2,8 @@ import { describe, it, expect, vi } from 'vitest';
 import { GENERATED_NAMES, generateBasicScript, generateLibraryScript, namespaceDeclaration, resolveTriggerNames } from '../services/CodeGenerationService';
 import { cfg } from './testHelpers';
 import { TRIGGER_KINDS } from '../services/triggerCapabilities';
-import type { PaneDefinitionConfig, TriggerKind } from '../types/PaneDefinitionConfig';
+import { parseStoredConfig } from '../services/configGuards';
+import type { PaneDefinitionConfig, RecordSource, TargetConfig, TriggerKind } from '../types/PaneDefinitionConfig';
 
 function isValidJS(code: string): boolean {
   try {
@@ -460,29 +461,14 @@ describe('buildNavigateInput — pageType branches', () => {
     expect(code).toContain('pageType: "search"');
     expect(code).not.toContain('searchText');
   });
-
-  it('generateLibraryScript includes dashboardId for dashboard type', () => {
-    const config = cfg({
-      target: { pageType: 'dashboard', dashboardId: 'aaa-bbb-ccc', dashboardName: 'Sales' },
-    });
-    const code = generateLibraryScript(config);
-    expect(code).toContain('dashboardId: "aaa-bbb-ccc"');
-  });
-
-  it('generateLibraryScript includes searchText for search type when non-empty', () => {
-    const config = cfg({
-      target: { pageType: 'search', searchText: 'test query' },
-    });
-    const code = generateLibraryScript(config);
-    expect(code).toContain('searchText: "test query"');
-  });
 });
 
-describe('generateBasicScript — unknown trigger kind fallback', () => {
-  it('unknown kind falls back to generateFormButton (contains __spstudio_pendingPanes)', () => {
-    // Deliberate cast: a stored config may carry a kind this build does not know.
-    const code = generateBasicScript(cfg({ trigger: { kind: 'UnknownKind' as TriggerKind } }));
-    expect(code).toContain('__spstudio_pendingPanes');
+describe('generateBasicScript — exhaustive trigger kinds (IN-004)', () => {
+  it('rejects an unknown stored kind at load, so generation has no fallback for one', () => {
+    const stored = cfg();
+    expect(parseStoredConfig(JSON.stringify({ ...stored, trigger: { ...stored.trigger, kind: 'UnknownKind' } }))).toBeNull();
+    // Deliberate cast: only a caller that bypasses the type can pass this kind.
+    expect(() => generateBasicScript(cfg({ trigger: { kind: 'UnknownKind' as TriggerKind } }))).toThrow('Unsupported trigger kind: UnknownKind');
   });
 });
 
@@ -617,6 +603,29 @@ describe('buildPaneOptions — isSelected and canClose', () => {
     expect(code).not.toContain('canClose: omitted');
   });
 
+  // WR-007 policy: both outputs state canClose once and explicitly. The platform default shows no close button and
+  // SidePaneHelper forwards only a defined canClose, so the Shared Library's old "emit only when false" hid the button.
+  it.each([
+    [{ canClose: true, hideHeader: false }, 'canClose: true'],
+    [{ canClose: false, hideHeader: false }, 'canClose: false'],
+    [{ canClose: true, hideHeader: true }, 'canClose: false'],
+  ])('pane %o emits %s in Basic and Shared Library output', (pane, expected) => {
+    for (const generate of [generateBasicScript, generateLibraryScript]) {
+      const code = generate(cfg({ pane }));
+      expect(code).toContain(expected);
+      expect(code.match(/canClose:/g)).toHaveLength(1);
+    }
+  });
+
+  it.each(['javascript:alert(1)', '../secret.svg', 'https://example.com/a.png', 'sps_/a b.svg'])(
+    'drops unsafe imageSrc %p from both outputs (WR-013)', imageSrc => {
+      for (const generate of [generateBasicScript, generateLibraryScript]) {
+        const code = generate(cfg({ pane: { imageSrc } }));
+        expect(isValidJS(code)).toBe(true);
+        expect(code).not.toContain('imageSrc');
+      }
+    });
+
   it('never emits isResizable — it is not a documented paneOption', () => {
     for (const isResizable of [true, false]) {
       const code = generateBasicScript(cfg({ pane: { isResizable } }));
@@ -717,32 +726,95 @@ describe('generateLibraryScript', () => {
     const code = generateLibraryScript(cfg({ pane: { isResizable: false } }));
     expect(code).not.toContain('isResizable');
   });
+});
 
-  it('entityrecord emits entityId resolved from the record-context matrix', () => {
-    const code = generateLibraryScript(
+describe('Basic and Shared Library emit the same keys (WR-007)', () => {
+  const GUID = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+  /** createPane options; Basic passes them to createPane, the Shared Library to SidePaneHelper.open. */
+  const PANE_KEYS = ['paneId', 'title', 'width', 'canClose', 'isSelected', 'hideHeader', 'alwaysRender', 'keepBadgeOnSelect', 'imageSrc'];
+  /** SidePaneHelper.open options that Basic implements as statements instead. */
+  const BEHAVIOR_KEYS = ['badge', 'reuseExistingPane', 'expandOnOpen', 'closeOthers', 'toggleIfOpen'];
+  const TARGETS: TargetConfig[] = [
+    { pageType: 'custom', name: 'sps_Page' },
+    { pageType: 'entityrecord', entityName: 'account', formId: `{${GUID}}`, tabName: 'details', data: '{"a":1}' },
+    { pageType: 'entityrecord', entityName: 'contact', formId: GUID, tabName: 'details', data: '{"a":1}', createNew: true },
+    { pageType: 'entitylist', entityName: 'account', viewId: GUID, viewType: 'savedquery' },
+    { pageType: 'webresource', name: 'new_page.html' },
+    { pageType: 'dashboard', dashboardId: GUID, dashboardName: 'Sales' },
+    { pageType: 'search', searchText: 'Contoso' },
+    { pageType: 'generative', pageId: `{${GUID}}`, data: '{"a":1}' },
+  ];
+  /** Every record source, each with a trigger that offers it. */
+  const SOURCES: Array<[RecordSource, TriggerKind]> = [
+    [{ kind: 'none' }, 'FormButton'],
+    [{ kind: 'host' }, 'FormButton'],
+    [{ kind: 'selectedRow' }, 'GridButton'],
+    [{ kind: 'clickedTag' }, 'LookupTagClick'],
+    [{ kind: 'fixed', entityName: 'account', id: GUID }, 'ManualJS'],
+    [{ kind: 'lookup', attribute: 'primarycontactid' }, 'FormOnLoad'],
+  ];
+  const cases = TARGETS.flatMap(target => SOURCES
+    // An existing-record form needs a record; Basic throws before navigating without one.
+    .filter(([source]) => !(target.pageType === 'entityrecord' && !target.createNew && source.kind === 'none'))
+    .map(([source, kind]) => [
+      target.pageType === 'entityrecord' && target.createNew ? 'entityrecord (create)' : target.pageType,
+      `${source.kind} source via ${kind}`,
       cfg({
-        target: { pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '' },
-        context: { source: { kind: 'fixed', entityName: 'account', id: '{AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE}' } },
-      })
-    );
-    expect(code).toContain('entityName: "account"');
-    expect(code).toContain('var recordId = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";');
-    expect(code).toContain('entityId: recordId');
-  });
+        pane: { paneId: 'p', imageSrc: 'sps_/icons/pane.svg' },
+        trigger: { kind, namespace: 'TestNs', functionName: 'open' },
+        host: { entityName: 'account', lookupControls: ['parentcustomerid'] },
+        target,
+        context: { source },
+      }),
+    ] as const));
 
-  it('custom page emits recordId when a static record resolves', () => {
-    const code = generateLibraryScript(
-      cfg({
-        context: { source: { kind: 'fixed', entityName: 'account', id: '{AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE}' } },
-      })
-    );
-    expect(code).toContain('var recordId = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";');
-    expect(code).toContain('recordId: recordId');
-  });
+  const form = {
+    data: { entity: { getEntityName: () => 'account', getId: () => '{A1}' } },
+    getAttribute: () => ({ getValue: () => [{ id: '{C1}', entityType: 'account' }] }),
+  };
+  const row = { getId: () => '{B1}', getEntityName: () => 'account' };
+  /** Serves as primaryControl or executionContext for every trigger. */
+  const triggerArg = {
+    ...form,
+    getFormContext: () => form,
+    getEventSource: () => row,
+    getGrid: () => ({ getSelectedRows: () => ({ getLength: () => 1, get: () => ({ getData: () => ({ getEntity: () => row }) }) }) }),
+    getEventArgs: () => ({ preventDefault: vi.fn(), getTagValue: () => ({ id: '{D1}', entityType: 'account' }) }),
+  };
+  const pick = (options: Record<string, unknown>, keep: (key: string) => boolean) =>
+    Object.fromEntries(Object.entries(options).filter(([key]) => keep(key)));
 
-  it('imageSrc is WebResources/-prefixed like the basic script', () => {
-    const code = generateLibraryScript(cfg({ pane: { imageSrc: 'sps_/icons/myicon.svg' } }));
-    expect(code).toContain('imageSrc: "WebResources/sps_/icons/myicon.svg"');
+  async function runBasic(config: PaneDefinitionConfig) {
+    const pane = { navigate: vi.fn().mockResolvedValue(undefined) };
+    const xrm = {
+      App: { sidePanes: { state: 0, getPane: vi.fn(), createPane: vi.fn().mockResolvedValue(pane), getAllPanes: vi.fn().mockReturnValue([]) } },
+      Navigation: { openErrorDialog: vi.fn(), openAlertDialog: vi.fn() },
+    };
+    // ManualJS Basic output runs on evaluation and defines no namespace.
+    const handler = new Function('window', 'Xrm',
+      `${generateBasicScript(config)}\nreturn typeof TestNs === 'undefined' ? undefined : TestNs.open;`)({}, xrm) as ((arg: unknown) => void) | undefined;
+    handler?.(triggerArg);
+    await vi.waitFor(() => expect(pane.navigate).toHaveBeenCalled());
+    expect(xrm.Navigation.openErrorDialog).not.toHaveBeenCalled();
+    return { paneOptions: xrm.App.sidePanes.createPane.mock.calls[0][0], navigateInput: pane.navigate.mock.calls[0][0] };
+  }
+
+  async function runLibrary(config: PaneDefinitionConfig): Promise<Record<string, unknown>> {
+    const open = vi.fn();
+    const handler = new Function('Xrm', 'SidePaneHelper', `${generateLibraryScript(config)}\nreturn TestNs.open;`)(
+      { App: { sidePanes: {} }, Navigation: { openErrorDialog: vi.fn() } }, { open }) as (arg: unknown) => void;
+    handler(triggerArg);
+    await vi.waitFor(() => expect(open).toHaveBeenCalled());
+    return open.mock.calls[0][0];
+  }
+
+  it.each(cases)('%s target, %s', async (_pageType, _source, config) => {
+    const basic = await runBasic(config);
+    const options = await runLibrary(config);
+    const navigation = pick(options, key => !PANE_KEYS.includes(key) && !BEHAVIOR_KEYS.includes(key));
+    expect(Object.keys(navigation).sort()).toEqual(Object.keys(basic.navigateInput).sort());
+    expect(navigation).toEqual(basic.navigateInput);
+    expect(pick(options, key => PANE_KEYS.includes(key))).toEqual(basic.paneOptions);
   });
 });
 
@@ -1313,8 +1385,10 @@ describe('form-event record and pre-fill expressions', () => {
   const LIBRARY_PREFILL = 'createFromEntity: { entityType: executionContext.getFormContext().data.entity.getEntityName(), id: executionContext.getFormContext().data.entity.getId() }';
   const RECORD_NAV = { pageType: 'entityrecord', entityName: 'account', entityId: '{A1}' };
   const PREFILL_NAV = { pageType: 'entityrecord', entityName: 'contact', createFromEntity: { entityType: 'account', id: '{A1}' } };
-  const LIBRARY_RECORD_OPEN = { paneId: 'p', title: 'Related Records', pageType: 'entityrecord', entityName: 'account', entityId: '{A1}' };
-  const LIBRARY_PREFILL_OPEN = { paneId: 'p', title: 'Related Records', pageType: 'entityrecord', entityName: 'contact', createFromEntity: { entityType: 'account', id: '{A1}' } };
+  // width and canClose are explicit, as in Basic createPane (WR-007).
+  const LIBRARY_PANE = { paneId: 'p', title: 'Related Records', width: 480, canClose: true };
+  const LIBRARY_RECORD_OPEN = { ...LIBRARY_PANE, pageType: 'entityrecord', entityName: 'account', entityId: '{A1}' };
+  const LIBRARY_PREFILL_OPEN = { ...LIBRARY_PANE, pageType: 'entityrecord', entityName: 'contact', createFromEntity: { entityType: 'account', id: '{A1}' } };
 
   function occurrences(code: string, needle: string): number {
     return code.split(needle).length - 1;
