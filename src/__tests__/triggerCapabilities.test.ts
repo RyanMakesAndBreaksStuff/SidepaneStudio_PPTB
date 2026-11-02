@@ -61,4 +61,11 @@ describe('coerceConfig', () => {
     expect(destinationTable(next)).toBe('account');
     expect(destinationTable(cfg({ target: record, context: { source: { kind: 'fixed', entityName: '', id: '' } } }))).toBe('contact');
   });
+  it('clears form data when the derived destination replaces a known table, and keeps it on a first derivation', () => {
+    const withData = { ...record, data: '{"firstname":"A"}' };
+    const replaced = coerceConfig(cfg({ host: { entityName: 'account' }, target: withData, context: { source: { kind: 'host' } } }));
+    expect(replaced.target).toEqual({ ...record, entityName: 'account', data: '' });
+    const first = coerceConfig(cfg({ host: { entityName: 'account' }, target: { ...withData, entityName: '' }, context: { source: { kind: 'host' } } }));
+    expect(first.target).toEqual({ ...withData, entityName: 'account' });
+  });
 });

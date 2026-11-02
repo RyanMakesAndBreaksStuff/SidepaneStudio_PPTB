@@ -172,9 +172,8 @@ it('keeps Configure filters independent and clears target dependencies atomicall
   }
   // Pickers render in section order: Trigger table (host), then Destination table.
   await click(filter(1));
-  // v2 clears the table-dependent form and tab but keeps the free-form data payload.
   expect(latest.target).toEqual({ pageType: 'entityrecord', entityName: '',
-    formId: '', tabName: '', data: '{"old":true}' });
+    formId: '', tabName: '', data: '' });
   expect(latest.host.entityName).toBe('account');
   expect(filter(0).getAttribute('aria-pressed')).toBe('false');
   await click(filter(0));
