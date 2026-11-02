@@ -8,7 +8,7 @@ export function changeHostTable(config: PaneDefinitionConfig, entityName: string
   if (config.host.entityName === entityName) return config;
   const source = config.context.source.kind === 'lookup' ? { kind: 'lookup' as const, attribute: '' } : config.context.source;
   const target = config.target.pageType === 'entityrecord' && !config.target.createNew && config.context.source.kind === 'lookup'
-    ? { ...config.target, entityName: '', formId: '', tabName: '' }
+    ? { ...config.target, entityName: '', formId: '', tabName: '', data: '' }
     : config.target;
   return coerceConfig({
     ...config,
@@ -40,6 +40,11 @@ export function applyLookup(config: PaneDefinitionConfig, hostEntity: string, lo
   return {
     ...config,
     context: { ...config.context, source: { kind: 'lookup', attribute } },
-    target: { ...config.target, entityName: destination, ...(shouldClearForm ? { formId: '', tabName: '' } : {}) },
+    target: {
+      ...config.target, entityName: destination,
+      ...(shouldClearForm ? { formId: '', tabName: '' } : {}),
+      // Form data names columns of the previous table; a first resolution keeps it.
+      ...(destinationChanged && config.target.entityName ? { data: '' } : {}),
+    },
   };
 }

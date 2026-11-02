@@ -27,16 +27,24 @@ describe('related record configuration transitions', () => {
     expect(changed).not.toBe(config);
     expect(changed.host.entityName).toBe('contact');
     expect(changed.context.source).toEqual({ kind: 'lookup', attribute: '' });
-    expect(changed.target).toMatchObject({ pageType: 'entityrecord', entityName: '', formId: '', tabName: '' });
-    expect(changed.target.pageType === 'entityrecord' && changed.target.data).toBe('{"name":"keep"}');
+    expect(changed.target).toMatchObject({ pageType: 'entityrecord', entityName: '', formId: '', tabName: '', data: '' });
   });
 
-  it('derives one destination from the lookup and clears incompatible form and tab', () => {
+  it('derives one destination from the lookup and clears incompatible form, tab and form data', () => {
     const changed = applyLookup(relatedConfig(), 'account', {
       LogicalName: 'primarycontactid', Targets: ['contact'],
     });
     expect(changed.context.source).toEqual({ kind: 'lookup', attribute: 'primarycontactid' });
-    expect(changed.target).toMatchObject({ pageType: 'entityrecord', entityName: 'contact', formId: '', tabName: '' });
+    expect(changed.target).toMatchObject({ pageType: 'entityrecord', entityName: 'contact', formId: '', tabName: '', data: '' });
+  });
+
+  it('keeps form data when the lookup first resolves a destination or resolves the same one', () => {
+    const unresolved = cfg({ ...relatedConfig(), target: { pageType: 'entityrecord', entityName: '', formId: '', tabName: '', data: '{"name":"keep"}' } });
+    const first = applyLookup(unresolved, 'account', { LogicalName: 'primarycontactid', Targets: ['contact'] });
+    expect(first.target).toMatchObject({ entityName: 'contact', data: '{"name":"keep"}' });
+    const same = cfg({ ...relatedConfig(), target: { pageType: 'entityrecord', entityName: 'contact', formId: '', tabName: '', data: '{"name":"keep"}' } });
+    const again = applyLookup(same, 'account', { LogicalName: 'primarycontactid', Targets: ['contact'] });
+    expect(again.target).toMatchObject({ entityName: 'contact', data: '{"name":"keep"}' });
   });
 
   it('leaves multi-target destination table unset without choosing the first target', () => {

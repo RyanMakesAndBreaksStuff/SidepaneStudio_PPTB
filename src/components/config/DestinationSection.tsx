@@ -187,8 +187,8 @@ export function DestinationSection({ config, onChange, metadataService, formXmlS
             {creating || source.kind === 'fixed' ? (
               <TablePicker ariaLabel="Destination table" value={target.entityName} metadataService={metadataService}
                 disabled={readOnly} error={!!errors['target.entityName']} onAccessibleTablesChange={onAccessibleTablesChange}
-                onChange={entityName => onChange(prev => prev.target.pageType !== 'entityrecord' ? prev
-                  : { ...prev, target: { ...prev.target, entityName, formId: '', tabName: '' } })} />
+                onChange={entityName => onChange(prev => prev.target.pageType !== 'entityrecord' || prev.target.entityName === entityName ? prev
+                  : { ...prev, target: { ...prev.target, entityName, formId: '', tabName: '', data: '' } })} />
             ) : (
               <div role="status" aria-live="polite" style={{ color: T.fg2, fontFamily: T.font, fontSize: 13 }}>
                 {relatedTarget

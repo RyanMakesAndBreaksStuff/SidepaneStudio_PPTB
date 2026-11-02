@@ -94,7 +94,9 @@ export function coerceConfig(config: PaneDefinitionConfig): PaneDefinitionConfig
   if (next.target.pageType === 'entityrecord' && !next.target.createNew &&
       (next.context.source.kind === 'host' || next.context.source.kind === 'selectedRow') &&
       next.target.entityName !== derived) {
-    next = { ...next, target: { ...next.target, entityName: derived, formId: '', tabName: '' } };
+    // Form data names columns of the previous table; a first derivation keeps data written before the table was known.
+    const data = next.target.entityName ? '' : next.target.data;
+    next = { ...next, target: { ...next.target, entityName: derived, formId: '', tabName: '', data } };
   }
   return next;
 }
