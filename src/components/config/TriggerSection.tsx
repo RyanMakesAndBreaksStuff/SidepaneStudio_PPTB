@@ -88,7 +88,7 @@ export function TriggerSection({ config, onChange, metadataService, readOnly, on
               : { ...prev, host: { ...prev.host, lookupControls } })} />
         </Field>
       )}
-      {caps.family !== 'manual' && (
+      {(
         <>
           <Field label="Function name" error={errors['trigger.functionName']}
             hint={names.ok ? `Full call: ${names.ns}.${names.fn}` : undefined}>

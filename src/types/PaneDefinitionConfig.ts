@@ -35,7 +35,6 @@ export interface PaneConfig {
   hidden: boolean;
   alwaysRender: boolean;
   keepBadgeOnSelect: boolean;
-  isResizable: boolean;
   badgeValue: number;
 }
 
@@ -117,11 +116,10 @@ export const DEFAULT_CONFIG: PaneDefinitionConfig = {
     hidden: false,
     alwaysRender: false,
     keepBadgeOnSelect: false,
-    isResizable: true,
     badgeValue: 0,
   },
-  target: { pageType: 'custom', name: 'sps_SidePaneBuilderPage' },
-  trigger: { kind: 'FormButton', functionName: 'openRelatedRecordsPane', namespace: 'YourNamespace', surface: 'main' },
+  target: { pageType: 'custom', name: '' },
+  trigger: { kind: 'FormButton', functionName: 'openRelatedRecordsPane', namespace: '', surface: 'main' },
   host: { entityName: '', formId: '', viewId: '', viewType: '', attribute: '', lookupControls: [] },
   context: { source: { kind: 'host' }, variableName: 'recordId' },
   behavior: { expandOnOpen: true, closeOthers: false, toggleIfOpen: false, reuseExistingPane: true },

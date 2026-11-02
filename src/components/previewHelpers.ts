@@ -1,8 +1,6 @@
 import { normalizeConfigWidth } from '../services/configGuards';
 import { MAX_CONFIG_WIDTH, MIN_CONFIG_WIDTH } from '../types/PaneDefinitionConfig';
 
-export { MAX_CONFIG_WIDTH, MIN_CONFIG_WIDTH } from '../types/PaneDefinitionConfig';
-
 export interface ComboItem {
   logicalName: string;
   displayName: string;

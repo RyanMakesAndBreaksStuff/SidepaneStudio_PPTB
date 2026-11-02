@@ -154,8 +154,9 @@ describe('ConfigurePanel — trigger section', () => {
     expect(combo('View')).toBeTruthy();
     await clickChip('triggerKind', 'Console');
     expect(combo('Trigger table')).toBeNull();
-    expect(input('openRelatedRecordsPane')).toBeNull();
-    expect(input('Contoso')).toBeNull();
+    // Console names are validated, so the fields must stay editable.
+    expect(input('openRelatedRecordsPane')).toBeTruthy();
+    expect(input('Contoso')).toBeTruthy();
     await clickChip('triggerKind', 'Field change');
     expect(combo('Column')).toBeTruthy();
     await clickChip('triggerKind', 'Lookup tag click');

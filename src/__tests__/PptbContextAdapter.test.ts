@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { RUNTIME_WEB_RESOURCE_SUFFIX } from '../constants';
 import { PptbContextAdapter, type DataverseError } from '../adapters/PptbContextAdapter';
 
 function makeMockDataverseAPI() {
@@ -26,23 +27,33 @@ describe('PptbContextAdapter', () => {
     await expect(new PptbContextAdapter().fetchXml('<fetch/>')).rejects.toBeInstanceOf(Error);
   });
 
-  it('checkWebResourceExists queries Dataverse and returns true when a row exists', async () => {
+  it('checkWebResourceExists matches by name suffix and returns the first deployed name', async () => {
     const api = makeMockDataverseAPI();
-    api.queryData.mockResolvedValue({ value: [{ webresourceid: 'wr-1' }] });
+    api.queryData.mockResolvedValue({ value: [{ name: 'acme_/scripts/sidepane.runtime.js' }] });
     vi.stubGlobal('dataverseAPI', api);
     const adapter = new PptbContextAdapter();
-    expect(await adapter.checkWebResourceExists("sps_/icons/o'brien.svg")).toBe(true);
+    expect(await adapter.checkWebResourceExists(RUNTIME_WEB_RESOURCE_SUFFIX)).toBe('acme_/scripts/sidepane.runtime.js');
     expect(api.queryData).toHaveBeenCalledWith(
-      "webresourceset?$select=webresourceid&$filter=name eq 'sps_/icons/o''brien.svg'&$top=1"
+      "webresourceset?$select=name&$filter=endswith(name,'/scripts/sidepane.runtime.js')&$top=1"
     );
   });
 
-  it('checkWebResourceExists queries Dataverse and returns false when no row exists', async () => {
+  it('checkWebResourceExists escapes single quotes in the suffix', async () => {
+    const api = makeMockDataverseAPI();
+    api.queryData.mockResolvedValue({ value: [] });
+    vi.stubGlobal('dataverseAPI', api);
+    await new PptbContextAdapter().checkWebResourceExists("/o'brien.svg");
+    expect(api.queryData).toHaveBeenCalledWith(
+      "webresourceset?$select=name&$filter=endswith(name,'/o''brien.svg')&$top=1"
+    );
+  });
+
+  it('checkWebResourceExists returns null when no row exists', async () => {
     const api = makeMockDataverseAPI();
     api.queryData.mockResolvedValue({ value: [] });
     vi.stubGlobal('dataverseAPI', api);
     const adapter = new PptbContextAdapter();
-    expect(await adapter.checkWebResourceExists('missing.svg')).toBe(false);
+    expect(await adapter.checkWebResourceExists(RUNTIME_WEB_RESOURCE_SUFFIX)).toBeNull();
   });
 
   it('webApiGet strips /api/data/vN.N/ prefix and unwraps value', async () => {

@@ -14,7 +14,8 @@ export interface FetchXmlResult {
 }
 
 export interface IXrmContext {
-  checkWebResourceExists(name: string): Promise<boolean>;
+  /** Name of the first web resource whose name ends with `suffix`, or null when none exists. */
+  checkWebResourceExists(suffix: string): Promise<string | null>;
   webApiGet<T = unknown>(path: string): Promise<T>;
   webApiGetEntity<T = unknown>(path: string): Promise<T>;
   fetchXml(xml: string): Promise<FetchXmlResult>;
@@ -66,11 +67,12 @@ export class PptbContextAdapter implements IXrmContext {
     }
   }
 
-  async checkWebResourceExists(name: string): Promise<boolean> {
+  async checkWebResourceExists(suffix: string): Promise<string | null> {
     const result = await this.callApi(() => window.dataverseAPI.queryData(
-      `webresourceset?$select=webresourceid&$filter=name eq '${escapeODataStringLiteral(name)}'&$top=1`
+      `webresourceset?$select=name&$filter=endswith(name,'${escapeODataStringLiteral(suffix)}')&$top=1`
     ));
-    return (result.value ?? []).length > 0;
+    const name = result.value?.[0]?.name;
+    return typeof name === 'string' ? name : null;
   }
 
   async webApiGet<T = unknown>(odataPath: string): Promise<T> {

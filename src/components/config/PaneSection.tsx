@@ -2,7 +2,7 @@ import * as React from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { theme } from '../../theme/tokens';
 import type { ConfigurePanelProps } from '../ConfigurePanel';
-import { MIN_CONFIG_WIDTH, MAX_CONFIG_WIDTH } from '../previewHelpers';
+import { MIN_CONFIG_WIDTH, MAX_CONFIG_WIDTH } from '../../types/PaneDefinitionConfig';
 import { Field } from '../Field';
 import { Input } from '../Input';
 import { Toggle } from '../Toggle';

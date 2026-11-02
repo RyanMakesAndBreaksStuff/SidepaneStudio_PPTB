@@ -4,8 +4,9 @@ import { createRoot, Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { OutputPanel } from '../components/OutputPanel';
 import { DEFAULT_CONFIG } from '../types/PaneDefinitionConfig';
-import { xrmStub } from './testHelpers';
+import { cfg, xrmStub } from './testHelpers';
 import runtimeSource from '../runtime/sidepane.runtime.js?raw';
+import { RUNTIME_FILE_NAME } from '../constants';
 import { describeConfigText } from '../services/describeConfig';
 
 let root: Root | undefined;
@@ -78,10 +79,10 @@ describe('runtime download', () => {
   });
 
   it('saves JavaScript through the native dialog', async () => {
-    const saveFile = vi.fn().mockResolvedValue('C:/sidepane.runtime.js');
+    const saveFile = vi.fn().mockResolvedValue(`C:/${RUNTIME_FILE_NAME}`);
     vi.stubGlobal('toolboxAPI', { fileSystem: { saveFile } });
     await clickRuntimeDownload();
-    expect(saveFile).toHaveBeenCalledWith('sidepane.runtime.js', runtimeSource);
+    expect(saveFile).toHaveBeenCalledWith(RUNTIME_FILE_NAME, runtimeSource);
   });
 
   it('respects native cancellation without a browser download', async () => {
@@ -99,7 +100,7 @@ describe('runtime download', () => {
     const revokeObjectURL = vi.fn();
     vi.stubGlobal('URL', { createObjectURL, revokeObjectURL });
     const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
-      expect(this.download).toBe('sidepane.runtime.js');
+      expect(this.download).toBe(RUNTIME_FILE_NAME);
       expect(this.href).toBe('blob:runtime');
       expect(this.isConnected).toBe(true);
     });
@@ -164,6 +165,7 @@ describe('OutputPanel', () => {
       trigger: {
         ...DEFAULT_CONFIG.trigger,
         kind: 'FormOnChange' as const,
+        namespace: 'Contoso',
       },
       host: { ...DEFAULT_CONFIG.host, attribute: 'statuscode' },
     };
@@ -183,7 +185,7 @@ describe('OutputPanel', () => {
 
   it('shows prerequisite warning when shared runtime is confirmed missing', async () => {
     const xrm = xrmStub();
-    xrm.checkWebResourceExists = vi.fn().mockResolvedValue(false);
+    xrm.checkWebResourceExists = vi.fn().mockResolvedValue(null);
 
     await render(
       <OutputPanel
@@ -241,7 +243,7 @@ describe('OutputPanel', () => {
 
   it('withholds the library-tab code block Copy affordance when validation has blocking errors', async () => {
     const xrm = xrmStub();
-    xrm.checkWebResourceExists = vi.fn().mockResolvedValue(true);
+    xrm.checkWebResourceExists = vi.fn().mockResolvedValue('acme_/scripts/sidepane.runtime.js');
 
     await render(
       <OutputPanel
@@ -279,7 +281,7 @@ describe('OutputPanel', () => {
   it('does not gate Copy on warnings alone (warnings are advisory, not blocking)', async () => {
     await render(
       <OutputPanel
-        config={DEFAULT_CONFIG}
+        config={cfg()}
         xrm={xrmStub()}
         validation={{
           isValid: true,
