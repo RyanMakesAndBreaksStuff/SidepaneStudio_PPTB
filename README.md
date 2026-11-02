@@ -27,25 +27,29 @@ Table-record targets support a form, tab, and JSON form data, and can open a
 blank form in create mode, optionally pre-filled from the triggering record.
 Table-list targets support system and personal views. Generative-page targets
 take a page ID and optional JSON page data. Metadata pickers include custom
-table quick filters, and record context can come from the current record,
-a selected row, a static record ID, a related record, or a clicked lookup tag.
+table quick filters. Record sources are the form record, selected row, clicked
+tag, lookup record, specific record, or no record.
 
 ## Preview and Generate
 
 - **Mock** previews pane layout and presentation.
-- **Form** uses connected table metadata and form XML.
+- **Form** uses the configured trigger table and form with connected metadata.
 - **Grid** uses a selected Dataverse view, its column order and display labels,
   and up to 10 records. Checkbox selection and **Preview command** let you
   try the configured interaction. Grid state survives workbench navigation
-  within the current session.
+  within the current session; table and view changes update the configured host.
 - **Basic Script** generates self-contained JavaScript.
 - **Shared Library** generates a handler that calls `SidePaneHelper`. Download
   the runtime from the Output panel, publish it as
   `spstudio_/scripts/sidepane.runtime.js`, and load it before the handler.
 - **Command Steps** provides deployment and trigger-wiring instructions.
 
-Triggers include form load, form/grid/subgrid command buttons, grid/subgrid
-row selection, field change, lookup tag click, and console/manual execution.
+The Configure panel reads the configuration as a sentence above **Trigger &
+source**, **Destination**, and **Pane & behaviour**. It offers seven triggers:
+Form on load, Form button, Field change, Lookup tag click, Grid button, Grid
+row select, and Console. Grid triggers have a Main grid / Subgrid choice.
+Content and record choices follow the selected trigger; Grid preview appears
+only for grid triggers.
 Validation blocks copying invalid configurations. Clipboard failures provide
 a manual-copy fallback.
 
@@ -77,7 +81,7 @@ The [user instruction manual](documentation/user-manual.md) starts with an
 installed tool and covers configuration, deployment, and troubleshooting.
 For installation and source builds, see [How-To-Build.md](How-To-Build.md).
 
-See [Change-Log.md](Change-Log.md) for the `v1.3.1` change summary.
+See [Change-Log.md](Change-Log.md) for the `v1.4.0` change summary.
 
 ## Requirements
 
