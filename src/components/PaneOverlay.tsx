@@ -3,18 +3,7 @@ import { PageType, PaneConfig, TargetConfig } from '../types/PaneDefinitionConfi
 import { ValidationResult } from '../services/ValidationService';
 import type { PreviewRecord } from '../services/GridViewModel';
 import { getPreviewPaneWidth, getSafePreviewImageSrc } from './previewHelpers';
-
-// Fluent Light tokens — hardcoded, isolated from app theme (same invariant as MockMDAShell)
-const FL = {
-  headerBg: '#0078D4',
-  headerFg: '#FFFFFF',
-  paneBg: '#FFFFFF',
-  fg: '#323130',
-  strokeStrong: '#D2D0CE',
-  fgMuted: '#605E5C',
-  stroke: '#EDEBE9',
-  font: "'Segoe UI', system-ui, sans-serif",
-};
+import { FL } from './flTokens';
 
 interface PaneOverlayProps {
   pane: PaneConfig;
@@ -239,13 +228,14 @@ export const PaneOverlay = React.memo(function PaneOverlay({
   const wrapperStyle: React.CSSProperties = stacked
     ? {
         width: '100%',
+        marginTop: 10,
         maxHeight: 220,
         display: 'flex',
         flexDirection: 'column',
         border: `1px solid ${FL.stroke}`,
         borderRadius: 6,
-        background: FL.paneBg,
-        fontFamily: FL.font,
+        background: FL.surface,
+        fontFamily: FL.paneFont,
         overflow: 'hidden',
       }
     : {
@@ -256,8 +246,8 @@ export const PaneOverlay = React.memo(function PaneOverlay({
         display: 'flex',
         flexDirection: 'column',
         borderLeft: `1px solid ${FL.stroke}`,
-        background: FL.paneBg,
-        fontFamily: FL.font,
+        background: FL.surface,
+        fontFamily: FL.paneFont,
         overflow: 'hidden',
       };
 
@@ -268,8 +258,8 @@ export const PaneOverlay = React.memo(function PaneOverlay({
         <div
           style={{
             height: 32,
-            background: FL.headerBg,
-            color: FL.headerFg,
+            background: FL.brand,
+            color: FL.surface,
             display: 'flex',
             alignItems: 'center',
             padding: '0 8px',
@@ -298,24 +288,24 @@ export const PaneOverlay = React.memo(function PaneOverlay({
         </div>
         {(target.pageType === 'entityrecord' || target.pageType === 'entitylist') &&
           (target.entityName || (target.pageType === 'entityrecord' && record?.entityName)) && (
-          <div style={{ fontSize: 12, color: FL.fg, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <div style={{ fontSize: 12, color: FL.fg2, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {target.pageType === 'entityrecord' && target.createNew
               ? `New ${target.entityName}`
               : target.pageType === 'entityrecord' && record?.entityName ? record.entityName : target.entityName}
           </div>
         )}
         {target.pageType === 'dashboard' && target.dashboardName && (
-          <div style={{ fontSize: 12, color: FL.fg, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <div style={{ fontSize: 12, color: FL.fg2, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {target.dashboardName}
           </div>
         )}
         {target.pageType === 'search' && target.searchText && (
-          <div style={{ fontSize: 12, color: FL.fg, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <div style={{ fontSize: 12, color: FL.fg2, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             Search: {target.searchText}
           </div>
         )}
         {target.pageType === 'generative' && target.pageId.trim() && (
-          <div title={target.pageId} style={{ fontSize: 12, color: FL.fg, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <div title={target.pageId} style={{ fontSize: 12, color: FL.fg2, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             …{target.pageId.trim().slice(-8)}
           </div>
         )}

@@ -2,7 +2,7 @@ import { PaneDefinitionConfig, COMMAND_TRIGGERS, MAX_CONFIG_WIDTH, MIN_CONFIG_WI
 import { isValidLogicalName, normalizeGuid } from './odataGuards';
 import { parseFormData } from './formData';
 import { isConfigWidthValid, isJsIdentifier } from './configGuards';
-import { GENERATED_NAMES } from './CodeGenerationService';
+import { GENERATED_NAMES, resolveTriggerNames } from './CodeGenerationService';
 import { allowedSources, allowedTargets, TRIGGER_CAPABILITIES } from './triggerCapabilities';
 
 export interface ValidationError { field: string; message: string; }
@@ -108,6 +108,9 @@ export function validate(config: PaneDefinitionConfig, accessibleTables?: Set<st
     if (!COMMAND_TRIGGERS.includes(trigger.kind)) errors.push({ field: 'behavior.toggleIfOpen', message: 'Close if already open works only for command bar buttons. Any other trigger would close its own pane when it fires again.' });
     else if (pane.hideHeader || !pane.canClose) warnings.push({ field: 'behavior.toggleIfOpen', message: 'This pane has no close button, so the command button is the only way to close it.' });
   }
+  // Trigger names — CR-001: the same resolver the generators use, so no script is emitted under a name the UI did not show.
+  const triggerNames = resolveTriggerNames(config);
+  if (!triggerNames.ok) errors.push(...triggerNames.errors);
   const specialCharPattern = /['"\\]/;
   for (const sf of [
     { value: pane.paneId, field: 'pane.paneId', label: 'Pane ID' },

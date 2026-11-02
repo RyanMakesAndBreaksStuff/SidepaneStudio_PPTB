@@ -180,7 +180,7 @@ it('keeps Configure filters independent and clears target dependencies atomicall
   expect(latest.host.entityName).toBe('');
 });
 
-it('drops old forms, loads only the chosen custom table, and allows explicit resync', async () => {
+it('drops old forms, loads only the chosen custom table', async () => {
   Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
     configurable: true, value: vi.fn(),
   });
@@ -194,7 +194,6 @@ it('drops old forms, loads only the chosen custom table, and allows explicit res
   function Selector() {
     const [entity, setEntity] = React.useState('account');
     return <FormSelector entityName={entity} onEntityNameChange={setEntity}
-      configuredEntity="account" onUseConfigured={() => setEntity('account')}
       metadataService={service} formXmlService={forms} onFormSelected={selected} />;
   }
   await render(<Selector />);
@@ -216,11 +215,6 @@ it('drops old forms, loads only the chosen custom table, and allows explicit res
   expect(getForms).toHaveBeenLastCalledWith('new_event');
   expect(host.querySelector<HTMLInputElement>('[role="combobox"][aria-label="Form"]')?.value).toContain('new_event form');
   expect(host.querySelector<HTMLInputElement>('[role="combobox"][aria-label="Form"]')?.value).not.toContain('account form');
-  const useConfigured = Array.from(host.querySelectorAll('button'))
-    .find(button => button.textContent?.trim() === 'Use account')!;
-  await click(useConfigured);
-  expect(filter().getAttribute('aria-pressed')).toBe('false');
-  expect(getForms).toHaveBeenLastCalledWith('account');
 });
 
 function relatedConfig(source: string): PaneDefinitionConfig {

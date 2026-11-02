@@ -3,7 +3,9 @@ import { createRoot, Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CodeBlock } from '../components/CodeBlock';
 import { CommandStepsTab } from '../components/CommandStepsTab';
-import { DEFAULT_CONFIG } from '../types/PaneDefinitionConfig';
+import { DEFAULT_CONFIG, PaneDefinitionConfig, TriggerKind } from '../types/PaneDefinitionConfig';
+import { generateBasicScript, generateLibraryScript } from '../services/CodeGenerationService';
+import { validate } from '../services/ValidationService';
 
 let root: Root;
 let host: HTMLDivElement;
@@ -131,5 +133,43 @@ describe.each(['code', 'function'] as const)('%s clipboard', kind => {
     expect(host.querySelector('textarea')).toBeNull();
     expect(errors).toEqual([]);
     if (kind === 'code') expect(host.textContent).toContain('Copied!');
+  });
+});
+
+describe('copied function name matches the generated scripts (CR-001)', () => {
+  const named = (kind: TriggerKind, namespace: string): PaneDefinitionConfig => ({
+    ...DEFAULT_CONFIG,
+    trigger: { ...DEFAULT_CONFIG.trigger, kind, namespace, functionName: 'openPane' },
+    host: { ...DEFAULT_CONFIG.host, entityName: 'account', lookupControls: ['parentaccountid'] },
+  });
+  const copyButton = () => Array.from(host.querySelectorAll('button')).find(item => item.textContent?.includes('Copy'));
+
+  it.each([
+    ['FormOnLoad', 'Contoso.Panes.openPane'],
+    ['FormButton', 'Contoso.Panes.openPane'],
+    ['GridButton', 'Contoso.Panes.openPane'],
+    ['LookupTagClick', 'Contoso.Panes.registerOpenPane'],
+  ] as const)('%s copies %s, which both scripts define', async (kind, expected) => {
+    const copyToClipboard = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('toolboxAPI', { utils: { copyToClipboard } });
+    const config = named(kind, 'Contoso.Panes');
+    await act(async () => { root.render(<CommandStepsTab config={config} />); });
+    await act(async () => { copyButton()!.click(); });
+
+    expect(copyToClipboard).toHaveBeenCalledWith(expected);
+    const copied = copyToClipboard.mock.calls[0][0] as string;
+    for (const code of [generateBasicScript(config), generateLibraryScript(config)]) {
+      expect(code).toContain(`${copied} = `);
+      expect(typeof new Function('window', 'Xrm', `${code}\nreturn ${copied};`)({}, {})).toBe('function');
+    }
+  });
+
+  it.each(['Contoso Panes', '', 'class'])('shows the validation message and no Copy button for namespace %p', async namespace => {
+    const config = named('FormButton', namespace);
+    await act(async () => { root.render(<CommandStepsTab config={config} />); });
+    const message = validate(config).errors.find(error => error.field === 'trigger.namespace')?.message;
+    expect(message).toBeDefined();
+    expect(host.querySelector('[role="alert"]')?.textContent).toBe(message);
+    expect(copyButton()).toBeUndefined();
   });
 });

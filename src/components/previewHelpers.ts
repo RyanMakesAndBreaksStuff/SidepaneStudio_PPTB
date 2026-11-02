@@ -12,23 +12,19 @@ export interface ComboItem {
 
 export interface FilteredEntry<T extends ComboItem = ComboItem> {
   table: T;
-  matchedOn: 'display' | 'logical' | 'both';
 }
 
 export function filterTables<T extends ComboItem>(tables: T[], query: string): FilteredEntry<T>[] {
   const q = query.trim().toLowerCase();
   if (!q) {
-    return tables.map(t => ({ table: t, matchedOn: 'display' as const }));
+    return tables.map(t => ({ table: t }));
   }
   const out: FilteredEntry<T>[] = [];
   for (const t of tables) {
     const inDisplay = t.displayName.toLowerCase().includes(q);
     const inLogical = t.logicalName.toLowerCase().includes(q);
     if (!inDisplay && !inLogical) continue;
-    out.push({
-      table: t,
-      matchedOn: inDisplay && inLogical ? 'both' : inDisplay ? 'display' : 'logical',
-    });
+    out.push({ table: t });
   }
   out.sort((a, b) => {
     const ap = a.table.displayName.toLowerCase().startsWith(q) || a.table.logicalName.toLowerCase().startsWith(q);
@@ -61,22 +57,16 @@ export function getPreviewPaneWidth(configWidth: number): number {
   );
 }
 
+const SAFE_RELATIVE_IMAGE_PATH = /^[A-Za-z0-9_\-./]+$/;
+
+export function isSafeRelativeImagePath(value: string): boolean {
+  if (!SAFE_RELATIVE_IMAGE_PATH.test(value) || value.includes(':')) return false;
+  return !value.split('/').includes('..');
+}
+
 export function getSafePreviewImageSrc(imageSrc: string): string | null {
   const trimmed = imageSrc.trim();
-  if (!trimmed) return null;
-
-  const lower = trimmed.toLowerCase();
-  if (
-    lower.startsWith('http:') ||
-    lower.startsWith('https:') ||
-    lower.startsWith('//') ||
-    lower.startsWith('data:') ||
-    lower.startsWith('javascript:')
-  ) {
-    return null;
-  }
-
-  return trimmed;
+  return isSafeRelativeImagePath(trimmed) && !trimmed.startsWith('//') ? trimmed : null;
 }
 
 export function escapeHtml(str: string): string {

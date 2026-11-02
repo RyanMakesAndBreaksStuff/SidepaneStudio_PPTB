@@ -57,6 +57,10 @@ export function DashboardPicker({
   }, [metadataService]);
 
   const handleChange = useCallback((id: string) => {
+    if (id === '') {
+      onChange('', '');
+      return;
+    }
     if (loadState.status !== 'loaded') return;
     const found = loadState.dashboards.find(d => d.id === id);
     if (found) onChange(found.id, found.name);

@@ -1,31 +1,27 @@
 // src/components/Section.tsx
 import * as React from 'react';
-import { useState } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 import { theme } from '../theme/tokens';
 
 export interface SectionProps {
   title: string;
   icon?: string;
-  defaultOpen?: boolean;
-  open?: boolean;
-  onOpenChange?: (open: boolean) => void;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   children: React.ReactNode;
 }
 
-export function Section({ title, icon, defaultOpen = false, open, onOpenChange, children }: SectionProps): React.ReactElement {
+export function Section({ title, icon, open, onOpenChange, children }: SectionProps): React.ReactElement {
   const { isDark } = useTheme();
   const T = theme(isDark);
-  const [localOpen, setLocalOpen] = useState(defaultOpen);
-  const isOpen = open ?? localOpen;
-  const toggle = () => (onOpenChange ?? setLocalOpen)(!isOpen);
+  const toggle = () => onOpenChange(!open);
 
   return (
     <div style={{ borderBottom: `1px solid ${T.stroke1}` }}>
       <button
         type="button"
         onClick={toggle}
-        aria-expanded={isOpen}
+        aria-expanded={open}
         style={{
           display: 'flex', alignItems: 'center', gap: 8,
           width: '100%', textAlign: 'left', border: 'none',
@@ -41,12 +37,12 @@ export function Section({ title, icon, defaultOpen = false, open, onOpenChange, 
         {title}
         <span style={{
           marginLeft: 'auto', color: T.fg3, fontSize: 11,
-          transform: isOpen ? 'rotate(0deg)' : 'rotate(-90deg)',
+          transform: open ? 'rotate(0deg)' : 'rotate(-90deg)',
           transition: 'transform 180ms cubic-bezier(.4,0,.2,1)',
           display: 'inline-block',
         }}>▾</span>
       </button>
-      {isOpen && (
+      {open && (
         <div style={{ padding: '10px 14px 14px', display: 'flex', flexDirection: 'column', gap: 12 }}>
           {children}
         </div>

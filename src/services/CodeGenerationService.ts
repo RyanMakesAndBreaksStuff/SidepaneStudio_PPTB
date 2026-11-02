@@ -31,11 +31,51 @@ function normalizeImageSrc(value: string): string {
   return trimmed.startsWith('WebResources/') ? trimmed : `WebResources/${trimmed}`;
 }
 
-function getSafeTriggerNames(config: PaneDefinitionConfig): { ns: string; fn: string } {
-  return {
-    ns: safeIdentifier(config.trigger.namespace || '', 'MyNamespace'),
-    fn: safeIdentifier(config.trigger.functionName || '', 'openPane'),
-  };
+export interface TriggerNameError { field: 'trigger.namespace' | 'trigger.functionName'; message: string; }
+export type TriggerNames =
+  | { ok: true; segments: string[]; ns: string; fn: string }
+  | { ok: false; errors: TriggerNameError[] };
+type ResolvedTriggerNames = Extract<TriggerNames, { ok: true }>;
+
+/** Emitted in place of a script when the trigger names are invalid; validation reports the reason. */
+const INVALID_NAMES_SCRIPT = '// Fix the trigger namespace and function name errors to generate this script.';
+
+/**
+ * CR-001 — the one source of the names the scripts define and the UI shows. A dotted namespace is split into
+ * segments; an invalid name is an error, never replaced by a fallback. At most one error per field.
+ */
+export function resolveTriggerNames(config: PaneDefinitionConfig): TriggerNames {
+  const errors: TriggerNameError[] = [];
+  const namespace = (config.trigger.namespace || '').trim();
+  const segments = namespace.split('.').map(segment => segment.trim());
+  const fn = (config.trigger.functionName || '').trim();
+  const reservedSegment = segments.find(segment => GENERATED_NAMES.has(segment));
+
+  if (!namespace) errors.push({ field: 'trigger.namespace', message: 'Namespace is required.' });
+  else if (!segments.every(isJsIdentifier)) {
+    errors.push({ field: 'trigger.namespace', message: 'Namespace must be JavaScript identifiers separated by dots, such as Contoso.Panes. Reserved words are not allowed.' });
+  } else if (reservedSegment) {
+    errors.push({ field: 'trigger.namespace', message: `${reservedSegment} is used by the generated script. Choose another namespace.` });
+  }
+
+  if (!fn) errors.push({ field: 'trigger.functionName', message: 'Function name is required.' });
+  else if (!isJsIdentifier(fn)) {
+    errors.push({ field: 'trigger.functionName', message: 'Function name must be a valid JavaScript identifier. Reserved words are not allowed.' });
+  } else if (GENERATED_NAMES.has(fn)) {
+    errors.push({ field: 'trigger.functionName', message: `${fn} is used by the generated script. Choose another function name.` });
+  }
+
+  return errors.length > 0 ? { ok: false, errors } : { ok: true, segments, ns: segments.join('.'), fn };
+}
+
+/** One line per segment: `var A = A || {};` then `A.B = A.B || {};`, so each level exists before the next is assigned. */
+export function namespaceDeclaration(segments: readonly string[]): string {
+  return segments
+    .map((_, index) => {
+      const path = segments.slice(0, index + 1).join('.');
+      return `${index === 0 ? 'var ' : ''}${path} = ${path} || {};`;
+    })
+    .join('\n');
 }
 
 /** WR-005 — every generated catch both logs and tells the user. */
@@ -346,11 +386,10 @@ function buildGetOrCreateBody(config: PaneDefinitionConfig, indent = '  '): stri
   return `${availabilityGuard}${buildToggleIfOpen(config, indent)}${buildRelatedRecordPreamble(config, indent)}${declared.line}${reuseCheck}${createBody}${behavior.reuseExistingPane ? `${indent}}\n` : ''}${closeOthersBlock}`;
 }
 
-function generateFormOnLoad(config: PaneDefinitionConfig): string {
-  const { ns, fn } = getSafeTriggerNames(config);
+function generateFormOnLoad(config: PaneDefinitionConfig, { segments, ns, fn }: ResolvedTriggerNames): string {
   const body = buildGetOrCreateBody(config, '  ');
 
-  return `var ${ns} = ${ns} || {};
+  return `${namespaceDeclaration(segments)}
 ${ns}.${fn} = async function(executionContext) {
   var formContext = executionContext.getFormContext();
   try {
@@ -366,12 +405,11 @@ ${body
 };`;
 }
 
-function generateFormButton(config: PaneDefinitionConfig): string {
-  const { ns, fn } = getSafeTriggerNames(config);
+function generateFormButton(config: PaneDefinitionConfig, { segments, ns, fn }: ResolvedTriggerNames): string {
   const body = buildGetOrCreateBody(config, '    ');
   const paneIdJson = JSON.stringify(config.pane.paneId);
 
-  return `var ${ns} = ${ns} || {};
+  return `${namespaceDeclaration(segments)}
 ${PENDING_VAR} = ${PENDING_VAR} || {};
 ${ns}.${fn} = function(primaryControl) {
   // primaryControl is captured at invocation time; assumed stable for command bar actions.
@@ -392,8 +430,7 @@ ${body
 };`;
 }
 
-function generateGridButtonScript(config: PaneDefinitionConfig): string {
-  const { ns, fn } = getSafeTriggerNames(config);
+function generateGridButtonScript(config: PaneDefinitionConfig, { segments, ns, fn }: ResolvedTriggerNames): string {
   const body = buildGetOrCreateBody(config, '    ');
   const paneIdJson = JSON.stringify(config.pane.paneId);
   const onSelect = GRID_SELECT_KINDS.includes(config.trigger.kind);
@@ -404,7 +441,7 @@ function generateGridButtonScript(config: PaneDefinitionConfig): string {
     ? `  var selectedEntity = executionContext.getEventSource();\n  var selectedRecordId = selectedEntity.getId();\n`
     : `  var selectedRows = primaryControl.getGrid().getSelectedRows();\n  if (!selectedRows || selectedRows.getLength() === 0) { return; }\n  var selectedEntity = selectedRows.get(0).getData().getEntity();\n  var selectedRecordId = selectedEntity.getId();\n`;
 
-  return `var ${ns} = ${ns} || {};
+  return `${namespaceDeclaration(segments)}
 ${PENDING_VAR} = ${PENDING_VAR} || {};
 ${ns}.${fn} = function(${arg}) {
 ${rowPreamble}  if (${PENDING_VAR}[${paneIdJson}] && (Date.now() - ${PENDING_VAR}[${paneIdJson}]) < ${PENDING_TTL_MS}) return;
@@ -424,8 +461,7 @@ ${body
 };`;
 }
 
-function generateManualJS(config: PaneDefinitionConfig): string {
-  const { fn } = getSafeTriggerNames(config);
+function generateManualJS(config: PaneDefinitionConfig, { fn }: ResolvedTriggerNames): string {
   const body = buildGetOrCreateBody(config, '  ');
 
   return `async function ${fn}() {
@@ -441,14 +477,13 @@ ${body
 ${fn}().catch(console.error);`;
 }
 
-function generateFormOnChange(config: PaneDefinitionConfig): string {
+function generateFormOnChange(config: PaneDefinitionConfig, { segments, ns, fn }: ResolvedTriggerNames): string {
   const { pane } = config;
-  const { ns, fn } = getSafeTriggerNames(config);
   const field = config.host.attribute || '';
   const timerVar = `__spstudio_tmr_${pane.paneId.replace(/[^a-zA-Z0-9_]/g, '_')}`;
   const body = buildGetOrCreateBody(config, '    ');
 
-  return `var ${ns} = ${ns} || {};
+  return `${namespaceDeclaration(segments)}
 var ${timerVar};
 ${ns}.${fn} = function(executionContext) {
   // Wire in OnLoad: formContext.getAttribute(${JSON.stringify(field)}).addOnChange(${ns}.${fn});
@@ -469,10 +504,9 @@ ${body
 };`;
 }
 
-function generateLookupTagClick(config: PaneDefinitionConfig): string {
-  const { ns, fn } = getSafeTriggerNames(config);
+function generateLookupTagClick(config: PaneDefinitionConfig, { segments, ns, fn }: ResolvedTriggerNames): string {
   const body = buildGetOrCreateBody(config, '  ');
-  return `var ${ns} = ${ns} || {};
+  return `${namespaceDeclaration(segments)}
 ${ns}.${fn} = async function(executionContext) {
 ${buildAvailabilityGuard(config, '  ')}  var eventArgs = executionContext.getEventArgs();
   eventArgs.preventDefault();
@@ -487,30 +521,33 @@ ${body.split('\n').map(line => '  ' + line).join('\n')}
 }
 
 export function generateBasicScript(config: PaneDefinitionConfig): string {
+  const names = resolveTriggerNames(config);
+  if (!names.ok) return INVALID_NAMES_SCRIPT;
   switch (config.trigger.kind) {
     case 'FormOnLoad':
-      return generateFormOnLoad(config);
+      return generateFormOnLoad(config, names);
     case 'FormButton':
-      return generateFormButton(config);
+      return generateFormButton(config, names);
     case 'GridButton':
     case 'GridRowSelect':
-      return generateGridButtonScript(config);
+      return generateGridButtonScript(config, names);
     case 'ManualJS':
-      return generateManualJS(config);
+      return generateManualJS(config, names);
     case 'FormOnChange':
-      return generateFormOnChange(config);
+      return generateFormOnChange(config, names);
     case 'LookupTagClick':
-      return generateLookupTagClick(config);
+      return generateLookupTagClick(config, names);
     default:
-      return generateFormButton(config);
+      return generateFormButton(config, names);
   }
 }
 
 export function generateLibraryScript(config: PaneDefinitionConfig): string {
   const { pane, trigger, target, behavior } = config;
+  const names = resolveTriggerNames(config);
+  if (!names.ok) return INVALID_NAMES_SCRIPT;
+  const { segments, ns, fn } = names;
   const width = normalizeConfigWidth(pane.width);
-  const ns = safeIdentifier(trigger.namespace || '', 'MyOrg');
-  const fn = safeIdentifier(trigger.functionName || '', 'openPane');
   const formContextExpr = trigger.kind === 'FormOnLoad' || trigger.kind === 'FormOnChange'
     ? 'executionContext.getFormContext()'
     : 'formContext';
@@ -602,7 +639,7 @@ export function generateLibraryScript(config: PaneDefinitionConfig): string {
       `    } catch(e) {\n${buildCatchBody(`${ns}.${fn}`, '      ')}\n    }\n  })();\n`
     : `${declared.line}${openCall}`;
 
-  return `var ${ns} = ${ns} || {};
+  return `${namespaceDeclaration(segments)}
 ${ns}.${fn} = function(${param}) {
 ${lookupPreamble}${gridContext}${body}};${lookupRegistration}`;
 }

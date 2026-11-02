@@ -13,35 +13,11 @@ import { LookupPicker } from './LookupPicker';
 import { NativeMdaFrame } from './NativeMdaFrame';
 import { MockGrid } from './MockGrid';
 import type { GridColumn } from '../services/GridViewModel';
-import { getRelatedLookup, resolveGridColumns, resolveRelatedRecord } from '../services/GridViewModel';
+import { capGridFetchXml, getRelatedLookup, parseGridFetch, resolveGridColumns, resolveRelatedRecord } from '../services/GridViewModel';
 import { usePreviewSessionState } from '../contexts/PreviewSessionContext';
 import { applyLookup, changeHostTable } from '../services/relatedRecordConfig';
 import type { LookupAttributeInfo } from '../services/MetadataService';
 import { isValidLogicalName } from '../services/odataGuards';
-
-export function capGridFetchXml(source: string, entityName: string, lookupColumn = ''): string {
-  const doc = new DOMParser().parseFromString(source, 'text/xml');
-  const fetch = doc.documentElement;
-  const entities = Array.from(fetch.children).filter(child => child.tagName === 'entity');
-  if (doc.doctype || doc.querySelector('parsererror') || fetch.tagName !== 'fetch' ||
-      entities.length !== 1 || entities[0].getAttribute('name') !== entityName) {
-    throw new Error('This view does not contain valid FetchXML for the preview entity.');
-  }
-  const existing = fetch.getAttribute('top');
-  if (existing !== null && (!/^\d+$/.test(existing) || Number(existing) < 1)) {
-    throw new Error('This view has an invalid FetchXML row limit.');
-  }
-  // RelatedRecord previews read the lookup value even when the view does not display it.
-  if (lookupColumn && !Array.from(entities[0].children).some(child => child.tagName === 'all-attributes' ||
-      (child.tagName === 'attribute' && child.getAttribute('name') === lookupColumn))) {
-    const column = doc.createElement('attribute');
-    column.setAttribute('name', lookupColumn);
-    entities[0].appendChild(column);
-  }
-  for (const attribute of ['page', 'count', 'paging-cookie', 'returntotalrecordcount']) fetch.removeAttribute(attribute);
-  fetch.setAttribute('top', String(Math.min(10, existing === null ? 10 : Number(existing))));
-  return new XMLSerializer().serializeToString(doc);
-}
 
 interface Props {
   config: PaneDefinitionConfig;
@@ -182,8 +158,9 @@ function GridData({ config, validation, metadataService, xrm, entityName, viewId
       if (result.status === 'error') throw new Error(result.reason);
       const view = result.views.find(item => item.id === viewId && item.viewType === viewType);
       if (!view) throw new Error('Select an accessible view.');
-      const xml = capGridFetchXml(view.fetchXml, entityName, relatedLookup);
-      const columns = await resolveGridColumns(view, entityName, metadataService);
+      const parsed = parseGridFetch(view.fetchXml, entityName);
+      const xml = capGridFetchXml(parsed, relatedLookup);
+      const columns = await resolveGridColumns(view, entityName, metadataService, parsed);
       if (id !== request.current) return;
       const response = await xrm.fetchXml(xml);
       if (id !== request.current) return;
@@ -235,9 +212,8 @@ function GridData({ config, validation, metadataService, xrm, entityName, viewId
     {relatedResolution?.status === 'unresolved' && relatedResolution.reason === 'table-not-allowed' &&
       <p role="alert" style={{ color: T.error, fontFamily: T.font, fontSize: 12 }}>The lookup annotation identifies a table that is not an allowed destination table.</p>}
     {state.status === 'loaded' && <NativeMdaFrame
-      pane={{ ...config.pane, isSelected: paneOpen }}
-      hostTarget={{ pageType: 'entitylist', entityName, viewId, viewType }} paneRecord={related ?? undefined}
-      paneTarget={config.target} validation={validation} caption={`${entityName} · ${state.viewName} · live data, simulated command`}>
+      pane={{ ...config.pane, isSelected: paneOpen }} paneTarget={config.target} validation={validation}
+      variant={{ kind: 'grid', caption: `${entityName} · ${state.viewName} · live data, simulated command`, record: related }}>
       <MockGrid rows={state.rows} columns={state.columns} viewName={state.viewName}
         selectedRows={selectedRows} activeRow={activeRow} onSelectionChange={onSelectionChange}
         onCommand={() => { if (selectedRows.length === 1) setActiveRow(selectedRows[0]); }}

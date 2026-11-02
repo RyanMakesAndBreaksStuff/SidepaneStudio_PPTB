@@ -253,15 +253,9 @@ const PreviewPanelContent = React.memo(function PreviewPanelContent({
               {formState.status === 'loaded' && (
                 <NativeMdaFrame
                   pane={sampleState.status === 'loaded' ? { ...config.pane, isSelected: sampleState.record !== null } : config.pane}
-                  paneRecord={sampleState.status === 'loaded' ? sampleState.record ?? undefined : undefined}
-                  hostTarget={{
-                    pageType: 'entityrecord',
-                    entityName: hostEntity,
-                    formId: '', tabName: '', data: '',
-                  }}
                   paneTarget={config.target}
                   validation={validation}
-                  formModel={formState.model}
+                  variant={{ kind: 'form', hostEntity, record: sampleState.status === 'loaded' ? sampleState.record : null }}
                 >
                   <FormXmlRenderer model={formState.model} />
                 </NativeMdaFrame>
