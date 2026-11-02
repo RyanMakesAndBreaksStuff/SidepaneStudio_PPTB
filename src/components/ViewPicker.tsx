@@ -1,8 +1,7 @@
 import * as React from 'react';
 import { useEffect, useRef, useState } from 'react';
 import type { MetadataService, ViewInfo, ViewsForEntityResult } from '../services/MetadataService';
-import { useTheme } from '../contexts/ThemeContext';
-import { theme } from '../theme/tokens';
+import { TableComboBox } from './TableComboBox';
 
 export interface ViewPickerProps {
   entityName: string;
@@ -15,8 +14,6 @@ export interface ViewPickerProps {
 }
 
 export function ViewPicker({ entityName, value, viewType, onChange, metadataService, disabled, onStatusChange }: ViewPickerProps): React.ReactElement {
-  const { isDark } = useTheme();
-  const T = theme(isDark);
   const [result, setResult] = useState<ViewsForEntityResult | null>(null);
   const [retry, setRetry] = useState(0);
   const [loadedRequest, setLoadedRequest] = useState<{
@@ -55,13 +52,12 @@ export function ViewPicker({ entityName, value, viewType, onChange, metadataServ
   useEffect(() => { onStatusChangeRef.current?.(status); }, [status, current]);
   return (
     <div>
-      <select aria-label="View" value={key} disabled={disabled || !entityName || !current || current.status === 'error'}
-        style={{ width: '100%', color: T.fg1, background: T.surface1, border: `1px solid ${T.stroke1}`, padding: 8, borderRadius: T.rS }}
-        onChange={event => onChange(views.find(view => `${view.viewType}:${view.id}` === event.target.value) ?? null)}>
-        <option value="">{!entityName ? 'Select a table first' : !current ? 'Loading views…' : 'Default view'}</option>
-        {key && !views.some(view => `${view.viewType}:${view.id}` === key) && <option value={key}>Configured view (unavailable)</option>}
-        {views.map(view => <option key={`${view.viewType}:${view.id}`} value={`${view.viewType}:${view.id}`}>{view.name}{view.viewType === 'userquery' ? ' (personal)' : ''}</option>)}
-      </select>
+      <TableComboBox ariaLabel="View" noun="views" value={key}
+        items={views.map(view => ({ logicalName: `${view.viewType}:${view.id}`, displayName: view.name, detail: view.viewType === 'userquery' ? 'Personal view' : 'System view' }))}
+        onChange={selected => onChange(views.find(view => `${view.viewType}:${view.id}` === selected) ?? null)}
+        loading={!!entityName && !current} error={current?.status === 'error' ? current.reason : undefined}
+        onRetry={() => setRetry(n => n + 1)} invalid={!!key && !selectedViewAvailable}
+        disabled={disabled || !entityName} placeholder={!entityName ? 'Select a table first' : 'Default view'} />
       {current?.status === 'error' && <div role="alert">{current.reason} <button type="button" disabled={disabled} onClick={() => setRetry(n => n + 1)}>Retry</button></div>}
       {current?.status === 'ok' && views.length === 0 && <div>No views found. The default view will be used.</div>}
     </div>

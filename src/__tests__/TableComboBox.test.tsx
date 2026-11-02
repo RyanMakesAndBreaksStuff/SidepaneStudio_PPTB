@@ -76,6 +76,15 @@ afterEach(async () => {
 });
 
 describe('TableComboBox', () => {
+  it('lists generic items and names the noun in empty copy', async () => {
+    await render(<TableComboBox value="" onChange={() => {}} items={[{ logicalName: 'name', displayName: 'Account Name' }]} noun="columns" ariaLabel="Column" />);
+    const input = host!.querySelector<HTMLInputElement>('[role="combobox"][aria-label="Column"]')!;
+    await focus(input);
+    expect(host!.textContent).toContain('Account Name');
+    await type(input, 'zzz');
+    expect(host!.textContent).toContain('No columns match "zzz"');
+  });
+
   it('filters by query and filters custom entities before applying the query', async () => {
     await render(<PickerHarness />);
     const input = combo();

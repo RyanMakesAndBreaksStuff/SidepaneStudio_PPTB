@@ -1,20 +1,23 @@
 // src/components/TableComboBox.tsx
-// A filterable single-select combobox for Dataverse tables. The parent owns
-// table data and load state so the picker stays reusable across metadata callers.
+// A filterable single-select combobox for metadata items. The parent owns
+// data and load state so the picker stays reusable across metadata callers.
 import * as React from 'react';
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 import { theme } from '../theme/tokens';
-import { TableInfo } from '../services/MetadataService';
-import { filterTables } from './previewHelpers';
+import { type ComboItem, filterTables } from './previewHelpers';
 import { TableComboDropdown } from './TableComboDropdown';
 
 export interface TableComboBoxProps {
-  /** Selected table logical name (or '' for none). */
+  /** Selected item logical name (or '' for none). */
   value: string;
   onChange: (logicalName: string) => void;
-  /** Full table list — pass [] while loading. */
-  tables: TableInfo[];
+  /** Items to list — pass [] while loading. */
+  items?: ComboItem[];
+  /** Alias retained for existing table callers. */
+  tables?: ComboItem[];
+  /** Plural noun used in loading and empty copy. */
+  noun?: string;
   loading?: boolean;
   error?: string;
   /** Mark the current selection as invalid without replacing available choices. */
@@ -36,7 +39,9 @@ export interface TableComboBoxProps {
 export function TableComboBox({
   value,
   onChange,
+  items,
   tables,
+  noun = 'tables',
   loading,
   error,
   invalid = false,
@@ -60,18 +65,20 @@ export function TableComboBox({
   const rootRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
+  const list = items ?? tables ?? [];
+  const singular = noun.replace(/s$/, '');
 
   // Resolve display label for the current value (may not be in `tables` yet during loading).
   const currentTable = useMemo(
-    () => tables.find(t => t.logicalName === value),
-    [tables, value]
+    () => list.find(t => t.logicalName === value),
+    [list, value]
   );
   const displayValue = currentTable
     ? `${currentTable.displayName} (${currentTable.logicalName})`
     : value;
   const customTables = useMemo(
-    () => customOnly ? tables.filter(table => table.isCustomEntity === true) : tables,
-    [tables, customOnly]
+    () => customOnly ? list.filter(table => table.isCustomEntity === true) : list,
+    [list, customOnly]
   );
   const filtered = useMemo(() => filterTables(customTables, query), [customTables, query]);
 
@@ -176,7 +183,7 @@ export function TableComboBox({
           ref={inputRef}
           type="text"
           value={isOpen ? query : displayValue}
-          placeholder={value ? '' : (placeholder ?? 'Select a table…')}
+          placeholder={value ? '' : (placeholder ?? `Select a ${singular}…`)}
           onChange={e => { setOpen(true); setQuery(e.target.value); }}
           onFocus={() => { if (!disabled) setOpen(true); }}
           onKeyDown={handleKeyDown}
@@ -288,6 +295,7 @@ export function TableComboBox({
           filtered={filtered}
           query={query}
           customOnly={customOnly}
+          noun={noun}
           highlight={highlight}
           value={value}
           onCommit={commit}

@@ -284,19 +284,11 @@ export function FormSelector({
         ) : forms.length === 0 ? (
           <div style={{ ...fieldStyle, color: T.fg3 }}>No main forms found</div>
         ) : (
-          <select
-            aria-label="Form"
-            value={selectedFormId}
-            onChange={e => handleFormChange(e.target.value)}
-            style={fieldStyle}
-            disabled={disabled}
-          >
-            <option value="">{controlledFormId === undefined ? '— select form —' : 'Default form'}</option>
-            {selectedFormId && !forms.some(f => f.id === selectedFormId) && <option value={selectedFormId}>Configured form (unavailable)</option>}
-            {forms.map(f => (
-              <option key={f.id} value={f.id}>{f.name}</option>
-            ))}
-          </select>
+          <TableComboBox ariaLabel="Form" noun="forms"
+            items={forms.map(f => ({ logicalName: f.id, displayName: f.name, detail: '' }))}
+            value={selectedFormId} onChange={handleFormChange}
+            placeholder={controlledFormId === undefined ? 'Select a form' : 'Default form'}
+            invalid={!!selectedFormId && !forms.some(f => f.id === selectedFormId)} disabled={disabled} />
         )}
       </div>
     </div>

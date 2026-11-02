@@ -12,6 +12,7 @@ export interface TableComboDropdownProps {
   filtered: FilteredEntry[];
   query: string;
   customOnly?: boolean;
+  noun?: string;
   highlight: number;
   value: string;
   onCommit: (logicalName: string) => void;
@@ -28,6 +29,7 @@ export function TableComboDropdown({
   filtered,
   query,
   customOnly,
+  noun = 'tables',
   highlight,
   value,
   onCommit,
@@ -39,7 +41,7 @@ export function TableComboDropdown({
 
   function renderContent() {
     if (loading) {
-      return <div style={{ padding: 10, color: T.fg3, fontSize: 12, textAlign: 'center' }}>Loading tables…</div>;
+      return <div style={{ padding: 10, color: T.fg3, fontSize: 12, textAlign: 'center' }}>Loading {noun}…</div>;
     }
     if (error) {
       return (
@@ -70,7 +72,7 @@ export function TableComboDropdown({
     if (filtered.length === 0) {
       return (
         <div style={{ padding: 10, color: T.fg3, fontSize: 12, textAlign: 'center' }}>
-          {query ? `No tables match "${query}"` : customOnly ? 'No custom tables found' : 'No accessible tables found'}
+          {query ? `No ${noun} match "${query}"` : customOnly ? `No custom ${noun} found` : `No ${noun} found`}
         </div>
       );
     }
@@ -113,7 +115,7 @@ export function TableComboDropdown({
                 {entry.table.displayName}
               </span>
               <span style={{ fontFamily: T.mono, fontSize: 11, color: T.fg3 }}>
-                {entry.table.logicalName}
+                {entry.table.detail ?? entry.table.logicalName}
               </span>
             </button>
           );

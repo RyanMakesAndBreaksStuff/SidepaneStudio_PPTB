@@ -4,7 +4,7 @@ import { createRoot, Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DashboardPicker } from '../components/DashboardPicker';
 import type { DashboardInfo, AccessibleDashboardsResult } from '../services/MetadataService';
-import { deferred } from './testHelpers';
+import { chooseOption, deferred } from './testHelpers';
 
 function makeService(result: Promise<AccessibleDashboardsResult>) {
   return {
@@ -25,6 +25,12 @@ async function render(element: React.ReactElement) {
   });
 }
 
+function dashboardInput(): HTMLInputElement {
+  const input = host?.querySelector<HTMLInputElement>('[role="combobox"][aria-label="Dashboard"]');
+  if (!input) throw new Error('Dashboard combobox not rendered');
+  return input;
+}
+
 afterEach(() => {
   if (root && host) {
     act(() => { root!.unmount(); });
@@ -35,16 +41,15 @@ afterEach(() => {
 });
 
 describe('DashboardPicker', () => {
-  it('shows disabled loading option while dashboards load', async () => {
+  it('shows a disabled combobox while dashboards load', async () => {
     const pending = deferred<AccessibleDashboardsResult>();
     const service = makeService(pending.promise);
     await render(<DashboardPicker value="" onChange={() => {}} metadataService={service} />);
-    const select = host?.querySelector('select');
-    expect(select?.disabled).toBe(true);
-    expect(select?.textContent).toContain('Loading');
+    const input = host?.querySelector<HTMLInputElement>('[role="combobox"][aria-label="Dashboard"]');
+    expect(input?.disabled).toBe(true);
   });
 
-  it('renders loaded dashboards as select options', async () => {
+  it('renders loaded dashboards as combobox options', async () => {
     const dashboards: DashboardInfo[] = [
       { id: 'aaa', name: 'Sales Dashboard', isPersonal: false },
       { id: 'bbb', name: 'My Dashboard', isPersonal: true },
@@ -52,10 +57,12 @@ describe('DashboardPicker', () => {
     const service = makeService(Promise.resolve({ status: 'ok', dashboards }));
     await render(<DashboardPicker value="" onChange={() => {}} metadataService={service} />);
     await act(async () => { await Promise.resolve(); });
-    const select = host?.querySelector('select') as HTMLSelectElement;
-    expect(select.disabled).toBe(false);
-    expect(select.textContent).toContain('Sales Dashboard');
-    expect(select.textContent).toContain('My Dashboard (Personal)');
+    const input = dashboardInput();
+    expect(input.disabled).toBe(false);
+    await act(async () => { input.focus(); });
+    expect(host?.textContent).toContain('Sales Dashboard');
+    expect(host?.textContent).toContain('My Dashboard');
+    expect(host?.textContent).toContain('Personal');
   });
 
   it('keeps an unset value unselected and commits the first dashboard when chosen', async () => {
@@ -66,28 +73,22 @@ describe('DashboardPicker', () => {
     const service = makeService(Promise.resolve({ status: 'ok', dashboards }));
     await render(<DashboardPicker value="" onChange={onChange} metadataService={service} />);
     await act(async () => { await Promise.resolve(); });
-    const select = host?.querySelector('select') as HTMLSelectElement;
-
-    expect(select.value).toBe('');
-    expect(select.options[0].textContent).toBe('Select a dashboard…');
+    const input = dashboardInput();
+    expect(input.value).toBe('');
+    expect(input.placeholder).toBe('Select a dashboard…');
     expect(onChange).not.toHaveBeenCalled();
-
-    select.value = 'aaa';
-    await act(async () => {
-      select.dispatchEvent(new Event('change', { bubbles: true }));
-    });
+    await chooseOption(host!, 'Dashboard', 'Only Dashboard');
     expect(onChange).toHaveBeenCalledWith('aaa', 'Only Dashboard');
   });
 
-  it('omits the placeholder once a dashboard is selected', async () => {
+  it('shows the selected dashboard without a placeholder', async () => {
     const dashboards: DashboardInfo[] = [{ id: 'aaa', name: 'Sales Dashboard', isPersonal: false }];
     const service = makeService(Promise.resolve({ status: 'ok', dashboards }));
     await render(<DashboardPicker value="aaa" onChange={() => {}} metadataService={service} />);
     await act(async () => { await Promise.resolve(); });
-    const select = host?.querySelector('select') as HTMLSelectElement;
-
-    expect(select.value).toBe('aaa');
-    expect(select.querySelector('option[value=""]')).toBeNull();
+    const input = dashboardInput();
+    expect(input.value).toContain('Sales Dashboard');
+    expect(input.placeholder).toBe('');
   });
 
   it('shows error state and retry button on failure', async () => {
@@ -113,6 +114,8 @@ describe('DashboardPicker', () => {
     });
     await act(async () => { await Promise.resolve(); });
     expect(service.invalidate).toHaveBeenCalledTimes(1);
+    const input = dashboardInput();
+    await act(async () => { input.focus(); });
     expect(host?.textContent).toContain('Sales Dashboard');
   });
 });
