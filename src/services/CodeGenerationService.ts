@@ -1,19 +1,27 @@
-import { PaneDefinitionConfig, TriggerKind, DEFAULT_CONFIG, LOOKUP_TAG_TARGETS, COMMAND_TRIGGERS } from '../types/PaneDefinitionConfig';
+import { PaneDefinitionConfig, TriggerKind, DEFAULT_CONFIG, COMMAND_TRIGGERS, GRID_TRIGGERS, RECORD_TARGETS } from '../types/PaneDefinitionConfig';
 import { normalizeGuid } from './odataGuards';
-import { normalizeConfigWidth, parseLookupFieldNames } from './configGuards';
+import { isJsIdentifier, normalizeConfigWidth } from './configGuards';
 
-const GRID_KINDS: TriggerKind[] = ['MainGridButton', 'SubgridButton', 'MainGridOnSelect', 'SubgridOnSelect'];
-const GRID_SELECT_KINDS: TriggerKind[] = ['MainGridOnSelect', 'SubgridOnSelect'];
+const GRID_KINDS = GRID_TRIGGERS;
+const GRID_SELECT_KINDS: readonly TriggerKind[] = ['GridRowSelect'];
+const INVALID_ID_EXPR = `(function() { throw new Error('A valid static record ID is required for entityrecord navigation.'); })()`;
 
 /** Guard variable name — namespaced to avoid collisions with other scripts. */
 const PENDING_VAR = 'window.__spstudio_pendingPanes';
 /** Milliseconds a pending-panes lock is considered valid before expiring. */
 const PENDING_TTL_MS = 2000;
-const IDENTIFIER_PATTERN = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
+/** Every identifier the generated scripts declare, receive or call; the record variable and namespace names may not shadow them. */
+export const GENERATED_NAMES: ReadonlySet<string> = new Set([
+  'allPanes', 'eventArgs', 'existing', 'formContext', 'pane', 'primaryControl', 'relatedAttribute',
+  'relatedRecord', 'relatedSource', 'selectedEntity', 'selectedPane', 'selectedRecordId',
+  'selectedRows', 'tag', 'executionContext', 'control', 'name', 'e', 'p',
+  'Xrm', 'window', 'SidePaneHelper', 'console', 'JSON', 'Error', 'Promise', 'Date',
+  'encodeURIComponent', 'setTimeout', 'clearTimeout', 'undefined', 'arguments',
+]);
 
 function safeIdentifier(value: string, fallback: string): string {
   const trimmed = value.trim();
-  return IDENTIFIER_PATTERN.test(trimmed) ? trimmed : fallback;
+  return isJsIdentifier(trimmed) && !GENERATED_NAMES.has(trimmed) ? trimmed : fallback;
 }
 
 /** WR-002 / contract C3 — official imageSrc samples use the WebResources/ relative form. */
@@ -44,27 +52,19 @@ export function lookupRegistrarName(functionName: string): string {
 }
 
 /** Item 2 — registrations live on each control, so remove-then-add keeps repeat OnLoad runs from registering twice. */
-function buildLookupRegistrar(ns: string, fn: string, fieldName: string): string {
+function buildLookupRegistrar(ns: string, fn: string, controls: readonly string[]): string {
   const registrar = `${ns}.${lookupRegistrarName(fn)}`;
   return `
 // Form OnLoad handler. Turn on "Pass execution context as first parameter". Safe to run more than once.
 ${registrar} = function(executionContext) {
   var formContext = executionContext.getFormContext();
-  ${JSON.stringify(parseLookupFieldNames(fieldName))}.forEach(function(name) {
+  ${JSON.stringify([...controls])}.forEach(function(name) {
     var control = formContext.getControl(name);
     if (!control) { console.warn(${JSON.stringify(`${registrar}: no lookup control `)} + name); return; }
     control.removeOnLookupTagClick(${ns}.${fn});
     control.addOnLookupTagClick(${ns}.${fn});
   });
 };`;
-}
-
-function buildConfiguredRecordIdExpression(config: PaneDefinitionConfig): string {
-  const configuredId = config.context.staticRecordId;
-  const normalized = normalizeGuid(configuredId);
-  if (normalized) return JSON.stringify(normalized);
-
-  return `(function() { throw new Error('A valid static record ID is required for entityrecord navigation.'); })()`;
 }
 
 /** Generative pages read recordId as a bare GUID; form, grid and tag IDs arrive as {GUID}. Static IDs are already normalized literals. */
@@ -104,56 +104,40 @@ interface RecordContext {
 }
 
 /** Form object whose record identity and attributes form triggers read. */
-function formObjectExpr(kind: TriggerKind): string | null {
-  if (kind === 'FormOnLoad' || kind === 'FormOnChange') return 'formContext';
+function formObjectExpr(kind: TriggerKind, formContextExpr = 'formContext'): string | null {
+  if (kind === 'FormOnLoad' || kind === 'FormOnChange') return formContextExpr;
   if (kind === 'FormButton') return 'primaryControl';
   return null;
 }
 
-/** CR-001 / plan contract C1 — the single owner of record-context resolution. */
+function runtimeHostEntityExpr(kind: TriggerKind, formContextExpr: string): string | null {
+  const form = formObjectExpr(kind, formContextExpr);
+  if (form) return `${form}.data.entity.getEntityName()`;
+  if (GRID_KINDS.includes(kind)) return 'selectedEntity.getEntityName()';
+  return null;
+}
+
+/** Contract C3 — the single owner of record-context resolution. */
 function buildRecordContext(config: PaneDefinitionConfig, formContextExpr = 'formContext'): RecordContext {
-  const { context, trigger, target } = config;
-  const targetEntityName =
-    target.pageType === 'entityrecord' || target.pageType === 'entitylist' ? target.entityName : '';
-  const entityName = context.entityName || targetEntityName || '';
-  const form = formObjectExpr(trigger.kind);
-
-  if (trigger.kind === 'LookupTagClick' && LOOKUP_TAG_TARGETS.includes(target.pageType)) {
-    return { idExpr: 'tag.id', entityExpr: 'tag.entityType', table: '' };
-  }
-
-  let idExpr: string | null = null;
-  switch (context.mode) {
-    case 'CurrentRecord':
-      if (trigger.kind === 'FormOnLoad' || trigger.kind === 'FormOnChange') {
-        idExpr = `${formContextExpr}.data.entity.getId()`;
-      } else if (trigger.kind === 'FormButton') {
-        idExpr = 'primaryControl.data.entity.getId()';
-      } else if (GRID_KINDS.includes(trigger.kind)) {
-        idExpr = 'selectedRecordId';
-      }
-      break;
-    case 'SelectedRow':
-      if (GRID_KINDS.includes(trigger.kind)) {
-        idExpr = 'selectedRecordId';
-      }
-      break;
-    case 'Static': {
-      const normalized = normalizeGuid(context.staticRecordId);
-      idExpr = normalized ? JSON.stringify(normalized) : null;
-      break;
+  const { context: { source }, trigger, target, host } = config;
+  const none: RecordContext = { idExpr: null, entityExpr: null, table: null };
+  if (!RECORD_TARGETS.includes(target.pageType)) return none;
+  const kind = trigger.kind;
+  const form = formObjectExpr(kind, formContextExpr);
+  const hostTable = host.entityName.trim();
+  const hostExpr = hostTable ? JSON.stringify(hostTable) : runtimeHostEntityExpr(kind, formContextExpr);
+  switch (source.kind) {
+    case 'host':        return form ? { idExpr: `${form}.data.entity.getId()`, entityExpr: hostExpr, table: hostTable } : none;
+    case 'selectedRow': return GRID_KINDS.includes(kind) ? { idExpr: 'selectedRecordId', entityExpr: hostExpr, table: hostTable } : none;
+    case 'clickedTag':  return kind === 'LookupTagClick' ? { idExpr: 'tag.id', entityExpr: 'tag.entityType', table: '' } : none;
+    case 'lookup':      return form || GRID_KINDS.includes(kind) ? { idExpr: 'relatedRecord.id', entityExpr: 'relatedRecord.entityType', table: '' } : none;
+    case 'fixed': {
+      const id = normalizeGuid(source.id);
+      const table = (target.pageType === 'entityrecord' ? target.entityName : source.entityName).trim();
+      return { idExpr: id ? JSON.stringify(id) : INVALID_ID_EXPR, entityExpr: table ? JSON.stringify(table) : null, table: table || null };
     }
-    case 'RelatedRecord':
-      // buildRelatedRecordPreamble declares relatedRecord before navigation.
-      return form || GRID_KINDS.includes(trigger.kind)
-        ? { idExpr: 'relatedRecord.id', entityExpr: 'relatedRecord.entityType', table: '' }
-        : { idExpr: null, entityExpr: null, table: null };
-    case 'None':
-      break;
+    case 'none':        return none;
   }
-
-  const entityExpr = entityName ? JSON.stringify(entityName) : null;
-  return { idExpr, entityExpr, table: idExpr && entityExpr ? entityName : null };
 }
 
 /** Table the script sends with a record: its logical name, '' when the table is only known at runtime, or null when no record is sent. */
@@ -161,16 +145,25 @@ export function recordContextTable(config: PaneDefinitionConfig): string | null 
   return buildRecordContext(config).table;
 }
 
+/** Declare the record ID once before both navigation paths use it. */
+function declareRecordVariable(config: PaneDefinitionConfig, rc: RecordContext, indent: string): { line: string; rc: RecordContext } {
+  const creating = config.target.pageType === 'entityrecord' && config.target.createNew === true;
+  if (!rc.idExpr || creating) return { line: '', rc };
+  const name = safeIdentifier(config.context.variableName, 'recordId');
+  return { line: `${indent}var ${name} = ${rc.idExpr};\n`, rc: { ...rc, idExpr: name } };
+}
+
 /** Item 3 — createFromEntity copies mapped columns from the triggering record. Null when no record triggers the script. */
 function buildCreateFromEntityExpr(config: PaneDefinitionConfig, formContextExpr = 'formContext'): string | null {
-  const { target, trigger, context } = config;
-  if (target.pageType !== 'entityrecord' || !target.createNew || !target.createFromCurrent) return null;
-  const kindForm = formObjectExpr(trigger.kind);
-  const form = kindForm === 'formContext' ? formContextExpr : kindForm;
-  if (form) return `{ entityType: ${form}.data.entity.getEntityName(), id: ${form}.data.entity.getId() }`;
-  return GRID_KINDS.includes(trigger.kind)
-    ? `{ entityType: ${JSON.stringify(context.entityName.trim())}, id: selectedRecordId }`
-    : null;
+  const { target, trigger, context: { source }, host } = config;
+  if (target.pageType !== 'entityrecord' || !target.createNew) return null;
+  const form = formObjectExpr(trigger.kind, formContextExpr);
+  if (source.kind === 'host' && form) return `{ entityType: ${form}.data.entity.getEntityName(), id: ${form}.data.entity.getId() }`;
+  if (source.kind === 'selectedRow' && GRID_KINDS.includes(trigger.kind)) {
+    const table = host.entityName.trim();
+    return `{ entityType: ${table ? JSON.stringify(table) : 'selectedEntity.getEntityName()'}, id: selectedRecordId }`;
+  }
+  return null;
 }
 
 /**
@@ -179,11 +172,10 @@ function buildCreateFromEntityExpr(config: PaneDefinitionConfig, formContextExpr
  * (unsaved edits included); grid rows expose only view columns, so grids read the saved record.
  */
 function buildRelatedRecordPreamble(config: PaneDefinitionConfig, indent: string, formContextExpr = 'formContext'): string {
-  const { context, trigger } = config;
-  if (context.mode !== 'RelatedRecord') return '';
-  const lookup = context.lookupAttribute.trim();
-  const kindForm = formObjectExpr(trigger.kind);
-  const form = kindForm === 'formContext' ? formContextExpr : kindForm;
+  const { context: { source }, trigger, host } = config;
+  if (source.kind !== 'lookup') return '';
+  const lookup = source.attribute.trim();
+  const form = formObjectExpr(trigger.kind, formContextExpr);
   if (form) {
     return (
       `${indent}var relatedAttribute = ${form}.getAttribute(${JSON.stringify(lookup)});\n` +
@@ -195,7 +187,7 @@ function buildRelatedRecordPreamble(config: PaneDefinitionConfig, indent: string
   if (!GRID_KINDS.includes(trigger.kind)) return '';
   const valueKey = `_${lookup}_value`;
   return (
-    `${indent}var relatedSource = await Xrm.WebApi.retrieveRecord(${JSON.stringify(context.entityName.trim())}, ` +
+    `${indent}var relatedSource = await Xrm.WebApi.retrieveRecord(${JSON.stringify(host.entityName.trim())}, ` +
     `selectedRecordId.replace(/[{}]/g, ''), ${JSON.stringify(`?$select=${valueKey}`)});\n` +
     `${indent}if (!relatedSource[${JSON.stringify(valueKey)}]) return;\n` +
     `${indent}var relatedRecord = { id: relatedSource[${JSON.stringify(valueKey)}], ` +
@@ -205,7 +197,7 @@ function buildRelatedRecordPreamble(config: PaneDefinitionConfig, indent: string
 
 function buildTargetParameterParts(
   target: PaneDefinitionConfig['target'],
-  contextMode: PaneDefinitionConfig['context']['mode'],
+  rc: RecordContext,
 ): string[] {
   const parts: string[] = [];
   if (target.pageType === 'entitylist' && target.viewId.trim()) {
@@ -216,8 +208,8 @@ function buildTargetParameterParts(
     const formTabParts: string[] = [];
     if (target.formId.trim()) formTabParts.push(`formId: ${JSON.stringify(normalizeGuid(target.formId) ?? target.formId)}`);
     if (target.tabName.trim()) formTabParts.push(`tabName: ${JSON.stringify(target.tabName.trim())}`);
-    if (formTabParts.length && contextMode === 'RelatedRecord' && !target.createNew) {
-      parts.push(`...(relatedRecord.entityType === ${JSON.stringify(target.entityName)} ? { ${formTabParts.join(', ')} } : {})`);
+    if (formTabParts.length && rc.table === '' && rc.entityExpr && target.entityName.trim() && !target.createNew) {
+      parts.push(`...(${rc.entityExpr} === ${JSON.stringify(target.entityName)} ? { ${formTabParts.join(', ')} } : {})`);
     } else {
       parts.push(...formTabParts);
     }
@@ -231,9 +223,8 @@ function buildTargetParameterParts(
   return parts;
 }
 
-function buildNavigateInput(config: PaneDefinitionConfig): string {
+function buildNavigateInput(config: PaneDefinitionConfig, rc: RecordContext): string {
   const { target } = config;
-  const rc = buildRecordContext(config);
 
   switch (target.pageType) {
     case 'custom': {
@@ -254,23 +245,23 @@ function buildNavigateInput(config: PaneDefinitionConfig): string {
         return `{ ${[
           `pageType: ${JSON.stringify(target.pageType)}`,
           `entityName: ${JSON.stringify(target.entityName)}`,
-          ...buildTargetParameterParts(target, config.context.mode),
+          ...buildTargetParameterParts(target, rc),
           ...(createFrom ? [`createFromEntity: ${createFrom}`] : []),
         ].join(', ')} }`;
       }
-      const entityIdExpr = rc.idExpr ?? buildConfiguredRecordIdExpression(config);
+      const entityIdExpr = rc.idExpr ?? INVALID_ID_EXPR;
       return `{ ${[
         `pageType: ${JSON.stringify(target.pageType)}`,
         `entityName: ${rc.entityExpr ?? '""'}`,
         `entityId: ${entityIdExpr}`,
-        ...buildTargetParameterParts(target, config.context.mode),
+        ...buildTargetParameterParts(target, rc),
       ].join(', ')} }`;
     }
     case 'entitylist':
       return `{ ${[
         `pageType: ${JSON.stringify(target.pageType)}`,
-        `entityName: ${rc.entityExpr ?? '""'}`,
-        ...buildTargetParameterParts(target, config.context.mode),
+        `entityName: ${JSON.stringify(target.entityName)}`,
+        ...buildTargetParameterParts(target, rc),
       ].join(', ')} }`;
     case 'webresource': {
       const parts = [
@@ -291,7 +282,7 @@ function buildNavigateInput(config: PaneDefinitionConfig): string {
         ? `{ pageType: ${JSON.stringify(target.pageType)}, searchText: ${JSON.stringify(target.searchText)} }`
         : `{ pageType: ${JSON.stringify(target.pageType)} }`;
     case 'generative': {
-      const parts = [`pageType: ${JSON.stringify(target.pageType)}`, ...buildTargetParameterParts(target, config.context.mode)];
+      const parts = [`pageType: ${JSON.stringify(target.pageType)}`, ...buildTargetParameterParts(target, rc)];
       if (rc.idExpr && rc.entityExpr) {
         parts.push(`entityName: ${rc.entityExpr}`);
         parts.push(`recordId: ${bareGuidExpr(rc.idExpr)}`);
@@ -331,12 +322,13 @@ function buildToggleIfOpen(config: PaneDefinitionConfig, indent: string): string
 }
 
 function buildGetOrCreateBody(config: PaneDefinitionConfig, indent = '  '): string {
-  const { pane, context } = config;
+  const { pane, behavior } = config;
   const paneOpts = buildPaneOptions(config);
-  const navInput = buildNavigateInput(config);
+  const declared = declareRecordVariable(config, buildRecordContext(config), indent);
+  const navInput = buildNavigateInput(config, declared.rc);
   const stateAssign = buildStateAssignment(config);
   const paneIdJson = JSON.stringify(pane.paneId);
-  const reuseCheck = context.reuseExistingPane
+  const reuseCheck = behavior.reuseExistingPane
     ? `${indent}var existing = Xrm.App.sidePanes.getPane(${paneIdJson});\n${indent}if (existing) { await existing.navigate(${navInput}); existing.select(); } else {\n`
     : `${indent}var existing = Xrm.App.sidePanes.getPane(${paneIdJson});\n${indent}if (existing) { existing.close(); await Promise.resolve(); }\n`;
 
@@ -351,7 +343,7 @@ function buildGetOrCreateBody(config: PaneDefinitionConfig, indent = '  '): stri
   const createBody = `${stateAssign}${indent}var pane = await Xrm.App.sidePanes.createPane(${paneOpts});\n${indent}await pane.navigate(${navInput});\n${badgeAssign}`;
   // Lookup handlers guard before preventDefault, so the shared body must not repeat the check.
   const availabilityGuard = config.trigger.kind === 'LookupTagClick' ? '' : buildAvailabilityGuard(config, indent);
-  return `${availabilityGuard}${buildToggleIfOpen(config, indent)}${buildRelatedRecordPreamble(config, indent)}${reuseCheck}${createBody}${context.reuseExistingPane ? `${indent}}\n` : ''}${closeOthersBlock}`;
+  return `${availabilityGuard}${buildToggleIfOpen(config, indent)}${buildRelatedRecordPreamble(config, indent)}${declared.line}${reuseCheck}${createBody}${behavior.reuseExistingPane ? `${indent}}\n` : ''}${closeOthersBlock}`;
 }
 
 function generateFormOnLoad(config: PaneDefinitionConfig): string {
@@ -409,8 +401,8 @@ function generateGridButtonScript(config: PaneDefinitionConfig): string {
   // OnRecordSelect: executionContext.getEventSource().getId() — Power Apps grid control sample
   // https://learn.microsoft.com/power-apps/developer/model-driven-apps/clientapi/reference/events/grid-onrecordselect
   const rowPreamble = onSelect
-    ? `  var selectedRecordId = executionContext.getEventSource().getId();\n`
-    : `  var selectedRows = primaryControl.getGrid().getSelectedRows();\n  if (!selectedRows || selectedRows.getLength() === 0) { return; }\n  var selectedRecordId = selectedRows.get(0).getData().getEntity().getId();\n`;
+    ? `  var selectedEntity = executionContext.getEventSource();\n  var selectedRecordId = selectedEntity.getId();\n`
+    : `  var selectedRows = primaryControl.getGrid().getSelectedRows();\n  if (!selectedRows || selectedRows.getLength() === 0) { return; }\n  var selectedEntity = selectedRows.get(0).getData().getEntity();\n  var selectedRecordId = selectedEntity.getId();\n`;
 
   return `var ${ns} = ${ns} || {};
 ${PENDING_VAR} = ${PENDING_VAR} || {};
@@ -450,9 +442,9 @@ ${fn}().catch(console.error);`;
 }
 
 function generateFormOnChange(config: PaneDefinitionConfig): string {
-  const { trigger, pane } = config;
+  const { pane } = config;
   const { ns, fn } = getSafeTriggerNames(config);
-  const field = trigger.fieldName || '';
+  const field = config.host.attribute || '';
   const timerVar = `__spstudio_tmr_${pane.paneId.replace(/[^a-zA-Z0-9_]/g, '_')}`;
   const body = buildGetOrCreateBody(config, '    ');
 
@@ -478,7 +470,6 @@ ${body
 }
 
 function generateLookupTagClick(config: PaneDefinitionConfig): string {
-  const { trigger } = config;
   const { ns, fn } = getSafeTriggerNames(config);
   const body = buildGetOrCreateBody(config, '  ');
   return `var ${ns} = ${ns} || {};
@@ -492,7 +483,7 @@ ${body.split('\n').map(line => '  ' + line).join('\n')}
   } catch(e) {
     ${buildCatchBody(`${ns}.${fn}`, '    ')}
   }
-};${buildLookupRegistrar(ns, fn, trigger.fieldName)}`;
+};${buildLookupRegistrar(ns, fn, config.host.lookupControls)}`;
 }
 
 export function generateBasicScript(config: PaneDefinitionConfig): string {
@@ -501,10 +492,8 @@ export function generateBasicScript(config: PaneDefinitionConfig): string {
       return generateFormOnLoad(config);
     case 'FormButton':
       return generateFormButton(config);
-    case 'MainGridButton':
-    case 'SubgridButton':
-    case 'MainGridOnSelect':
-    case 'SubgridOnSelect':
+    case 'GridButton':
+    case 'GridRowSelect':
       return generateGridButtonScript(config);
     case 'ManualJS':
       return generateManualJS(config);
@@ -518,14 +507,15 @@ export function generateBasicScript(config: PaneDefinitionConfig): string {
 }
 
 export function generateLibraryScript(config: PaneDefinitionConfig): string {
-  const { pane, trigger, target, context, behavior } = config;
+  const { pane, trigger, target, behavior } = config;
   const width = normalizeConfigWidth(pane.width);
   const ns = safeIdentifier(trigger.namespace || '', 'MyOrg');
   const fn = safeIdentifier(trigger.functionName || '', 'openPane');
   const formContextExpr = trigger.kind === 'FormOnLoad' || trigger.kind === 'FormOnChange'
     ? 'executionContext.getFormContext()'
     : 'formContext';
-  const rc = buildRecordContext(config, formContextExpr);
+  const declared = declareRecordVariable(config, buildRecordContext(config, formContextExpr), '  ');
+  const rc = declared.rc;
   const libIdExpr = rc.idExpr;
 
   const optLines: string[] = [
@@ -555,10 +545,10 @@ export function generateLibraryScript(config: PaneDefinitionConfig): string {
       if (createFrom) optLines.push(`    createFromEntity: ${createFrom}`);
     } else {
       optLines.push(`    entityName: ${rc.entityExpr ?? '""'}`);
-      optLines.push(`    entityId: ${libIdExpr ?? buildConfiguredRecordIdExpression(config)}`);
+      optLines.push(`    entityId: ${libIdExpr ?? INVALID_ID_EXPR}`);
     }
   } else if (target.pageType === 'entitylist') {
-    optLines.push(`    entityName: ${rc.entityExpr ?? '""'}`);
+    optLines.push(`    entityName: ${JSON.stringify(target.entityName)}`);
   } else if (target.pageType === 'dashboard') {
     optLines.push(`    dashboardId: ${JSON.stringify(target.dashboardId)}`);
   } else if (target.pageType === 'search' && target.searchText) {
@@ -568,7 +558,7 @@ export function generateLibraryScript(config: PaneDefinitionConfig): string {
     optLines.push(`    recordId: ${bareGuidExpr(libIdExpr)}`);
   }
 
-  optLines.push(...buildTargetParameterParts(target, config.context.mode).map(part => `    ${part}`));
+  optLines.push(...buildTargetParameterParts(target, rc).map(part => `    ${part}`));
 
   // Appearance + behavior keys — contract C4. isResizable is deliberately absent.
   if (width !== DEFAULT_CONFIG.pane.width) optLines.push(`    width: ${width}`);
@@ -580,7 +570,7 @@ export function generateLibraryScript(config: PaneDefinitionConfig): string {
   const imageSrc = normalizeImageSrc(pane.imageSrc);
   if (imageSrc) optLines.push(`    imageSrc: ${JSON.stringify(imageSrc)}`);
   if (pane.badgeValue) optLines.push(`    badge: ${JSON.stringify(pane.badgeValue)}`);
-  if (!context.reuseExistingPane) optLines.push(`    reuseExistingPane: false`);
+  if (!behavior.reuseExistingPane) optLines.push(`    reuseExistingPane: false`);
   if (!behavior.expandOnOpen) optLines.push(`    expandOnOpen: false`);
   if (behavior.closeOthers) optLines.push(`    closeOthers: true`);
   if (behavior.toggleIfOpen && COMMAND_TRIGGERS.includes(trigger.kind)) optLines.push(`    toggleIfOpen: true`);
@@ -593,24 +583,24 @@ export function generateLibraryScript(config: PaneDefinitionConfig): string {
         : 'primaryControl';
 
   const gridContext = GRID_SELECT_KINDS.includes(trigger.kind)
-    ? `  var selectedRecordId = executionContext.getEventSource().getId();\n`
-    : trigger.kind === 'MainGridButton' || trigger.kind === 'SubgridButton'
-      ? `  var selectedRows = primaryControl.getGrid().getSelectedRows();\n  if (!selectedRows || selectedRows.getLength() === 0) { return; }\n  var selectedRecordId = selectedRows.get(0).getData().getEntity().getId();\n`
+    ? `  var selectedEntity = executionContext.getEventSource();\n  var selectedRecordId = selectedEntity.getId();\n`
+    : trigger.kind === 'GridButton'
+      ? `  var selectedRows = primaryControl.getGrid().getSelectedRows();\n  if (!selectedRows || selectedRows.getLength() === 0) { return; }\n  var selectedEntity = selectedRows.get(0).getData().getEntity();\n  var selectedRecordId = selectedEntity.getId();\n`
       : '';
 
   const lookupPreamble = trigger.kind === 'LookupTagClick'
     ? `${buildAvailabilityGuard(config, '  ')}  var eventArgs = executionContext.getEventArgs();\n  eventArgs.preventDefault();\n  var tag = eventArgs.getTagValue();\n  if (!tag || !tag.id) return;\n`
     : '';
 
-  const lookupRegistration = trigger.kind === 'LookupTagClick' ? buildLookupRegistrar(ns, fn, trigger.fieldName) : '';
+  const lookupRegistration = trigger.kind === 'LookupTagClick' ? buildLookupRegistrar(ns, fn, config.host.lookupControls) : '';
 
   const openCall = `  SidePaneHelper.open({\n${optLines.join(',\n')}\n  });\n`;
   const relatedPreamble = buildRelatedRecordPreamble(config, '      ', formContextExpr);
-  // RelatedRecord awaits the lookup, so the open call moves into an async block with the standard catch.
+  // Lookup resolution awaits the lookup, so the open call and record variable share its async scope.
   const body = relatedPreamble
-    ? `  (async function() {\n    try {\n${relatedPreamble}${openCall.replace(/^(?=.)/gm, '    ')}` +
+    ? `  (async function() {\n    try {\n${relatedPreamble}${declared.line.replace(/^ {2}/, '      ')}${openCall.replace(/^(?=.)/gm, '    ')}` +
       `    } catch(e) {\n${buildCatchBody(`${ns}.${fn}`, '      ')}\n    }\n  })();\n`
-    : openCall;
+    : `${declared.line}${openCall}`;
 
   return `var ${ns} = ${ns} || {};
 ${ns}.${fn} = function(${param}) {

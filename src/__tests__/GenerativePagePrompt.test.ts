@@ -4,10 +4,16 @@ import { buildGenerativePagePrompt } from '../services/GenerativePagePromptServi
 import type { PaneDefinitionConfig } from '../types/PaneDefinitionConfig';
 import { cfg } from './testHelpers';
 
-const page = (data: string, context: Partial<PaneDefinitionConfig['context']> = {}, trigger: Partial<PaneDefinitionConfig['trigger']> = {}) => cfg({
+const page = (
+  data: string,
+  context: Partial<PaneDefinitionConfig['context']> = { source: { kind: 'none' } },
+  trigger: Partial<PaneDefinitionConfig['trigger']> = {},
+  host: Partial<PaneDefinitionConfig['host']> = {},
+) => cfg({
   trigger: { kind: 'FormButton', ...trigger },
+  host,
   target: { pageType: 'generative', pageId: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee', data },
-  context: { mode: 'None', entityName: '', ...context },
+  context,
 });
 
 describe('buildGenerativePagePrompt', () => {
@@ -16,7 +22,7 @@ describe('buildGenerativePagePrompt', () => {
   });
 
   it('asks for the record table and ID when a record is sent', () => {
-    expect(buildGenerativePagePrompt(page('', { mode: 'CurrentRecord', entityName: 'account' }))).toBe(
+    expect(buildGenerativePagePrompt(page('', { source: { kind: 'host' } }, {}, { entityName: 'account' }))).toBe(
       'Set up the page to accept an entityName of "account" and a recordId GUID. On load, fetch and display that record.');
   });
 
@@ -26,7 +32,7 @@ describe('buildGenerativePagePrompt', () => {
   });
 
   it('combines both, leaving the table open when it is chosen at runtime', () => {
-    expect(buildGenerativePagePrompt(page('{"status":"open"}', {}, { kind: 'LookupTagClick', fieldName: 'parentcustomerid' }))).toBe(
+    expect(buildGenerativePagePrompt(page('{"status":"open"}', { source: { kind: 'clickedTag' } }, { kind: 'LookupTagClick' }, { lookupControls: ['parentcustomerid'] }))).toBe(
       'Set up the page to accept an entityName (a table logical name) and a recordId GUID. On load, fetch and display that record.\n' +
       'Set up the page to accept a data object with the keys status.');
   });
@@ -37,20 +43,22 @@ describe('buildGenerativePagePrompt', () => {
 });
 
 describe('recordContextTable', () => {
-  it('returns a known logical name', () => {
-    expect(recordContextTable(page('', { mode: 'CurrentRecord', entityName: 'account' }))).toBe('account');
+  it('returns a known logical name for a host source with a host table', () => {
+    expect(recordContextTable(page('', { source: { kind: 'host' } }, {}, { entityName: 'account' }))).toBe('account');
   });
 
-  it('returns an empty string for a runtime lookup or related table', () => {
-    expect(recordContextTable(page('', {}, { kind: 'LookupTagClick', fieldName: 'parentcustomerid' }))).toBe('');
+  it('returns an empty string for a host source without a host table', () => {
+    expect(recordContextTable(page('', { source: { kind: 'host' } }))).toBe('');
+  });
+
+  it('returns an empty string for a runtime clicked-tag or lookup table', () => {
+    expect(recordContextTable(page('', { source: { kind: 'clickedTag' } }, { kind: 'LookupTagClick' }, { lookupControls: ['parentcustomerid'] }))).toBe('');
     expect(recordContextTable(page('', {
-      mode: 'RelatedRecord',
-      entityName: 'account',
-      lookupAttribute: 'parentcustomerid',
-    }))).toBe('');
+      source: { kind: 'lookup', attribute: 'parentcustomerid' },
+    }, {}, { entityName: 'account' }))).toBe('');
   });
 
   it('returns null when no record pair is sent', () => {
-    expect(recordContextTable(page('', { mode: 'None', entityName: 'account' }))).toBeNull();
+    expect(recordContextTable(page('', { source: { kind: 'none' } }, {}, { entityName: 'account' }))).toBeNull();
   });
 });

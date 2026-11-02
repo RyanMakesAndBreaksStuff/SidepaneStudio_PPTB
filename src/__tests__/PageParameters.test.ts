@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { DEFAULT_CONFIG, PaneDefinitionConfig } from '../types/PaneDefinitionConfig';
+import { DEFAULT_CONFIG, PaneDefinitionConfig, TargetConfig } from '../types/PaneDefinitionConfig';
 import { generateBasicScript, generateLibraryScript } from '../services/CodeGenerationService';
 import { validate } from '../services/ValidationService';
 import { parseStoredConfig } from '../services/configGuards';
@@ -7,13 +7,17 @@ import runtimeSource from '../runtime/sidepane.runtime.js?raw';
 
 const id = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
 const otherId = '11111111-2222-3333-4444-555555555555';
-function config(target: object): PaneDefinitionConfig {
+function config(target: TargetConfig): PaneDefinitionConfig {
   return {
     ...DEFAULT_CONFIG,
     target,
-    context: { ...DEFAULT_CONFIG.context, mode: 'Static', staticRecordId: id },
+    context: { ...DEFAULT_CONFIG.context, source: { kind: 'fixed', entityName: '', id } },
     trigger: { ...DEFAULT_CONFIG.trigger, kind: 'ManualJS', namespace: 'ParameterTest', functionName: 'open' },
-  } as PaneDefinitionConfig;
+  };
+}
+/** A stored config as JSON, whose target (and legacy fields) may not match the current types. */
+function stored(target: object, overrides: object = {}): string {
+  return JSON.stringify({ ...config(DEFAULT_CONFIG.target), target, ...overrides });
 }
 async function navigate(c: PaneDefinitionConfig, library: boolean) {
   const navigation = vi.fn().mockResolvedValue(undefined);
@@ -24,10 +28,10 @@ async function navigate(c: PaneDefinitionConfig, library: boolean) {
   });
   const primaryControl = { getGrid: () => ({ getSelectedRows: () => ({
     getLength: () => 1,
-    get: () => ({ getData: () => ({ getEntity: () => ({ getId: () => otherId }) }) }),
+    get: () => ({ getData: () => ({ getEntity: () => ({ getId: () => otherId, getEntityName: () => 'account' }) }) }),
   }) }) };
   const executionContext = { getEventSource: () => ({ getId: () => otherId, getEntityName: () => 'account' }) };
-  const onSelect = c.trigger.kind === 'MainGridOnSelect' || c.trigger.kind === 'SubgridOnSelect';
+  const onSelect = c.trigger.kind === 'GridRowSelect';
   if (library) {
     (0, eval)(runtimeSource);
     if (onSelect) {
@@ -35,7 +39,7 @@ async function navigate(c: PaneDefinitionConfig, library: boolean) {
     } else {
       new Function('primaryControl', `${generateLibraryScript(c)}; return ParameterTest.open(primaryControl);`)(primaryControl);
     }
-  } else if (c.trigger.kind === 'MainGridButton' || c.trigger.kind === 'SubgridButton') {
+  } else if (c.trigger.kind === 'GridButton') {
     new Function('primaryControl', `${generateBasicScript(c)}; return ParameterTest.open(primaryControl);`)(primaryControl);
   } else if (onSelect) {
     new Function('executionContext', `${generateBasicScript(c)}; return ParameterTest.open(executionContext);`)(executionContext);
@@ -54,23 +58,26 @@ afterEach(() => {
 describe('page parameter contract', () => {
   it('opens a blank create-mode form with pre-filled data through both outputs', async () => {
     const c = config({ pageType: 'entityrecord', entityName: 'contact', formId: '', tabName: '', data: '{"firstname":"Pat"}', createNew: true });
-    c.context.mode = 'None';
-    c.context.staticRecordId = '';
+    c.context.source = { kind: 'none' };
     for (const library of [false, true]) {
       const input = await navigate(c, library);
       expect(input).toEqual({ pageType: 'entityrecord', entityName: 'contact', data: { firstname: 'Pat' } });
       expect(input).not.toHaveProperty('entityId');
     }
   });
-  it.each(['MainGridButton', 'SubgridButton', 'MainGridOnSelect', 'SubgridOnSelect'] as const)('delivers selected row parameters from %s through both outputs', async kind => {
+  it.each([
+    ['GridButton', 'main'], ['GridButton', 'subgrid'], ['GridRowSelect', 'main'], ['GridRowSelect', 'subgrid'],
+  ] as const)('delivers selected row parameters from %s on the %s grid through both outputs', async (kind, surface) => {
     const c = config({ pageType: 'entityrecord', entityName: 'account', formId: id, tabName: '', data: '' });
     c.trigger.kind = kind;
-    c.context.mode = 'SelectedRow';
+    c.trigger.surface = surface;
+    c.host.entityName = 'account';
+    c.context.source = { kind: 'selectedRow' };
     const expected = { pageType: 'entityrecord', entityName: 'account', entityId: otherId, formId: id };
     expect(await navigate(c, false)).toEqual(expected);
     expect(await navigate(c, true)).toEqual(expected);
   });
-  it.each(['savedquery', 'userquery'])('delivers %s view identically', async viewType => {
+  it.each(['savedquery', 'userquery'] as const)('delivers %s view identically', async viewType => {
     const c = config({ pageType: 'entitylist', entityName: 'account', viewId: `{${otherId}}`, viewType });
     const expected = { pageType: 'entitylist', entityName: 'account', viewId: otherId, viewType };
     expect(await navigate(c, false)).toEqual(expected);
@@ -82,9 +89,8 @@ describe('page parameter contract', () => {
     expect(await navigate(c, false)).toEqual(expected);
     expect(await navigate(c, true)).toEqual(expected);
   });
-  it('omits blank optional parameters and uses one configured ID in None mode', async () => {
+  it('omits blank optional parameters and uses the one configured ID', async () => {
     const c = config({ pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '' });
-    c.context.mode = 'None';
     expect(await navigate(c, false)).toEqual({ pageType: 'entityrecord', entityName: 'account', entityId: id });
     expect(await navigate(c, true)).toEqual(await navigate(c, false));
   });
@@ -98,22 +104,18 @@ describe('page parameter contract', () => {
     expect(validate(config({ pageType: 'entitylist', entityName: 'account', viewId: 'bad', viewType: '' })).errors.map(e => e.field)).toEqual(expect.arrayContaining(['target.viewId', 'target.viewType']));
     expect(validate(config({ pageType: 'entityrecord', entityName: 'account', formId: 'bad', tabName: '', data: '' })).errors.map(e => e.field)).toContain('target.formId');
     const c = config({ pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '' });
-    c.context.mode = 'None';
-    c.context.staticRecordId = '';
+    c.context.source = { kind: 'none' };
     c.trigger.kind = 'FormButton';
-    expect(validate(c).errors.map(e => e.field)).toContain('context.staticRecordId');
+    expect(validate(c).errors.map(e => e.field)).toContain('context.source');
   });
   it('migrates legacy target ID without overriding the existing context ID', () => {
-    const legacy = {
-      ...config({ pageType: 'entityrecord', entityName: 'account', entityId: otherId }),
-      context: { mode: 'Static', entityName: '', staticRecordId: id },
-    };
-    expect(parseStoredConfig(JSON.stringify(legacy))?.context.source).toEqual({ kind: 'fixed', entityName: '', id });
-    legacy.context.staticRecordId = '';
-    const migrated = parseStoredConfig(JSON.stringify(legacy));
+    const legacyTarget = { pageType: 'entityrecord', entityName: 'account', entityId: otherId };
+    const legacyContext = { mode: 'Static', entityName: '', staticRecordId: id };
+    expect(parseStoredConfig(stored(legacyTarget, { context: legacyContext }))?.context.source).toEqual({ kind: 'fixed', entityName: '', id });
+    const migrated = parseStoredConfig(stored(legacyTarget, { context: { ...legacyContext, staticRecordId: '' } }));
     expect(migrated?.context.source).toEqual({ kind: 'fixed', entityName: '', id: otherId });
     expect(migrated?.target).toEqual({ pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '', createNew: false });
-    expect(parseStoredConfig(JSON.stringify(config({ pageType: 'entitylist', entityName: 'account' })))?.target).toEqual({ pageType: 'entitylist', entityName: 'account', viewId: '', viewType: '' });
+    expect(parseStoredConfig(stored({ pageType: 'entitylist', entityName: 'account' }))?.target).toEqual({ pageType: 'entitylist', entityName: 'account', viewId: '', viewType: '' });
   });
   it('rejects wrong-shaped new settings values', () => {
     for (const target of [
@@ -121,14 +123,14 @@ describe('page parameter contract', () => {
       { pageType: 'entityrecord', entityName: 'account', data: {} },
       { pageType: 'entitylist', entityName: 'account', viewType: 'other' },
       { pageType: 'entitylist', entityName: 'account', viewId: [] },
-    ]) expect(parseStoredConfig(JSON.stringify(config(target)))).toBeNull();
+    ]) expect(parseStoredConfig(stored(target))).toBeNull();
   });
 
   it('pre-fills a new record from the selected grid row through both outputs', async () => {
-    const c = config({ pageType: 'entityrecord', entityName: 'contact', formId: '', tabName: '', data: '', createNew: true, createFromCurrent: true });
-    c.trigger.kind = 'MainGridButton';
-    c.context.mode = 'SelectedRow';
-    c.context.entityName = 'account';
+    const c = config({ pageType: 'entityrecord', entityName: 'contact', formId: '', tabName: '', data: '', createNew: true });
+    c.trigger.kind = 'GridButton';
+    c.host.entityName = 'account';
+    c.context.source = { kind: 'selectedRow' };
     const expected = { pageType: 'entityrecord', entityName: 'contact', createFromEntity: { entityType: 'account', id: otherId } };
     expect(await navigate(c, false)).toEqual(expected);
     expect(await navigate(c, true)).toEqual(expected);
@@ -136,11 +138,11 @@ describe('page parameter contract', () => {
 });
 
 describe('generative page contract', () => {
-  const generative = { pageType: 'generative', pageId: `{${otherId}}`, data: '{"status":"open"}' };
+  const generative: TargetConfig = { pageType: 'generative', pageId: `{${otherId}}`, data: '{"status":"open"}' };
 
   it('sends pageId, the record pair, and data through both outputs', async () => {
     const c = config(generative);
-    c.context.entityName = 'account';
+    c.context.source = { kind: 'fixed', entityName: 'account', id };
     const expected = { pageType: 'generative', pageId: otherId, entityName: 'account', recordId: id, data: { status: 'open' } };
     expect(await navigate(c, false)).toEqual(expected);
     expect(await navigate(c, true)).toEqual(expected);
