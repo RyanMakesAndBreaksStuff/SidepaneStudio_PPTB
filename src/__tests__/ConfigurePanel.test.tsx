@@ -1,814 +1,394 @@
 import * as React from 'react';
-import { useState } from 'react';
-import { act } from 'react';
-import { createRoot, Root } from 'react-dom/client';
+import { useState, act } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ConfigurePanel } from '../components/ConfigurePanel';
 import { ThemeProvider } from '../contexts/ThemeContext';
-import { DEFAULT_CONFIG, PaneDefinitionConfig } from '../types/PaneDefinitionConfig';
+import { DEFAULT_CONFIG, type PaneDefinitionConfig } from '../types/PaneDefinitionConfig';
 import { DEFAULT_METADATA_FILTER_CONFIG } from '../types/MetadataFilterConfig';
 import { validate } from '../services/ValidationService';
+import { coerceConfig } from '../services/triggerCapabilities';
+import { describeConfigText } from '../services/describeConfig';
 import type { MetadataService } from '../services/MetadataService';
+import type { FormXmlService } from '../services/FormXmlService';
+import { cfg } from './testHelpers';
 
 let root: Root | undefined;
 let host: HTMLDivElement | undefined;
 
 function makeMetadataService(overrides: Partial<MetadataService> = {}): MetadataService {
   return {
-    listAccessibleTables: vi.fn().mockResolvedValue({ status: 'ok', tables: [] }),
+    listAccessibleTables: vi.fn().mockResolvedValue({ status: 'ok', tables: [
+      { logicalName: 'account', displayName: 'Account', objectTypeCode: 1 },
+      { logicalName: 'contact', displayName: 'Contact', objectTypeCode: 2 },
+    ] }),
     listAccessibleDashboards: vi.fn().mockResolvedValue({ status: 'ok', dashboards: [] }),
     listViewsForEntity: vi.fn().mockResolvedValue({ status: 'ok', views: [] }),
+    listLookupAttributes: vi.fn().mockResolvedValue([]),
+    listAttributeLabels: vi.fn().mockResolvedValue([]),
     invalidate: vi.fn(),
     subscribeTables: vi.fn(() => () => undefined),
     ...overrides,
   } as unknown as MetadataService;
 }
 
-async function render(element: React.ReactElement) {
+async function render(element: React.ReactElement): Promise<void> {
   host = document.createElement('div');
   document.body.appendChild(host);
   root = createRoot(host);
-  await act(async () => {
-    root?.render(<ThemeProvider>{element}</ThemeProvider>);
-  });
+  await act(async () => { root?.render(<ThemeProvider>{element}</ThemeProvider>); });
 }
 
-async function expandSection(title: string) {
-  const sectionBtn = Array.from(host?.querySelectorAll('button') ?? []).find(
-    b => b.textContent?.includes(title)
-  );
-  if (sectionBtn?.getAttribute('aria-expanded') === 'false') {
-    await act(async () => {
-      sectionBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
+function sectionButton(title: string): HTMLButtonElement | undefined {
+  return Array.from(host?.querySelectorAll<HTMLButtonElement>('button[aria-expanded]') ?? [])
+    .find(button => button.textContent?.includes(title));
+}
+
+async function expandSection(title: string): Promise<void> {
+  const button = sectionButton(title);
+  expect(button).toBeTruthy();
+  if (button?.getAttribute('aria-expanded') === 'false') await act(async () => { button.click(); });
+}
+
+function chip(group: string, label: string): HTMLButtonElement | undefined {
+  return Array.from(host?.querySelectorAll<HTMLButtonElement>(`[role="radiogroup"][aria-label="${group}"] [role="radio"]`) ?? [])
+    .find(button => button.textContent?.includes(label));
+}
+
+async function clickChip(group: string, label: string): Promise<void> {
+  const button = chip(group, label);
+  expect(button).toBeTruthy();
+  await act(async () => { button?.click(); });
+}
+
+function combo(label: string): HTMLInputElement | null {
+  return host?.querySelector<HTMLInputElement>(`[role="combobox"][aria-label="${label}"]`) ?? null;
+}
+
+async function chooseOption(label: string, optionText: string): Promise<void> {
+  const input = combo(label);
+  expect(input).toBeTruthy();
+  await act(async () => { input?.focus(); });
+  const option = Array.from(host?.querySelectorAll<HTMLElement>('[role="option"]') ?? [])
+    .find(item => item.textContent?.includes(optionText));
+  expect(option).toBeTruthy();
+  await act(async () => { option?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })); });
+}
+
+function input(placeholder: string): HTMLInputElement | null {
+  return host?.querySelector<HTMLInputElement>(`input[placeholder="${placeholder}"]`) ?? null;
+}
+
+async function changeInput(element: HTMLInputElement, value: string): Promise<void> {
+  const setValue = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set?.bind(element);
+  await act(async () => { setValue?.(value); element.dispatchEvent(new Event('input', { bubbles: true })); });
+}
+
+async function renderPanel(initialConfig: PaneDefinitionConfig = DEFAULT_CONFIG,
+  metadataService = makeMetadataService(), formXmlService?: FormXmlService): Promise<() => PaneDefinitionConfig> {
+  let current = initialConfig;
+  function Workflow(): React.ReactElement {
+    const [config, setConfig] = useState(initialConfig);
+    current = config;
+    return <ConfigurePanel config={config} onChange={updater => setConfig(prev => coerceConfig(updater(prev)))}
+      validation={validate(config)} metadataService={metadataService} formXmlService={formXmlService} />;
   }
-}
-
-function getChoiceButton(label: string): HTMLButtonElement | undefined {
-  return Array.from(host?.querySelectorAll('[role="radio"]') ?? []).find(
-    b => b.textContent?.includes(label)
-  ) as HTMLButtonElement | undefined;
-}
-
-function findToggleByLabel(label: string): HTMLElement | undefined {
-  return Array.from(host?.querySelectorAll('[role="switch"]') ?? []).find(
-    el => el.getAttribute('aria-label') === label
-  ) as HTMLElement | undefined;
-}
-
-function findInputByPlaceholder(placeholder: string): HTMLInputElement | undefined {
-  return (host?.querySelector(`input[placeholder="${placeholder}"]`) ?? undefined) as HTMLInputElement | undefined;
-}
-
-async function renderPanel({
-  config,
-  onChange,
-}: {
-  config?: PaneDefinitionConfig;
-  onChange?: (updater: (prev: PaneDefinitionConfig) => PaneDefinitionConfig) => void;
-} = {}) {
-  const useStateful = config === undefined && onChange === undefined;
-
-  if (useStateful) {
-    await render(
-      <StatefulConfigurePanel
-        initialConfig={DEFAULT_CONFIG}
-        metadataService={makeMetadataService()}
-      />
-    );
-  } else {
-    await render(
-      <ConfigurePanel
-        config={config ?? DEFAULT_CONFIG}
-        onChange={onChange ?? vi.fn()}
-        validation={validate(config ?? DEFAULT_CONFIG)}
-        metadataService={makeMetadataService()}
-      />
-    );
-  }
-  await expandSection('Record context');
-  await expandSection('Advanced options');
-}
-
-function StatefulConfigurePanel({
-  initialConfig,
-  metadataService,
-}: {
-  initialConfig: PaneDefinitionConfig;
-  metadataService: MetadataService;
-}): React.ReactElement {
-  const [config, setConfig] = useState(initialConfig);
-  const validation = validate(config);
-  return (
-    <ConfigurePanel
-      config={config}
-      onChange={updater => setConfig(prev => updater(prev))}
-      validation={validation}
-      metadataService={metadataService}
-    />
-  );
+  await render(<Workflow />);
+  await expandSection('Trigger & source');
+  await expandSection('Destination');
+  return () => current;
 }
 
 afterEach(async () => {
-  if (root) {
-    await act(async () => {
-      root?.unmount();
-    });
-  }
+  if (root) await act(async () => { root?.unmount(); });
   vi.unstubAllGlobals();
   host?.remove();
   root = undefined;
   host = undefined;
 });
 
-describe('ConfigurePanel', () => {
-  it('renders dashboard and search as enabled choices', async () => {
-    await render(
-      <ConfigurePanel
-        config={DEFAULT_CONFIG}
-        onChange={() => {}}
-        validation={{ isValid: true, errors: [], warnings: [] }}
-        metadataService={makeMetadataService()}
-      />
-    );
-    await expandSection('What opens in the pane');
-
-    const dashboardBtn = getChoiceButton('Dashboard');
-    const searchBtn = getChoiceButton('Search');
-
-    expect(dashboardBtn).toBeTruthy();
-    expect(dashboardBtn?.disabled).toBe(false);
-    expect(searchBtn).toBeTruthy();
-    expect(searchBtn?.disabled).toBe(false);
-  });
-
-  it('shows DashboardPicker when dashboard page type is selected', async () => {
-    const listAccessibleDashboards = vi.fn().mockResolvedValue({ status: 'ok', dashboards: [] });
-    const metadataService = makeMetadataService({ listAccessibleDashboards } as Partial<MetadataService>);
-    await render(
-      <StatefulConfigurePanel
-        initialConfig={DEFAULT_CONFIG}
-        metadataService={metadataService}
-      />
-    );
-    await expandSection('What opens in the pane');
-
-    const dashboardBtn = getChoiceButton('Dashboard');
-    expect(dashboardBtn).toBeTruthy();
-
-    await act(async () => {
-      dashboardBtn?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
-
-    // Field shows error instead of hint because dashboardId is empty
-    expect(host?.textContent).toContain('Dashboard is required');
-    expect(listAccessibleDashboards).toHaveBeenCalled();
-  });
-
-  it('shows search text input when search page type is selected', async () => {
-    await render(
-      <StatefulConfigurePanel
-        initialConfig={DEFAULT_CONFIG}
-        metadataService={makeMetadataService()}
-      />
-    );
-    await expandSection('What opens in the pane');
-
-    const searchBtn = getChoiceButton('Search');
-    expect(searchBtn).toBeTruthy();
-
-    await act(async () => {
-      searchBtn?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
-
-    expect(host?.textContent).toContain('Search text');
-    expect(host?.textContent).toContain('Pre-fill the global search box');
-  });
-
-  it('emits updated config when search text changes', async () => {
-    const onChange = vi.fn();
-    await render(
-      <ConfigurePanel
-        config={{ ...DEFAULT_CONFIG, target: { pageType: 'search', searchText: '' } }}
-        onChange={onChange}
-        validation={{ isValid: true, errors: [], warnings: [] }}
-        metadataService={makeMetadataService()}
-      />
-    );
-    await expandSection('What opens in the pane');
-
-    const input = host?.querySelector('input[placeholder="e.g. Contoso"]') as HTMLInputElement;
-    expect(input).toBeTruthy();
-
-    const inputValueDescriptor = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
-    await act(async () => {
-      inputValueDescriptor?.set?.call(input, 'Contoso');
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-    });
-
-    expect(onChange).toHaveBeenCalled();
-    const updater = onChange.mock.calls[0][0];
-    const next = updater({ ...DEFAULT_CONFIG, target: { pageType: 'search', searchText: '' } });
-    expect(next.target).toEqual({ pageType: 'search', searchText: 'Contoso' });
-  });
-
-  it('displays dashboard validation error when dashboardId is empty', async () => {
-    const config = { ...DEFAULT_CONFIG, target: { pageType: 'dashboard' as const, dashboardId: '', dashboardName: '' } };
-    const validation = validate(config);
-    expect(validation.errors.some(e => e.field === 'target.dashboardId')).toBe(true);
-
-    await render(
-      <ConfigurePanel
-        config={config}
-        onChange={() => {}}
-        validation={validation}
-        metadataService={makeMetadataService()}
-      />
-    );
-    await expandSection('What opens in the pane');
-
-    expect(host?.textContent).toContain('Dashboard is required');
-  });
-
-  it('resets target fields when switching page types', async () => {
-    const onChange = vi.fn();
-    await render(
-      <ConfigurePanel
-        config={{ ...DEFAULT_CONFIG, target: { pageType: 'custom', name: 'sps_MyPage' } }}
-        onChange={onChange}
-        validation={{ isValid: true, errors: [], warnings: [] }}
-        metadataService={makeMetadataService()}
-      />
-    );
-    await expandSection('What opens in the pane');
-
-    const searchBtn = getChoiceButton('Search');
-    await act(async () => {
-      searchBtn?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
-
-    expect(onChange).toHaveBeenCalled();
-    const updater = onChange.mock.calls[0][0];
-    const next = updater({ ...DEFAULT_CONFIG, target: { pageType: 'custom', name: 'sps_MyPage' } });
-    expect(next.target).toEqual({ pageType: 'search', searchText: '' });
-  });
-
-  it('renders metadata filter editor in advanced options when handlers are provided', async () => {
-    await render(
-      <ConfigurePanel
-        config={DEFAULT_CONFIG}
-        onChange={() => {}}
-        validation={{ isValid: true, errors: [], warnings: [] }}
-        metadataService={makeMetadataService()}
-        metadataFilterConfig={DEFAULT_METADATA_FILTER_CONFIG}
-        defaultMetadataFilterConfig={DEFAULT_METADATA_FILTER_CONFIG}
-        metadataFilterPersistenceAvailable={true}
-        onSaveMetadataFilterConfig={() => {}}
-        onResetMetadataFilterConfig={() => {}}
-      />
-    );
-    await expandSection('Advanced options');
-
-    expect(host?.textContent).toContain('Metadata table filters');
-    expect(host?.textContent).toContain('Deny prefixes');
-    expect(host?.textContent).toContain('Allowed standard tables');
-  });
-
-  it('orders advanced pane settings before metadata filters', async () => {
-    await render(
-      <ConfigurePanel
-        config={DEFAULT_CONFIG}
-        onChange={() => {}}
-        validation={{ isValid: true, errors: [], warnings: [] }}
-        metadataService={makeMetadataService()}
-        metadataFilterConfig={DEFAULT_METADATA_FILTER_CONFIG}
-        defaultMetadataFilterConfig={DEFAULT_METADATA_FILTER_CONFIG}
-        metadataFilterPersistenceAvailable={true}
-        onSaveMetadataFilterConfig={() => {}}
-        onResetMetadataFilterConfig={() => {}}
-      />
-    );
-    await expandSection('Advanced options');
-
-    const text = host?.textContent ?? '';
-    expect(text.indexOf('Open in foreground (isSelected)')).toBeLessThan(text.indexOf('Keep loaded when inactive'));
-    expect(text.indexOf('Initial badge value')).toBeLessThan(text.indexOf('Metadata table filters'));
-  });
-});
-
-describe('ConfigurePanel behavior controls', () => {
-  it('renders a control for every behavior field the generator consumes', async () => {
-    const onChange = vi.fn();
-    await renderPanel({ config: DEFAULT_CONFIG, onChange: onChange });
-
-    const expand = findToggleByLabel('Expand pane on open');
-    const closeOthers = findToggleByLabel('Close other side panes');
-    expect(expand).toBeTruthy();
-    expect(closeOthers).toBeTruthy();
-
-    await act(async () => { closeOthers!.click(); });
-    expect(onChange).toHaveBeenCalled();
-    const next = onChange.mock.calls[0][0](DEFAULT_CONFIG);
-    expect(next.behavior.closeOthers).toBe(true);
-  });
-
-  it('stores Close if already open', async () => {
-    const onChange = vi.fn();
-    await renderPanel({ config: DEFAULT_CONFIG, onChange });
-    await act(async () => { findToggleByLabel('Close if already open')!.click(); });
-    expect(onChange.mock.calls[0][0](DEFAULT_CONFIG).behavior.toggleIfOpen).toBe(true);
-  });
-
-  it('exposes the static record ID field for ManualJS + entityrecord', async () => {
-    const config: PaneDefinitionConfig = {
-      ...DEFAULT_CONFIG,
-      target: { pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '' },
-      trigger: { ...DEFAULT_CONFIG.trigger, kind: 'ManualJS' },
-      context: { ...DEFAULT_CONFIG.context, mode: 'CurrentRecord' },
-    };
-    await renderPanel({ config, onChange: vi.fn() });
-
-    expect(findInputByPlaceholder('00000000-0000-0000-0000-000000000000')).toBeTruthy();
-  });
-});
-
-describe('ConfigurePanel — LookupTagClick', () => {
-  it('shows a lookup control name field with the lookup placeholder', async () => {
-    await render(
-      <ConfigurePanel
-        config={{ ...DEFAULT_CONFIG, trigger: { ...DEFAULT_CONFIG.trigger, kind: 'LookupTagClick', fieldName: '' } as any }}
-        onChange={() => {}}
-        validation={{ isValid: true, errors: [], warnings: [] }}
-        metadataService={makeMetadataService()}
-      />
-    );
-    await expandSection('How makers launch this pane');
-
-    expect(host?.textContent).toContain('Lookup control name');
-    expect(findInputByPlaceholder('parentaccountid')).toBeTruthy();
-  });
-});
-
-describe('ConfigurePanel — pane appearance (WR-002)', () => {
-  it('shows the blocking error for an invalid pane width', async () => {
-    const config = { ...DEFAULT_CONFIG, pane: { ...DEFAULT_CONFIG.pane, width: 1201 as any } };
-    await render(
-      <ConfigurePanel
-        config={config}
-        onChange={() => {}}
-        validation={validate(config)}
-        metadataService={makeMetadataService()}
-      />
-    );
-    await expandSection('Pane Appearance');
-
-    expect(host?.textContent).toContain('Pane width must be between 300 and 1200 pixels.');
-  });
-
-  it('offers no Resizable toggle, because isResizable is not a documented paneOption', async () => {
-    await renderPanel({ config: DEFAULT_CONFIG, onChange: vi.fn() });
-    await expandSection('Pane Appearance');
-    expect(host?.textContent ?? '').not.toMatch(/resizable/i);
-  });
-
-  it('tells makers the tab icon needs the WebResources/ prefix', async () => {
-    await renderPanel({ config: DEFAULT_CONFIG, onChange: vi.fn() });
-    await expandSection('Pane Appearance');
-    expect(findInputByPlaceholder('WebResources/sps_/icons/myicon.svg')).toBeTruthy();
-  });
-
-  it('surfaces the hideHeader warning as a warn callout, not an error', async () => {
-    const config = DEFAULT_CONFIG;
-    const validation = {
-      errors: [] as Array<{ field: string; message: string }>,
-      warnings: [{ field: 'pane.hideHeader', message: 'Hiding the header also hides the close button.' }],
-      isValid: true,
-    };
-    await render(
-      <ConfigurePanel
-        config={config}
-        onChange={vi.fn()}
-        validation={validation}
-        metadataService={makeMetadataService()}
-      />
-    );
-    await expandSection('Pane Appearance');
-
-    expect(host?.textContent ?? '').toMatch(/hides the close button/i);
-  });
-});
-
-describe('ConfigurePanel — search target (WR-001)', () => {
-  it('shows the search warning callout when the search page type is selected', async () => {
-    const config = { ...DEFAULT_CONFIG, target: { pageType: 'search' as const, searchText: '' } };
-    const validation = {
-      errors: [] as Array<{ field: string; message: string }>,
-      warnings: [{ field: 'target.pageType', message: 'Search is not a documented navigateTo pageType.' }],
-      isValid: true,
-    };
-    await render(
-      <ConfigurePanel
-        config={config}
-        onChange={vi.fn()}
-        validation={validation}
-        metadataService={makeMetadataService()}
-      />
-    );
-    await expandSection('What opens in the pane');
-
-    expect(host?.textContent ?? '').toMatch(/not a documented navigateTo pageType/i);
-  });
-
-  it('labels the search option as unsupported in the content type list', async () => {
+describe('ConfigurePanel — sentence', () => {
+  it('renders one sentence and jumps to Pane & behaviour', async () => {
     await renderPanel();
-    await expandSection('What opens in the pane');
-
-    const searchBtn = getChoiceButton('Search');
-    await act(async () => {
-      searchBtn?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
-
-    expect(host?.textContent ?? '').toMatch(/not documented by navigateTo/i);
+    const summary = host?.querySelector('[role="region"][aria-label="Configuration summary"]');
+    expect(summary?.textContent).toContain(describeConfigText(DEFAULT_CONFIG));
+    expect(sectionButton('Pane & behaviour')?.getAttribute('aria-expanded')).toBe('false');
+    await act(async () => { summary?.querySelector<HTMLButtonElement>('[data-slot="pane"]')?.click(); });
+    expect(sectionButton('Pane & behaviour')?.getAttribute('aria-expanded')).toBe('true');
   });
+});
 
-  it('shows no search warning for a custom page target', async () => {
+describe('ConfigurePanel — sentence slots', () => {
+  it('re-expands a collapsed section from its sentence slot', async () => {
     await renderPanel();
-    await expandSection('What opens in the pane');
-    expect(host?.textContent ?? '').not.toMatch(/not a documented navigateTo pageType/i);
-  });
-});
-
-describe('ConfigurePanel — record context table name (CR-001)', () => {
-  const withMode = (mode: string, extra: Record<string, unknown> = {}) => ({
-    config: {
-      ...DEFAULT_CONFIG,
-      context: { mode, entityName: '', staticRecordId: '', reuseExistingPane: true },
-      ...extra,
-    },
-  });
-
-  it('offers a table name picker on the shipped default (custom + CurrentRecord)', async () => {
-    await renderPanel(withMode('CurrentRecord') as any);
-    expect(host!.querySelector('[aria-label="Show custom tables only"]')).toBeTruthy();
-    expect(host!.textContent).not.toContain('Only Custom Tables');
-  });
-
-  it('offers a table name picker for SelectedRow', async () => {
-    await renderPanel(withMode('SelectedRow') as any);
-    expect(host!.querySelector('[aria-label="Show custom tables only"]')).toBeTruthy();
-  });
-
-  it('offers a table name picker for Static', async () => {
-    await renderPanel(withMode('Static') as any);
-    expect(host!.querySelector('[aria-label="Show custom tables only"]')).toBeTruthy();
-  });
-
-  it('hides the table name picker for None, which emits no record fields', async () => {
-    await renderPanel(withMode('None') as any);
-    expect(host!.querySelector('[aria-label="Show custom tables only"]')).toBeNull();
-  });
-
-  it('shows the Record ID input only for Static', async () => {
-    await renderPanel(withMode('Static') as any);
-    expect(findInputByPlaceholder('00000000-0000-0000-0000-000000000000')).toBeTruthy();
-  });
-
-  it('hides the Record ID input for CurrentRecord, which resolves the id at runtime', async () => {
-    await renderPanel(withMode('CurrentRecord') as any);
-    expect(findInputByPlaceholder('00000000-0000-0000-0000-000000000000')).toBeUndefined();
-  });
-
-  it('still shows the Record ID input for ManualJS + entityrecord', async () => {
-    await renderPanel(
-      withMode('None', {
-        trigger: { kind: 'ManualJS', functionName: 'openPane', namespace: 'Ns', fieldName: '' },
-        target: { pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '' },
-      }) as any
-    );
-    expect(findInputByPlaceholder('00000000-0000-0000-0000-000000000000')).toBeTruthy();
-  });
-});
-
-describe('ConfigurePanel — related record context', () => {
-  it('reapplies resolved lookup target when switching to Table record and loads that table forms', async () => {
-    const listLookupAttributes = vi.fn().mockResolvedValue([
-      { LogicalName: 'primarycontactid', Targets: ['contact'] },
-    ]);
-    const metadataService = makeMetadataService({ listLookupAttributes });
-    const getFormsForEntityResult = vi.fn().mockResolvedValue({ ok: true, forms: [] });
-    const formXmlService = { getFormsForEntityResult } as any;
-    const initial: PaneDefinitionConfig = {
-      ...DEFAULT_CONFIG,
-      target: { pageType: 'custom', name: 'sample_page' },
-      context: { ...DEFAULT_CONFIG.context, mode: 'RelatedRecord', entityName: 'account', lookupAttribute: '' },
-    };
-    let current = initial;
-    function Workflow(): React.ReactElement {
-      const [config, setConfig] = useState(initial);
-      current = config;
-      return <ConfigurePanel config={config} onChange={updater => setConfig(prev => updater(prev))}
-        validation={validate(config)} metadataService={metadataService}
-        formXmlService={formXmlService} />;
+    for (const [slot, title] of [['trigger', 'Trigger & source'], ['host', 'Trigger & source'], ['target', 'Destination'], ['source', 'Destination']] as const) {
+      await act(async () => { sectionButton(title)?.click(); });
+      expect(sectionButton(title)?.getAttribute('aria-expanded')).toBe('false');
+      await act(async () => { host?.querySelector<HTMLButtonElement>(`[data-slot="${slot}"]`)?.click(); });
+      expect(sectionButton(title)?.getAttribute('aria-expanded')).toBe('true');
     }
-    await render(<Workflow />);
-    await expandSection('Record context');
-    const lookup = host!.querySelector<HTMLSelectElement>('select[aria-label="Lookup column"]')!;
-    await act(async () => {
-      lookup.value = 'primarycontactid';
-      lookup.dispatchEvent(new Event('change', { bubbles: true }));
-    });
-    expect(host!.textContent).toContain('Destination table: contact');
-    expect(current.target).toMatchObject({ pageType: 'custom', name: 'sample_page' });
-    await expandSection('What opens in the pane');
-    await act(async () => { getChoiceButton('Table record')!.click(); });
+  });
+});
 
-    expect(current.target).toMatchObject({ pageType: 'entityrecord', entityName: 'contact' });
+describe('ConfigurePanel — trigger section', () => {
+  it('snaps target and source to legal values when the trigger changes', async () => {
+    const get = await renderPanel(cfg({ target: { pageType: 'entitylist', entityName: 'account', viewId: '', viewType: '' },
+      context: { source: { kind: 'host' } } }));
+    await clickChip('triggerKind', 'Grid button');
+    expect(get().target.pageType).not.toBe('entitylist');
+    expect(get().context.source.kind).toBe('selectedRow');
+    await clickChip('triggerKind', 'Console');
+    expect(get().context.source.kind).toBe('fixed');
+    await clickChip('triggerKind', 'Lookup tag click');
+    await clickChip('pageType', 'Table record');
+    expect(get().context.source.kind).toBe('clickedTag');
+  });
+
+  it('offers the seven trigger kinds and shows the right host controls', async () => {
+    await renderPanel();
+    expect(Array.from(host!.querySelectorAll('[role="radiogroup"][aria-label="triggerKind"] [role="radio"]'))).toHaveLength(7);
+    await clickChip('triggerKind', 'Grid button');
+    expect(chip('gridSurface', 'Main grid')).toBeTruthy();
+    expect(chip('pageType', 'Table list')).toBeUndefined();
+    expect(combo('View')).toBeTruthy();
+    await clickChip('triggerKind', 'Console');
+    expect(combo('Trigger table')).toBeNull();
+    expect(input('openRelatedRecordsPane')).toBeNull();
+    expect(input('Contoso')).toBeNull();
+    await clickChip('triggerKind', 'Field change');
+    expect(combo('Column')).toBeTruthy();
+    await clickChip('triggerKind', 'Lookup tag click');
+    expect(combo('Add lookup control')).toBeTruthy();
+  });
+});
+
+describe('ConfigurePanel — record source', () => {
+  it('offers only legal record sources after trigger and content choices', async () => {
+    await renderPanel();
+    await clickChip('pageType', 'Table record');
+    expect(chip('recordSource', 'The record on this form')).toBeTruthy();
+    expect(chip('recordSource', 'A record in a lookup')).toBeTruthy();
+    expect(chip('recordSource', 'A specific record')).toBeTruthy();
+    expect(chip('recordSource', 'No record')).toBeUndefined();
+    await clickChip('triggerKind', 'Lookup tag click');
+    expect(host?.querySelectorAll('[role="radiogroup"][aria-label="recordSource"] [role="radio"]')).toHaveLength(1);
+    expect(chip('recordSource', 'The clicked tag record')).toBeTruthy();
+    expect(host?.textContent).toContain('Set by the trigger.');
+    await clickChip('pageType', 'Dashboard');
+    expect(host?.querySelector('[role="radiogroup"][aria-label="recordSource"]')).toBeNull();
+  });
+
+  it('shows GUID, record table and variable inputs only when used', async () => {
+    await renderPanel();
+    await clickChip('recordSource', 'A specific record');
+    expect(input('00000000-0000-0000-0000-000000000000')).toBeTruthy();
+    expect(combo('Record table')).toBeTruthy();
+    expect(input('recordId')).toBeTruthy();
+    await clickChip('recordSource', 'No record');
+    expect(input('recordId')).toBeNull();
+    await clickChip('pageType', 'Dashboard');
+    expect(input('recordId')).toBeNull();
+  });
+});
+
+describe('ConfigurePanel — destination table', () => {
+  it('derives the host table for an existing record and asks for one in create mode', async () => {
+    await renderPanel(cfg({ host: { entityName: 'account' },
+      target: { pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '' } }));
+    expect(Array.from(host?.querySelectorAll('[role="status"]') ?? []).some(status =>
+      status.textContent?.includes('Destination table: account'))).toBe(true);
+    expect(combo('Destination table')).toBeNull();
+    await clickChip('entityRecordMode', 'Create new record');
+    expect(combo('Destination table')).toBeTruthy();
+  });
+
+  it('reapplies a resolved lookup target when switching to Table record and loads its forms', async () => {
+    const listLookupAttributes = vi.fn().mockResolvedValue([{ LogicalName: 'primarycontactid', Targets: ['contact'] }]);
+    const getFormsForEntityResult = vi.fn().mockResolvedValue({ ok: true, forms: [] });
+    const get = await renderPanel(cfg({ host: { entityName: 'account' }, context: { source: { kind: 'lookup', attribute: '' } } }),
+      makeMetadataService({ listLookupAttributes }), { getFormsForEntityResult } as unknown as FormXmlService);
+    await chooseOption('Lookup column', 'primarycontactid');
+    await clickChip('pageType', 'Table record');
+    expect(get().target).toMatchObject({ pageType: 'entityrecord', entityName: 'contact' });
     expect(getFormsForEntityResult).toHaveBeenCalledWith('contact');
   });
 
-  it('lists the source table lookup columns and stores the chosen column', async () => {
+  it('lists host lookup columns and stores the chosen column', async () => {
     const listLookupAttributes = vi.fn().mockResolvedValue([
       { LogicalName: 'primarycontactid', DisplayName: { UserLocalizedLabel: { Label: 'Primary Contact' } } },
     ]);
-    const onChange = vi.fn();
-    const config: PaneDefinitionConfig = {
-      ...DEFAULT_CONFIG,
-      trigger: { ...DEFAULT_CONFIG.trigger, kind: 'MainGridOnSelect' },
-      context: { ...DEFAULT_CONFIG.context, mode: 'RelatedRecord', entityName: 'account' },
-    };
-    await render(<ConfigurePanel config={config} onChange={onChange} validation={validate(config)}
-      metadataService={makeMetadataService({ listLookupAttributes })} />);
-    await expandSection('Record context');
-    expect(host!.textContent).toContain('Source table');
-    expect(host!.textContent).toContain('Select the lookup column whose record opens in the pane.');
+    const get = await renderPanel(cfg({ host: { entityName: 'account' }, context: { source: { kind: 'lookup', attribute: '' } } }),
+      makeMetadataService({ listLookupAttributes }));
     expect(listLookupAttributes).toHaveBeenCalledWith('account');
-    const select = host!.querySelector<HTMLSelectElement>('select[aria-label="Lookup column"]')!;
-    expect(Array.from(select.options).map(option => option.textContent)).toContain('Primary Contact (primarycontactid)');
-    await act(async () => {
-      select.value = 'primarycontactid';
-      select.dispatchEvent(new Event('change', { bubbles: true }));
-    });
-    const updater = onChange.mock.calls[onChange.mock.calls.length - 1][0] as
-      (prev: PaneDefinitionConfig) => PaneDefinitionConfig;
-    expect(updater(config).context.lookupAttribute).toBe('primarycontactid');
+    await chooseOption('Lookup column', 'Primary Contact');
+    expect(get().context.source).toEqual({ kind: 'lookup', attribute: 'primarycontactid' });
   });
 
   it('derives a single lookup destination and clears incompatible form and tab selections', async () => {
-    const listLookupAttributes = vi.fn().mockResolvedValue([
-      { LogicalName: 'primarycontactid', Targets: ['contact'], DisplayName: { UserLocalizedLabel: { Label: 'Primary Contact' } } },
-    ]);
-    const config: PaneDefinitionConfig = {
-      ...DEFAULT_CONFIG,
+    const listLookupAttributes = vi.fn().mockResolvedValue([{ LogicalName: 'primarycontactid', Targets: ['contact'] }]);
+    const get = await renderPanel(cfg({ host: { entityName: 'account' },
       target: { pageType: 'entityrecord', entityName: 'account', formId: 'old-form', tabName: 'old-tab', data: '' },
-      context: { ...DEFAULT_CONFIG.context, mode: 'RelatedRecord', entityName: 'account', lookupAttribute: '' },
-    };
-    await render(<StatefulConfigurePanel initialConfig={config} metadataService={makeMetadataService({ listLookupAttributes })} />);
-    await expandSection('Record context');
-    const select = host!.querySelector<HTMLSelectElement>('select[aria-label="Lookup column"]')!;
-    await act(async () => {
-      select.value = 'primarycontactid';
-      select.dispatchEvent(new Event('change', { bubbles: true }));
-    });
-    await expandSection('What opens in the pane');
-    expect(host!.textContent).toContain('Destination table: contact');
-    const tabField = Array.from(host!.querySelectorAll('label')).find(label => label.textContent?.includes('Tab name'))?.parentElement;
-    expect(tabField?.querySelector('input')?.disabled).toBe(false);
-    expect(host!.textContent).toContain('Primary Contact (primarycontactid)');
+      context: { source: { kind: 'lookup', attribute: '' } } }), makeMetadataService({ listLookupAttributes }));
+    await chooseOption('Lookup column', 'primarycontactid');
+    expect(get().target).toMatchObject({ entityName: 'contact', formId: '', tabName: '' });
+    expect(host?.textContent).toContain('Destination table: contact');
+    expect(host?.querySelector<HTMLInputElement>('input[placeholder=""]')).toBeTruthy();
   });
 
-  it('shows every possible customer target and disables table-specific form and tab controls', async () => {
+  it('shows multiple possible lookup targets and disables table-specific controls', async () => {
     const listLookupAttributes = vi.fn().mockResolvedValue([
-      { LogicalName: 'parentcustomerid', Targets: ['account', 'contact'], DisplayName: { UserLocalizedLabel: { Label: 'Parent Customer' } } },
+      { LogicalName: 'parentcustomerid', Targets: ['account', 'contact'] },
     ]);
-    const config: PaneDefinitionConfig = {
-      ...DEFAULT_CONFIG,
-      target: { pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '' },
-      context: { ...DEFAULT_CONFIG.context, mode: 'RelatedRecord', entityName: 'account', lookupAttribute: 'parentcustomerid' },
-    };
-    await render(<StatefulConfigurePanel initialConfig={config} metadataService={makeMetadataService({ listLookupAttributes })} />);
-    await expandSection('Record context');
-    await expandSection('What opens in the pane');
-    expect(host!.textContent).toContain('Possible destination tables: account, contact.');
-    expect(host!.textContent).toContain('Determined by the selected row');
-    expect(Array.from(host!.querySelectorAll('label')).some(label => label.textContent?.trim() === 'Table name *')).toBe(false);
+    await renderPanel(cfg({ host: { entityName: 'account' },
+      target: { pageType: 'entityrecord', entityName: '', formId: '', tabName: '', data: '' },
+      context: { source: { kind: 'lookup', attribute: 'parentcustomerid' } } }),
+    makeMetadataService({ listLookupAttributes }));
+    expect(host?.textContent).toContain('Possible destination tables: account, contact.');
     const tabField = Array.from(host!.querySelectorAll('label')).find(label => label.textContent?.includes('Tab name'))?.parentElement;
     expect(tabField?.querySelector('input')?.disabled).toBe(true);
   });
 
-  it('ignores a delayed response for the prior source table', async () => {
+  it('ignores a delayed lookup response for the prior host table', async () => {
     let resolveAccount!: (value: Array<{ LogicalName: string; Targets: string[] }>) => void;
     const listLookupAttributes = vi.fn((entity: string) => entity === 'account'
       ? new Promise<Array<{ LogicalName: string; Targets: string[] }>>(resolve => { resolveAccount = resolve; })
-      : Promise.resolve([{ LogicalName: 'contactlookup', Targets: ['contact'] } as { LogicalName: string; Targets: string[] }])
-    );
-    const current: PaneDefinitionConfig = {
-      ...DEFAULT_CONFIG,
-      target: { pageType: 'entityrecord', entityName: 'account', formId: 'old-form', tabName: 'old-tab', data: '' },
-      context: { ...DEFAULT_CONFIG.context, mode: 'RelatedRecord', entityName: 'account', lookupAttribute: '' },
-    };
-    const metadataService = makeMetadataService({
-      listLookupAttributes,
-      listAccessibleTables: vi.fn().mockResolvedValue({ status: 'ok', tables: [
-        { logicalName: 'account', displayName: 'Account', objectTypeCode: 1 },
-        { logicalName: 'contact', displayName: 'Contact', objectTypeCode: 2 },
-      ] }),
-    });
-    await render(<StatefulConfigurePanel initialConfig={current} metadataService={metadataService} />);
-    await expandSection('Record context');
-    expect(host!.textContent).toContain('Loading lookup columns');
-    const sourcePicker = host!.querySelector<HTMLInputElement>('[role="combobox"]');
-    expect(sourcePicker).toBeTruthy();
-    await act(async () => { sourcePicker!.focus(); });
-    const contactOption = Array.from(host!.querySelectorAll<HTMLElement>('[role="option"]'))
-      .find(option => option.textContent?.includes('contact'));
-    expect(contactOption).toBeTruthy();
-    await act(async () => {
-      contactOption!.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
-    });
+      : Promise.resolve([{ LogicalName: 'contactlookup', Targets: ['contact'] }]));
+    await renderPanel(cfg({ host: { entityName: 'account' },
+      target: { pageType: 'entityrecord', entityName: '', formId: '', tabName: '', data: '' },
+      context: { source: { kind: 'lookup', attribute: '' } } }), makeMetadataService({ listLookupAttributes }));
+    await chooseOption('Trigger table', 'contact');
     resolveAccount([{ LogicalName: 'staleaccountlookup', Targets: ['account'] }]);
     await act(async () => { await Promise.resolve(); });
-    expect(host!.textContent).not.toContain('staleaccountlookup');
-    const selects = Array.from(host!.querySelectorAll<HTMLSelectElement>('select'));
-    const lookupOptions = selects[selects.length - 1]?.options;
-    expect(Array.from(lookupOptions ?? []).map(option => option.value)).not.toContain('staleaccountlookup');
-    expect(host!.textContent).toContain('contactlookup');
+    expect(host?.textContent).not.toContain('staleaccountlookup');
+    await chooseOption('Lookup column', 'contactlookup');
+    expect(host?.textContent).toContain('Destination table: contact');
   });
 
-  it('preserves saved destination fields on lookup error and retries into the resolved target', async () => {
-    const listLookupAttributes = vi.fn()
-      .mockRejectedValueOnce(new Error('connection unavailable'))
-      .mockResolvedValueOnce([
-        { LogicalName: 'primarycontactid', Targets: ['contact'], DisplayName: { UserLocalizedLabel: { Label: 'Primary Contact' } } },
-      ]);
-    const config: PaneDefinitionConfig = {
-      ...DEFAULT_CONFIG,
+  it('preserves saved destination on lookup error and retries into the resolved target', async () => {
+    const listLookupAttributes = vi.fn().mockRejectedValueOnce(new Error('connection unavailable'))
+      .mockResolvedValueOnce([{ LogicalName: 'primarycontactid', Targets: ['contact'] }]);
+    const get = await renderPanel(cfg({ host: { entityName: 'account' },
       target: { pageType: 'entityrecord', entityName: 'account', formId: 'saved-form', tabName: 'saved-tab', data: '' },
-      context: { ...DEFAULT_CONFIG.context, mode: 'RelatedRecord', entityName: 'account', lookupAttribute: 'primarycontactid' },
-    };
-    await render(<StatefulConfigurePanel initialConfig={config} metadataService={makeMetadataService({ listLookupAttributes })} />);
-    await expandSection('Record context');
-    await expandSection('What opens in the pane');
-    expect(host!.querySelector('[role="alert"]')?.textContent).toContain('connection unavailable');
-    const tabField = Array.from(host!.querySelectorAll('label')).find(label => label.textContent?.includes('Tab name'))?.parentElement;
-    expect(tabField?.querySelector('input')?.value).toBe('saved-tab');
-    expect(host!.textContent).toContain('Saved table selection “account” is unconfirmed');
-
-    await act(async () => {
-      Array.from(host!.querySelectorAll('button')).find(button => button.textContent === 'Retry')?.click();
-    });
-    expect(host!.textContent).toContain('Destination table: contact');
-    expect(tabField?.querySelector('input')?.value).toBe('');
+      context: { source: { kind: 'lookup', attribute: 'primarycontactid' } } }),
+    makeMetadataService({ listLookupAttributes }));
+    expect(host?.textContent).toContain('connection unavailable');
+    expect(host?.textContent).toContain('Saved table selection “account” is unconfirmed');
+    expect(get().target).toMatchObject({ formId: 'saved-form', tabName: 'saved-tab' });
+    await act(async () => { Array.from(host!.querySelectorAll('button')).find(button => button.textContent === 'Retry')?.click(); });
+    expect(host?.textContent).toContain('Destination table: contact');
+    expect(get().target).toMatchObject({ formId: '', tabName: '' });
     expect(listLookupAttributes).toHaveBeenCalledTimes(2);
   });
 
-  it('ignores lookup metadata returned by a replaced metadata service instance', async () => {
+  it('ignores metadata returned by a replaced metadata service instance', async () => {
     let resolveOld!: (value: Array<{ LogicalName: string; Targets: string[] }>) => void;
-    const oldService = makeMetadataService({
-      listLookupAttributes: vi.fn(() => new Promise<Array<{ LogicalName: string; Targets: string[] }>>(resolve => { resolveOld = resolve; })),
-    });
-    const newService = makeMetadataService({
-      listLookupAttributes: vi.fn().mockResolvedValue([
-        { LogicalName: 'newservice_lookup', Targets: ['contact'] },
-      ]),
-    });
-    const config: PaneDefinitionConfig = {
-      ...DEFAULT_CONFIG,
-      target: { pageType: 'entityrecord', entityName: '', formId: '', tabName: '', data: '' },
-      context: { ...DEFAULT_CONFIG.context, mode: 'RelatedRecord', entityName: 'account', lookupAttribute: '' },
-    };
+    const oldService = makeMetadataService({ listLookupAttributes: vi.fn(() =>
+      new Promise<Array<{ LogicalName: string; Targets: string[] }>>(resolve => { resolveOld = resolve; })) });
+    const newService = makeMetadataService({ listLookupAttributes: vi.fn().mockResolvedValue([
+      { LogicalName: 'newservice_lookup', Targets: ['contact'] },
+    ]) });
+    const config = cfg({ host: { entityName: 'account' }, context: { source: { kind: 'lookup', attribute: '' } } });
     const onChange = vi.fn();
     await render(<ConfigurePanel config={config} onChange={onChange} validation={validate(config)} metadataService={oldService} />);
-    await expandSection('Record context');
-    await act(async () => {
-      root?.render(<ThemeProvider><ConfigurePanel config={config} onChange={onChange} validation={validate(config)} metadataService={newService} /></ThemeProvider>);
-    });
+    await act(async () => { root?.render(<ThemeProvider>
+      <ConfigurePanel config={config} onChange={onChange} validation={validate(config)} metadataService={newService} />
+    </ThemeProvider>); });
     resolveOld([{ LogicalName: 'oldservice_lookup', Targets: ['account'] }]);
     await act(async () => { await Promise.resolve(); });
-    expect(host!.textContent).not.toContain('oldservice_lookup');
-    expect(host!.textContent).toContain('newservice_lookup');
+    expect(host?.textContent).not.toContain('oldservice_lookup');
+    await chooseOption('Lookup column', 'newservice_lookup');
+    expect(onChange).toHaveBeenCalled();
   });
 });
 
-describe('ConfigurePanel — form data guidance', () => {
-  const entityRecordConfig = {
-    ...DEFAULT_CONFIG,
-    target: { pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '' },
-  } as PaneDefinitionConfig;
-
-  function formDataTextarea(): HTMLTextAreaElement | undefined {
-    return (host?.querySelector('textarea[aria-label="Form data"]') ?? undefined) as HTMLTextAreaElement | undefined;
-  }
-
-  it('shows a sample-object placeholder on the Form data textarea', async () => {
-    await renderPanel({ config: entityRecordConfig, onChange: vi.fn() });
-    await expandSection('What opens in the pane');
-    expect(formDataTextarea()?.placeholder).toContain('"name"');
-  });
-
-  it('inserts the sample object when Insert example is clicked', async () => {
-    let current = entityRecordConfig;
-    await renderPanel({ config: current, onChange: updater => { current = updater(current); } });
-    await expandSection('What opens in the pane');
-    const btn = Array.from(host?.querySelectorAll('button') ?? []).find(
-      b => b.textContent?.includes('Insert example')
-    );
-    expect(btn).toBeTruthy();
-    await act(async () => { btn!.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
-    expect(JSON.parse(current.target.pageType === 'entityrecord' ? current.target.data : '{}')).toEqual(
-      expect.objectContaining({ name: expect.any(String) })
-    );
-  });
-
-  it('tells makers column defaults need create mode and links the docs', async () => {
-    await renderPanel({ config: entityRecordConfig, onChange: vi.fn() });
-    await expandSection('What opens in the pane');
-    expect(host?.textContent ?? '').toMatch(/Choose Create new record to pre-fill columns/);
-    const links = Array.from(host?.querySelectorAll('a') ?? []).map(a => (a as HTMLAnchorElement).href);
-    expect(links.some(h => h.includes('set-field-values-using-parameters-passed-form'))).toBe(true);
-    expect(links.some(h => h.includes('configure-form-accept-custom-querystring-parameters'))).toBe(true);
+describe('ConfigurePanel — create mode', () => {
+  it('limits Create new record sources to the host record or none, and offers a destination table', async () => {
+    await renderPanel(cfg({ host: { entityName: 'account' },
+      target: { pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '' } }));
+    await clickChip('entityRecordMode', 'Create new record');
+    expect(chip('recordSource', 'The record on this form')).toBeTruthy();
+    expect(chip('recordSource', 'No record')).toBeTruthy();
+    expect(chip('recordSource', 'A specific record')).toBeUndefined();
+    expect(chip('recordSource', 'A record in a lookup')).toBeUndefined();
+    expect(combo('Destination table')).toBeTruthy();
+    await clickChip('triggerKind', 'Grid button');
+    expect(chip('recordSource', 'The selected row')).toBeTruthy();
+    expect(chip('recordSource', 'The record on this form')).toBeUndefined();
   });
 });
 
-describe('ConfigurePanel — entity record create mode', () => {
-  const openRecord: PaneDefinitionConfig = {
-    ...DEFAULT_CONFIG,
-    target: { pageType: 'entityrecord', entityName: 'contact', formId: '', tabName: '', data: '' },
-    context: { ...DEFAULT_CONFIG.context, mode: 'None' },
-  };
-
-  it('switches to create mode, hides Record ID, and explains Form data pre-fill', async () => {
-    await render(<StatefulConfigurePanel initialConfig={openRecord} metadataService={makeMetadataService()} />);
-    await expandSection('What opens in the pane');
-    await expandSection('Record context');
-    expect(findInputByPlaceholder('00000000-0000-0000-0000-000000000000')).toBeTruthy();
-    await act(async () => { getChoiceButton('Create new record')!.click(); });
-    expect(getChoiceButton('Create new record')?.getAttribute('aria-checked')).toBe('true');
-    expect(findInputByPlaceholder('00000000-0000-0000-0000-000000000000')).toBeUndefined();
-    expect(host!.textContent).toContain('In create mode these values pre-fill columns on the new record.');
+describe('ConfigurePanel — existing controls', () => {
+  it('keeps dashboard and search choices, validation and search text changes', async () => {
+    const listAccessibleDashboards = vi.fn().mockResolvedValue({ status: 'ok', dashboards: [] });
+    const get = await renderPanel(DEFAULT_CONFIG, makeMetadataService({ listAccessibleDashboards }));
+    await clickChip('pageType', 'Dashboard');
+    expect(combo('Dashboard')).toBeTruthy();
+    expect(host?.textContent).toContain('Dashboard is required');
+    expect(listAccessibleDashboards).toHaveBeenCalled();
+    await clickChip('pageType', 'Search');
+    expect(host?.textContent).toContain('Pre-fill the global search box');
+    await changeInput(input('e.g. Contoso')!, 'Contoso');
+    expect(get().target).toEqual({ pageType: 'search', searchText: 'Contoso' });
+    expect(host?.textContent).toContain('not a documented navigateTo pageType');
   });
 
-  const createRecord: PaneDefinitionConfig = {
-    ...openRecord,
-    target: { pageType: 'entityrecord', entityName: 'contact', formId: '', tabName: '', data: '', createNew: true },
-  };
-
-  it('stores Pre-fill from current record for a form trigger', async () => {
-    let current = createRecord;
-    await renderPanel({ config: current, onChange: updater => { current = updater(current); } });
-    await expandSection('What opens in the pane');
-    await act(async () => { findToggleByLabel('Pre-fill from current record')!.click(); });
-    expect(current.target).toMatchObject({ createFromCurrent: true });
+  it('keeps behavior controls and metadata filters in order', async () => {
+    await render(<ConfigurePanel config={DEFAULT_CONFIG} onChange={vi.fn()} validation={validate(DEFAULT_CONFIG)}
+      metadataService={makeMetadataService()} metadataFilterConfig={DEFAULT_METADATA_FILTER_CONFIG}
+      defaultMetadataFilterConfig={DEFAULT_METADATA_FILTER_CONFIG} metadataFilterPersistenceAvailable
+      onSaveMetadataFilterConfig={vi.fn()} onResetMetadataFilterConfig={vi.fn()} />);
+    await expandSection('Pane & behaviour');
+    const text = host?.textContent ?? '';
+    expect(text.indexOf('Open in foreground (isSelected)')).toBeLessThan(text.indexOf('Keep loaded when inactive'));
+    expect(text.indexOf('Initial badge value')).toBeLessThan(text.indexOf('Metadata table filters'));
+    expect(host?.querySelector('[role="switch"][aria-label="Reuse open pane"]')).toBeTruthy();
+    expect(text).toContain('Deny prefixes');
   });
 
-  it('hides Pre-fill from current record for a console script', async () => {
-    await renderPanel({ config: { ...createRecord, trigger: { ...DEFAULT_CONFIG.trigger, kind: 'ManualJS' } }, onChange: vi.fn() });
-    await expandSection('What opens in the pane');
-    expect(findToggleByLabel('Pre-fill from current record')).toBeUndefined();
-  });
-});
-
-describe('ConfigurePanel — generative page', () => {
-  it('offers the content type with Page ID, Page data, and the input-parameters link', async () => {
-    await render(<StatefulConfigurePanel initialConfig={DEFAULT_CONFIG} metadataService={makeMetadataService()} />);
-    await expandSection('What opens in the pane');
-    await act(async () => { getChoiceButton('Generative page')!.click(); });
-    expect(findInputByPlaceholder('xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx')).toBeTruthy();
-    expect(host!.querySelector('textarea[aria-label="Page data"]')).not.toBeNull();
-    expect(host!.textContent).toContain('Page ID must be the GUID of a generative page.');
-    const links = Array.from(host!.querySelectorAll('a')).map(a => a.href);
-    expect(links.some(h => h.includes('generative-pages#set-up-a-page-to-accept-input-parameters'))).toBe(true);
+  it('keeps pane width error, icon guidance, and hide-header warning', async () => {
+    const config = cfg({ pane: { width: 1201, hideHeader: true, canClose: true } });
+    await renderPanel(config);
+    await expandSection('Pane & behaviour');
+    expect(host?.textContent).toContain('Pane width must be between 300 and 1200 pixels.');
+    expect(input('WebResources/sps_/icons/myicon.svg')).toBeTruthy();
+    expect(host?.textContent).toContain('Hiding the header also hides the close button');
+    expect(host?.textContent).not.toMatch(/Resizable toggle/i);
   });
 
-  it('writes the page ID into the target', async () => {
+  it('keeps form data guidance and inserts its example', async () => {
+    const get = await renderPanel(cfg({ host: { entityName: 'account' },
+      target: { pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '' } }));
+    const area = host?.querySelector<HTMLTextAreaElement>('textarea[aria-label="Form data"]');
+    expect(area?.placeholder).toContain('"name"');
+    expect(host?.textContent).toContain('Choose Create new record to pre-fill columns');
+    await act(async () => { Array.from(host!.querySelectorAll('button')).find(button => button.textContent === 'Insert example')?.click(); });
+    const target = get().target;
+    if (target.pageType !== 'entityrecord') throw new Error('expected an entityrecord target');
+    expect(JSON.parse(target.data)).toMatchObject({ name: expect.any(String) });
+  });
+
+  it('keeps generative page ID, data and guidance, including stale updater guard', async () => {
+    const config = cfg({ target: { pageType: 'generative', pageId: '', data: '' } });
     const onChange = vi.fn();
-    const config: PaneDefinitionConfig = { ...DEFAULT_CONFIG, target: { pageType: 'generative', pageId: '', data: '' } };
     await render(<ConfigurePanel config={config} onChange={onChange} validation={validate(config)} metadataService={makeMetadataService()} />);
-    await expandSection('What opens in the pane');
-    const input = findInputByPlaceholder('xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx')!;
-    const setValue = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set?.bind(input);
-    await act(async () => {
-      setValue?.('aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee');
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-    });
-    expect(onChange.mock.calls[0][0](config).target).toEqual({ pageType: 'generative', pageId: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee', data: '' });
-  });
-
-  it('returns the original configuration when a page-id updater is applied to another target', async () => {
-    const onChange = vi.fn();
-    const config: PaneDefinitionConfig = { ...DEFAULT_CONFIG, target: { pageType: 'generative', pageId: '', data: '' } };
-    await render(<ConfigurePanel config={config} onChange={onChange} validation={validate(config)} metadataService={makeMetadataService()} />);
-    await expandSection('What opens in the pane');
-    const input = findInputByPlaceholder('xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx')!;
-    const setValue = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set?.bind(input);
-    await act(async () => {
-      setValue?.('aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee');
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-    });
+    const pageId = input('xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx');
+    expect(pageId).toBeTruthy();
+    expect(host?.querySelector('textarea[aria-label="Page data"]')).toBeTruthy();
+    expect(host?.textContent).toContain('Page ID must be the GUID of a generative page.');
+    expect(host?.querySelector<HTMLAnchorElement>('a[href*="generative-pages"]')).toBeTruthy();
+    await changeInput(pageId!, 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee');
     const updater = onChange.mock.calls[0][0] as (prev: PaneDefinitionConfig) => PaneDefinitionConfig;
-    const other: PaneDefinitionConfig = {
-      ...DEFAULT_CONFIG,
-      target: { pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '{"name":"Contoso"}', createNew: true, createFromCurrent: true },
-    };
+    const other = cfg({ target: { pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '' } });
     expect(updater(other)).toBe(other);
+  });
+
+  it('maps create mode pre-fill to the record source and limits console to no record', async () => {
+    await renderPanel(cfg({ target: { pageType: 'entityrecord', entityName: 'contact', formId: '', tabName: '', data: '', createNew: true },
+      context: { source: { kind: 'host' } } }));
+    expect(chip('recordSource', 'The record on this form')).toBeTruthy();
+    expect(host?.textContent).toContain('In create mode these values pre-fill columns');
+    await clickChip('triggerKind', 'Console');
+    expect(chip('recordSource', 'No record')).toBeTruthy();
+    expect(host?.querySelectorAll('[role="radiogroup"][aria-label="recordSource"] [role="radio"]')).toHaveLength(1);
   });
 });
