@@ -3,6 +3,7 @@ import { useState, act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ConfigurePanel } from '../components/ConfigurePanel';
+import { DestinationSection } from '../components/config/DestinationSection';
 import { ThemeProvider } from '../contexts/ThemeContext';
 import { DEFAULT_CONFIG, type PaneDefinitionConfig } from '../types/PaneDefinitionConfig';
 import { DEFAULT_METADATA_FILTER_CONFIG } from '../types/MetadataFilterConfig';
@@ -390,5 +391,38 @@ describe('ConfigurePanel — existing controls', () => {
     await clickChip('triggerKind', 'Console');
     expect(chip('recordSource', 'No record')).toBeTruthy();
     expect(host?.querySelectorAll('[role="radiogroup"][aria-label="recordSource"] [role="radio"]')).toHaveLength(1);
+  });
+});
+
+describe('DestinationSection — stale updaters', () => {
+  type Updater = (prev: PaneDefinitionConfig) => PaneDefinitionConfig;
+
+  async function captureUpdater(config: PaneDefinitionConfig, placeholder: string, value: string): Promise<Updater> {
+    const onChange = vi.fn();
+    await render(<DestinationSection config={config} onChange={onChange} metadataService={makeMetadataService()}
+      errors={{}} warnings={{}} />);
+    const element = input(placeholder);
+    expect(element).toBeTruthy();
+    await changeInput(element as HTMLInputElement, value);
+    expect(onChange).toHaveBeenCalledTimes(1);
+    return onChange.mock.calls[0][0] as Updater;
+  }
+
+  it('patchTarget ignores an updater queued for a different page type', async () => {
+    const updater = await captureUpdater(
+      cfg({ target: { pageType: 'custom', name: '' } }), 'sps_SidePaneBuilderPage', 'sps_Other');
+    const stale = cfg({ target: { pageType: 'webresource', name: 'sps_/pages/a.html' } });
+    expect(updater(stale)).toBe(stale);
+    expect(updater(cfg({ target: { pageType: 'custom', name: '' } })).target).toEqual({ pageType: 'custom', name: 'sps_Other' });
+  });
+
+  it('patchSource ignores an updater queued for a different source kind', async () => {
+    const updater = await captureUpdater(
+      cfg({ target: { pageType: 'custom', name: 'sps_Page' }, context: { source: { kind: 'fixed', entityName: '', id: '' } } }),
+      '00000000-0000-0000-0000-000000000000', 'abc');
+    const stale = cfg({ target: { pageType: 'custom', name: 'sps_Page' }, context: { source: { kind: 'none' } } });
+    expect(updater(stale)).toBe(stale);
+    const fresh = cfg({ context: { source: { kind: 'fixed', entityName: 'account', id: '' } } });
+    expect(updater(fresh).context.source).toEqual({ kind: 'fixed', entityName: 'account', id: 'abc' });
   });
 });

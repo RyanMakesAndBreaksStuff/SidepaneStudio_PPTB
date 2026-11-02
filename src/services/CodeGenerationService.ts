@@ -1,6 +1,7 @@
-import { PaneDefinitionConfig, TriggerKind, DEFAULT_CONFIG, COMMAND_TRIGGERS, GRID_TRIGGERS, RECORD_TARGETS } from '../types/PaneDefinitionConfig';
+import { PaneDefinitionConfig, TriggerKind, COMMAND_TRIGGERS, GRID_TRIGGERS, RECORD_TARGETS } from '../types/PaneDefinitionConfig';
 import { normalizeGuid } from './odataGuards';
 import { isJsIdentifier, normalizeConfigWidth } from './configGuards';
+import { isSafeRelativeImagePath } from '../components/previewHelpers';
 
 const GRID_KINDS = GRID_TRIGGERS;
 const GRID_SELECT_KINDS: readonly TriggerKind[] = ['GridRowSelect'];
@@ -24,11 +25,19 @@ function safeIdentifier(value: string, fallback: string): string {
   return isJsIdentifier(trimmed) && !GENERATED_NAMES.has(trimmed) ? trimmed : fallback;
 }
 
-/** WR-002 / contract C3 — official imageSrc samples use the WebResources/ relative form. */
+/** WR-002 / contract C3 — official imageSrc samples use the WebResources/ relative form. WR-013 — a path outside the allow-list emits nothing. */
 function normalizeImageSrc(value: string): string {
   const trimmed = value.trim();
-  if (!trimmed) return '';
+  if (!trimmed || !isSafeRelativeImagePath(trimmed)) return '';
   return trimmed.startsWith('WebResources/') ? trimmed : `WebResources/${trimmed}`;
+}
+
+/** One `key: expression` entry of a generated object literal; the SPREAD key emits `...expression` instead. */
+type Field = readonly [key: string, expr: string];
+const SPREAD = '...';
+
+function formatField([key, expr]: Field): string {
+  return key === SPREAD ? `${SPREAD}${expr}` : `${key}: ${expr}`;
 }
 
 export interface TriggerNameError { field: 'trigger.namespace' | 'trigger.functionName'; message: string; }
@@ -112,27 +121,29 @@ function bareGuidExpr(idExpr: string): string {
   return idExpr.startsWith('"') ? idExpr : `${idExpr}.replace(/[{}]/g, '')`;
 }
 
-function buildPaneOptions(config: PaneDefinitionConfig): string {
+/** Contract C4 — the createPane options, shared by both outputs so they emit the same keys. */
+function paneFields(config: PaneDefinitionConfig): Field[] {
   const { pane } = config;
-  const width = normalizeConfigWidth(pane.width);
-  const opts: string[] = [
-    `    paneId: ${JSON.stringify(pane.paneId)}`,
-    `    title: ${JSON.stringify(pane.title)}`,
-    `    width: ${width}`,
+  const fields: Field[] = [
+    ['paneId', JSON.stringify(pane.paneId)],
+    ['title', JSON.stringify(pane.title)],
+    ['width', String(normalizeConfigWidth(pane.width))],
+    // Always explicit: the platform default shows no close button, and SidePaneHelper forwards only a defined value.
+    // P1-CGS-E: hideHeader hides the entire header bar, close button included.
+    ['canClose', pane.hideHeader || !pane.canClose ? 'false' : 'true'],
   ];
-
-  // P1-CGS-E: defensively coerce canClose to false when hideHeader hides the entire header bar.
-  const effectiveCanClose = pane.hideHeader ? false : pane.canClose;
-  opts.push(`    canClose: ${effectiveCanClose ? 'true' : 'false'}`);
-
   // P1-D-C: emit isSelected only when false (API default is true; omitting true is harmless)
-  if (pane.isSelected === false) opts.push(`    isSelected: false`);
-  if (pane.hideHeader) opts.push(`    hideHeader: true`);
-  if (pane.alwaysRender) opts.push(`    alwaysRender: true`);
-  if (pane.keepBadgeOnSelect) opts.push(`    keepBadgeOnSelect: true`);
+  if (pane.isSelected === false) fields.push(['isSelected', 'false']);
+  if (pane.hideHeader) fields.push(['hideHeader', 'true']);
+  if (pane.alwaysRender) fields.push(['alwaysRender', 'true']);
+  if (pane.keepBadgeOnSelect) fields.push(['keepBadgeOnSelect', 'true']);
   const imageSrc = normalizeImageSrc(pane.imageSrc);
-  if (imageSrc) opts.push(`    imageSrc: ${JSON.stringify(imageSrc)}`);
-  return `{\n${opts.join(',\n')}\n  }`;
+  if (imageSrc) fields.push(['imageSrc', JSON.stringify(imageSrc)]);
+  return fields;
+}
+
+function buildPaneOptions(config: PaneDefinitionConfig): string {
+  return `{\n${paneFields(config).map(field => `    ${formatField(field)}`).join(',\n')}\n  }`;
 }
 
 interface RecordContext {
@@ -235,101 +246,64 @@ function buildRelatedRecordPreamble(config: PaneDefinitionConfig, indent: string
   );
 }
 
-function buildTargetParameterParts(
-  target: PaneDefinitionConfig['target'],
-  rc: RecordContext,
-): string[] {
-  const parts: string[] = [];
-  if (target.pageType === 'entitylist' && target.viewId.trim()) {
-    parts.push(`viewId: ${JSON.stringify(normalizeGuid(target.viewId) ?? target.viewId)}`);
-    parts.push(`viewType: ${JSON.stringify(target.viewType)}`);
-  }
-  if (target.pageType === 'entityrecord') {
-    const formTabParts: string[] = [];
-    if (target.formId.trim()) formTabParts.push(`formId: ${JSON.stringify(normalizeGuid(target.formId) ?? target.formId)}`);
-    if (target.tabName.trim()) formTabParts.push(`tabName: ${JSON.stringify(target.tabName.trim())}`);
-    if (formTabParts.length && rc.table === '' && rc.entityExpr && target.entityName.trim() && !target.createNew) {
-      parts.push(`...(${rc.entityExpr} === ${JSON.stringify(target.entityName)} ? { ${formTabParts.join(', ')} } : {})`);
-    } else {
-      parts.push(...formTabParts);
+/**
+ * WR-007 / contract C4 — the one owner of navigation target keys. Basic output formats them as the navigateTo input;
+ * library output passes the same keys to SidePaneHelper.open. name and webresourceName are mutually exclusive.
+ */
+function targetFields(config: PaneDefinitionConfig, rc: RecordContext, formContextExpr = 'formContext'): ReadonlyArray<Field> {
+  const { target } = config;
+  const fields: Field[] = [['pageType', JSON.stringify(target.pageType)]];
+  const record = rc.idExpr && rc.entityExpr ? { id: rc.idExpr, entity: rc.entityExpr } : null;
+  switch (target.pageType) {
+    case 'custom':
+      fields.push(['name', JSON.stringify(target.name)]);
+      if (record) fields.push(['entityName', record.entity], ['recordId', record.id]);
+      break;
+    case 'entityrecord': {
+      // Create mode: no entityId, and the configured table wins over the context table.
+      if (target.createNew) fields.push(['entityName', JSON.stringify(target.entityName)]);
+      else fields.push(['entityName', rc.entityExpr ?? '""'], ['entityId', rc.idExpr ?? INVALID_ID_EXPR]);
+      const formTab: Field[] = [];
+      if (target.formId.trim()) formTab.push(['formId', JSON.stringify(normalizeGuid(target.formId) ?? target.formId)]);
+      if (target.tabName.trim()) formTab.push(['tabName', JSON.stringify(target.tabName.trim())]);
+      // A table known only at runtime gets the configured form and tab only when it is the configured table.
+      if (formTab.length && rc.table === '' && rc.entityExpr && target.entityName.trim() && !target.createNew) {
+        fields.push([SPREAD, `(${rc.entityExpr} === ${JSON.stringify(target.entityName)} ? { ${formTab.map(formatField).join(', ')} } : {})`]);
+      } else {
+        fields.push(...formTab);
+      }
+      if (target.data.trim()) fields.push(['data', `JSON.parse(${JSON.stringify(target.data)})`]);
+      const createFrom = buildCreateFromEntityExpr(config, formContextExpr);
+      if (createFrom) fields.push(['createFromEntity', createFrom]);
+      break;
     }
+    case 'entitylist':
+      fields.push(['entityName', JSON.stringify(target.entityName)]);
+      if (target.viewId.trim()) {
+        fields.push(['viewId', JSON.stringify(normalizeGuid(target.viewId) ?? target.viewId)], ['viewType', JSON.stringify(target.viewType)]);
+      }
+      break;
+    case 'webresource':
+      fields.push(['webresourceName', JSON.stringify(target.name)]);
+      if (record) fields.push(['data', `encodeURIComponent(JSON.stringify({ entityName: ${record.entity}, recordId: ${record.id} }))`]);
+      break;
+    case 'dashboard':
+      fields.push(['dashboardId', JSON.stringify(target.dashboardId)]);
+      break;
+    case 'search':
+      if (target.searchText) fields.push(['searchText', JSON.stringify(target.searchText)]);
+      break;
+    case 'generative':
+      fields.push(['pageId', JSON.stringify(normalizeGuid(target.pageId) ?? target.pageId)]);
+      if (target.data.trim()) fields.push(['data', `JSON.parse(${JSON.stringify(target.data)})`]);
+      if (record) fields.push(['entityName', record.entity], ['recordId', bareGuidExpr(record.id)]);
+      break;
   }
-  if (target.pageType === 'generative') {
-    parts.push(`pageId: ${JSON.stringify(normalizeGuid(target.pageId) ?? target.pageId)}`);
-  }
-  if ((target.pageType === 'entityrecord' || target.pageType === 'generative') && target.data.trim()) {
-    parts.push(`data: JSON.parse(${JSON.stringify(target.data)})`);
-  }
-  return parts;
+  return fields;
 }
 
 function buildNavigateInput(config: PaneDefinitionConfig, rc: RecordContext): string {
-  const { target } = config;
-
-  switch (target.pageType) {
-    case 'custom': {
-      const parts = [
-        `pageType: ${JSON.stringify(target.pageType)}`,
-        `name: ${JSON.stringify(target.name)}`,
-      ];
-      if (rc.idExpr && rc.entityExpr) {
-        parts.push(`entityName: ${rc.entityExpr}`);
-        parts.push(`recordId: ${rc.idExpr}`);
-      }
-      return `{ ${parts.join(', ')} }`;
-    }
-    case 'entityrecord': {
-      // Create mode: no entityId, and the configured table wins over the context table.
-      if (target.createNew) {
-        const createFrom = buildCreateFromEntityExpr(config);
-        return `{ ${[
-          `pageType: ${JSON.stringify(target.pageType)}`,
-          `entityName: ${JSON.stringify(target.entityName)}`,
-          ...buildTargetParameterParts(target, rc),
-          ...(createFrom ? [`createFromEntity: ${createFrom}`] : []),
-        ].join(', ')} }`;
-      }
-      const entityIdExpr = rc.idExpr ?? INVALID_ID_EXPR;
-      return `{ ${[
-        `pageType: ${JSON.stringify(target.pageType)}`,
-        `entityName: ${rc.entityExpr ?? '""'}`,
-        `entityId: ${entityIdExpr}`,
-        ...buildTargetParameterParts(target, rc),
-      ].join(', ')} }`;
-    }
-    case 'entitylist':
-      return `{ ${[
-        `pageType: ${JSON.stringify(target.pageType)}`,
-        `entityName: ${JSON.stringify(target.entityName)}`,
-        ...buildTargetParameterParts(target, rc),
-      ].join(', ')} }`;
-    case 'webresource': {
-      const parts = [
-        `pageType: ${JSON.stringify(target.pageType)}`,
-        `webresourceName: ${JSON.stringify(target.name)}`,
-      ];
-      if (rc.idExpr && rc.entityExpr) {
-        parts.push(
-          `data: encodeURIComponent(JSON.stringify({ entityName: ${rc.entityExpr}, recordId: ${rc.idExpr} }))`
-        );
-      }
-      return `{ ${parts.join(', ')} }`;
-    }
-    case 'dashboard':
-      return `{ pageType: ${JSON.stringify(target.pageType)}, dashboardId: ${JSON.stringify(target.dashboardId)} }`;
-    case 'search':
-      return target.searchText
-        ? `{ pageType: ${JSON.stringify(target.pageType)}, searchText: ${JSON.stringify(target.searchText)} }`
-        : `{ pageType: ${JSON.stringify(target.pageType)} }`;
-    case 'generative': {
-      const parts = [`pageType: ${JSON.stringify(target.pageType)}`, ...buildTargetParameterParts(target, rc)];
-      if (rc.idExpr && rc.entityExpr) {
-        parts.push(`entityName: ${rc.entityExpr}`);
-        parts.push(`recordId: ${bareGuidExpr(rc.idExpr)}`);
-      }
-      return `{ ${parts.join(', ')} }`;
-    }
-  }
+  return `{ ${targetFields(config, rc).map(formatField).join(', ')} }`;
 }
 
 function buildStateAssignment(config: PaneDefinitionConfig): string {
@@ -430,21 +404,42 @@ ${body
 };`;
 }
 
+/** Grid triggers declare selectedEntity and selectedRecordId first; a command with no selected row does nothing. '' for other triggers. */
+function gridRowPreamble(kind: TriggerKind): string {
+  // OnRecordSelect: executionContext.getEventSource().getId() — Power Apps grid control sample
+  // https://learn.microsoft.com/power-apps/developer/model-driven-apps/clientapi/reference/events/grid-onrecordselect
+  if (GRID_SELECT_KINDS.includes(kind)) {
+    return `  var selectedEntity = executionContext.getEventSource();\n  var selectedRecordId = selectedEntity.getId();\n`;
+  }
+  if (kind !== 'GridButton') return '';
+  return (
+    `  var selectedRows = primaryControl.getGrid().getSelectedRows();\n` +
+    `  if (!selectedRows || selectedRows.getLength() === 0) { return; }\n` +
+    `  var selectedEntity = selectedRows.get(0).getData().getEntity();\n` +
+    `  var selectedRecordId = selectedEntity.getId();\n`
+  );
+}
+
+/** LookupTagClick: guard, then cancel the default navigation and read the clicked tag. '' for other triggers. */
+function lookupTagPreamble(config: PaneDefinitionConfig): string {
+  if (config.trigger.kind !== 'LookupTagClick') return '';
+  return (
+    `${buildAvailabilityGuard(config, '  ')}  var eventArgs = executionContext.getEventArgs();\n` +
+    `  eventArgs.preventDefault();\n` +
+    `  var tag = eventArgs.getTagValue();\n` +
+    `  if (!tag || !tag.id) return;\n`
+  );
+}
+
 function generateGridButtonScript(config: PaneDefinitionConfig, { segments, ns, fn }: ResolvedTriggerNames): string {
   const body = buildGetOrCreateBody(config, '    ');
   const paneIdJson = JSON.stringify(config.pane.paneId);
-  const onSelect = GRID_SELECT_KINDS.includes(config.trigger.kind);
-  const arg = onSelect ? 'executionContext' : 'primaryControl';
-  // OnRecordSelect: executionContext.getEventSource().getId() — Power Apps grid control sample
-  // https://learn.microsoft.com/power-apps/developer/model-driven-apps/clientapi/reference/events/grid-onrecordselect
-  const rowPreamble = onSelect
-    ? `  var selectedEntity = executionContext.getEventSource();\n  var selectedRecordId = selectedEntity.getId();\n`
-    : `  var selectedRows = primaryControl.getGrid().getSelectedRows();\n  if (!selectedRows || selectedRows.getLength() === 0) { return; }\n  var selectedEntity = selectedRows.get(0).getData().getEntity();\n  var selectedRecordId = selectedEntity.getId();\n`;
+  const arg = GRID_SELECT_KINDS.includes(config.trigger.kind) ? 'executionContext' : 'primaryControl';
 
   return `${namespaceDeclaration(segments)}
 ${PENDING_VAR} = ${PENDING_VAR} || {};
 ${ns}.${fn} = function(${arg}) {
-${rowPreamble}  if (${PENDING_VAR}[${paneIdJson}] && (Date.now() - ${PENDING_VAR}[${paneIdJson}]) < ${PENDING_TTL_MS}) return;
+${gridRowPreamble(config.trigger.kind)}  if (${PENDING_VAR}[${paneIdJson}] && (Date.now() - ${PENDING_VAR}[${paneIdJson}]) < ${PENDING_TTL_MS}) return;
   ${PENDING_VAR}[${paneIdJson}] = Date.now();
   (async function() {
     try {
@@ -508,11 +503,7 @@ function generateLookupTagClick(config: PaneDefinitionConfig, { segments, ns, fn
   const body = buildGetOrCreateBody(config, '  ');
   return `${namespaceDeclaration(segments)}
 ${ns}.${fn} = async function(executionContext) {
-${buildAvailabilityGuard(config, '  ')}  var eventArgs = executionContext.getEventArgs();
-  eventArgs.preventDefault();
-  var tag = eventArgs.getTagValue();
-  if (!tag || !tag.id) return;
-  try {
+${lookupTagPreamble(config)}  try {
 ${body.split('\n').map(line => '  ' + line).join('\n')}
   } catch(e) {
     ${buildCatchBody(`${ns}.${fn}`, '    ')}
@@ -523,7 +514,8 @@ ${body.split('\n').map(line => '  ' + line).join('\n')}
 export function generateBasicScript(config: PaneDefinitionConfig): string {
   const names = resolveTriggerNames(config);
   if (!names.ok) return INVALID_NAMES_SCRIPT;
-  switch (config.trigger.kind) {
+  const kind = config.trigger.kind;
+  switch (kind) {
     case 'FormOnLoad':
       return generateFormOnLoad(config, names);
     case 'FormButton':
@@ -537,80 +529,29 @@ export function generateBasicScript(config: PaneDefinitionConfig): string {
       return generateFormOnChange(config, names);
     case 'LookupTagClick':
       return generateLookupTagClick(config, names);
-    default:
-      return generateFormButton(config, names);
   }
+  // IN-004 — parseStoredConfig rejects unknown kinds, so only a caller that bypasses the type can reach this.
+  const _exhaustive: never = kind;
+  throw new Error(`Unsupported trigger kind: ${String(_exhaustive)}`);
 }
 
 export function generateLibraryScript(config: PaneDefinitionConfig): string {
-  const { pane, trigger, target, behavior } = config;
+  const { pane, trigger, behavior } = config;
   const names = resolveTriggerNames(config);
   if (!names.ok) return INVALID_NAMES_SCRIPT;
   const { segments, ns, fn } = names;
-  const width = normalizeConfigWidth(pane.width);
   const formContextExpr = trigger.kind === 'FormOnLoad' || trigger.kind === 'FormOnChange'
     ? 'executionContext.getFormContext()'
     : 'formContext';
   const declared = declareRecordVariable(config, buildRecordContext(config, formContextExpr), '  ');
-  const rc = declared.rc;
-  const libIdExpr = rc.idExpr;
 
-  const optLines: string[] = [
-    `    paneId: ${JSON.stringify(pane.paneId)}`,
-    `    title: ${JSON.stringify(pane.title)}`,
-    `    pageType: ${JSON.stringify(target.pageType)}`,
-  ];
-
-  // Target keys — contract C4. name and webresourceName are mutually exclusive (WR-007).
-  if (target.pageType === 'custom') {
-    optLines.push(`    name: ${JSON.stringify(target.name)}`);
-    if (libIdExpr && rc.entityExpr) {
-      optLines.push(`    entityName: ${rc.entityExpr}`);
-      optLines.push(`    recordId: ${libIdExpr}`);
-    }
-  } else if (target.pageType === 'webresource') {
-    optLines.push(`    webresourceName: ${JSON.stringify(target.name)}`);
-    if (libIdExpr && rc.entityExpr) {
-      optLines.push(
-        `    data: encodeURIComponent(JSON.stringify({ entityName: ${rc.entityExpr}, recordId: ${libIdExpr} }))`
-      );
-    }
-  } else if (target.pageType === 'entityrecord') {
-    if (target.createNew) {
-      optLines.push(`    entityName: ${JSON.stringify(target.entityName)}`);
-      const createFrom = buildCreateFromEntityExpr(config, formContextExpr);
-      if (createFrom) optLines.push(`    createFromEntity: ${createFrom}`);
-    } else {
-      optLines.push(`    entityName: ${rc.entityExpr ?? '""'}`);
-      optLines.push(`    entityId: ${libIdExpr ?? INVALID_ID_EXPR}`);
-    }
-  } else if (target.pageType === 'entitylist') {
-    optLines.push(`    entityName: ${JSON.stringify(target.entityName)}`);
-  } else if (target.pageType === 'dashboard') {
-    optLines.push(`    dashboardId: ${JSON.stringify(target.dashboardId)}`);
-  } else if (target.pageType === 'search' && target.searchText) {
-    optLines.push(`    searchText: ${JSON.stringify(target.searchText)}`);
-  } else if (target.pageType === 'generative' && libIdExpr && rc.entityExpr) {
-    optLines.push(`    entityName: ${rc.entityExpr}`);
-    optLines.push(`    recordId: ${bareGuidExpr(libIdExpr)}`);
-  }
-
-  optLines.push(...buildTargetParameterParts(target, rc).map(part => `    ${part}`));
-
-  // Appearance + behavior keys — contract C4. isResizable is deliberately absent.
-  if (width !== DEFAULT_CONFIG.pane.width) optLines.push(`    width: ${width}`);
-  if (!pane.canClose) optLines.push(`    canClose: false`);
-  if (pane.hideHeader) optLines.push(`    hideHeader: true`);
-  if (pane.isSelected === false) optLines.push(`    isSelected: false`);
-  if (pane.alwaysRender) optLines.push(`    alwaysRender: true`);
-  if (pane.keepBadgeOnSelect) optLines.push(`    keepBadgeOnSelect: true`);
-  const imageSrc = normalizeImageSrc(pane.imageSrc);
-  if (imageSrc) optLines.push(`    imageSrc: ${JSON.stringify(imageSrc)}`);
-  if (pane.badgeValue) optLines.push(`    badge: ${JSON.stringify(pane.badgeValue)}`);
-  if (!behavior.reuseExistingPane) optLines.push(`    reuseExistingPane: false`);
-  if (!behavior.expandOnOpen) optLines.push(`    expandOnOpen: false`);
-  if (behavior.closeOthers) optLines.push(`    closeOthers: true`);
-  if (behavior.toggleIfOpen && COMMAND_TRIGGERS.includes(trigger.kind)) optLines.push(`    toggleIfOpen: true`);
+  // Contract C4: the same pane and target keys as the Basic script, then the behavior keys Basic implements inline.
+  const fields: Field[] = [...paneFields(config), ...targetFields(config, declared.rc, formContextExpr)];
+  if (pane.badgeValue) fields.push(['badge', JSON.stringify(pane.badgeValue)]);
+  if (!behavior.reuseExistingPane) fields.push(['reuseExistingPane', 'false']);
+  if (!behavior.expandOnOpen) fields.push(['expandOnOpen', 'false']);
+  if (behavior.closeOthers) fields.push(['closeOthers', 'true']);
+  if (behavior.toggleIfOpen && COMMAND_TRIGGERS.includes(trigger.kind)) fields.push(['toggleIfOpen', 'true']);
 
   const param =
     trigger.kind === 'FormOnLoad' || trigger.kind === 'FormOnChange' || trigger.kind === 'LookupTagClick' || GRID_SELECT_KINDS.includes(trigger.kind)
@@ -619,19 +560,9 @@ export function generateLibraryScript(config: PaneDefinitionConfig): string {
         ? ''
         : 'primaryControl';
 
-  const gridContext = GRID_SELECT_KINDS.includes(trigger.kind)
-    ? `  var selectedEntity = executionContext.getEventSource();\n  var selectedRecordId = selectedEntity.getId();\n`
-    : trigger.kind === 'GridButton'
-      ? `  var selectedRows = primaryControl.getGrid().getSelectedRows();\n  if (!selectedRows || selectedRows.getLength() === 0) { return; }\n  var selectedEntity = selectedRows.get(0).getData().getEntity();\n  var selectedRecordId = selectedEntity.getId();\n`
-      : '';
-
-  const lookupPreamble = trigger.kind === 'LookupTagClick'
-    ? `${buildAvailabilityGuard(config, '  ')}  var eventArgs = executionContext.getEventArgs();\n  eventArgs.preventDefault();\n  var tag = eventArgs.getTagValue();\n  if (!tag || !tag.id) return;\n`
-    : '';
-
   const lookupRegistration = trigger.kind === 'LookupTagClick' ? buildLookupRegistrar(ns, fn, config.host.lookupControls) : '';
 
-  const openCall = `  SidePaneHelper.open({\n${optLines.join(',\n')}\n  });\n`;
+  const openCall = `  SidePaneHelper.open({\n${fields.map(field => `    ${formatField(field)}`).join(',\n')}\n  });\n`;
   const relatedPreamble = buildRelatedRecordPreamble(config, '      ', formContextExpr);
   // Lookup resolution awaits the lookup, so the open call and record variable share its async scope.
   const body = relatedPreamble
@@ -641,5 +572,5 @@ export function generateLibraryScript(config: PaneDefinitionConfig): string {
 
   return `${namespaceDeclaration(segments)}
 ${ns}.${fn} = function(${param}) {
-${lookupPreamble}${gridContext}${body}};${lookupRegistration}`;
+${lookupTagPreamble(config)}${gridRowPreamble(trigger.kind)}${body}};${lookupRegistration}`;
 }

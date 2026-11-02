@@ -182,7 +182,7 @@ export function FormSelector({
           <TableComboBox
             value={formEntity}
             onChange={commitEntity}
-            tables={visibleTables}
+            items={visibleTables}
             loading={tablesLoading}
             error={tablesError}
             onRetry={retryTables}

@@ -1,5 +1,5 @@
 import { PaneDefinitionConfig, RECORD_TARGETS } from '../types/PaneDefinitionConfig';
-import { TRIGGER_CAPABILITIES } from './triggerCapabilities';
+import { isCreating, TRIGGER_CAPABILITIES } from './triggerCapabilities';
 
 export type SummarySlot = 'trigger' | 'host' | 'target' | 'source' | 'pane';
 export interface SummaryPart { text: string; slot?: SummarySlot; }
@@ -47,7 +47,7 @@ function targetPhrase(config: PaneDefinitionConfig): string {
 function sourcePhrase(config: PaneDefinitionConfig): string | null {
   const { source } = config.context;
   if (!RECORD_TARGETS.includes(config.target.pageType) || source.kind === 'none') return null;
-  const creating = config.target.pageType === 'entityrecord' && config.target.createNew === true;
+  const creating = isCreating(config.target);
   const prefix = creating ? ' pre-filled from' : ' from';
   switch (source.kind) {
     case 'host':        return `${prefix} the form record`;

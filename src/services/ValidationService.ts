@@ -1,9 +1,9 @@
-import { PaneDefinitionConfig, COMMAND_TRIGGERS, MAX_CONFIG_WIDTH, MIN_CONFIG_WIDTH, RECORD_TARGETS } from '../types/PaneDefinitionConfig';
+import { PaneDefinitionConfig, COMMAND_TRIGGERS, MAX_CONFIG_WIDTH, MIN_CONFIG_WIDTH } from '../types/PaneDefinitionConfig';
 import { isValidLogicalName, normalizeGuid } from './odataGuards';
 import { parseFormData } from './formData';
 import { isConfigWidthValid, isJsIdentifier } from './configGuards';
 import { GENERATED_NAMES, resolveTriggerNames } from './CodeGenerationService';
-import { allowedSources, allowedTargets, TRIGGER_CAPABILITIES } from './triggerCapabilities';
+import { allowedSources, allowedTargets, isCreating, sendsRecord, TRIGGER_CAPABILITIES } from './triggerCapabilities';
 
 export interface ValidationError { field: string; message: string; }
 export interface ValidationWarning { field: string; message: string; }
@@ -22,8 +22,8 @@ export function validate(config: PaneDefinitionConfig, accessibleTables?: Set<st
   const { pane, target, trigger, host, context, behavior } = config;
   const caps = TRIGGER_CAPABILITIES[trigger.kind];
   const { source } = context;
-  const creating = target.pageType === 'entityrecord' && target.createNew === true;
-  const sendsRecord = RECORD_TARGETS.includes(target.pageType) && source.kind !== 'none' && !creating;
+  const creating = isCreating(target);
+  const sendsRecordId = sendsRecord(config);
   const hostTable = host.entityName.trim();
 
   // Pane
@@ -59,7 +59,7 @@ export function validate(config: PaneDefinitionConfig, accessibleTables?: Set<st
     }
     warnings.push({ field: 'context.source', message: 'A fixed record ID is environment-specific. Reconfigure it after deploying to another environment.' });
   }
-  if (sendsRecord) {
+  if (sendsRecordId) {
     const name = context.variableName.trim();
     if (!isJsIdentifier(name)) errors.push({ field: 'context.variableName', message: 'Variable name must be a valid JavaScript identifier.' });
     else if (RESERVED_VARIABLES.includes(name)) errors.push({ field: 'context.variableName', message: `${name} is used by the generated script. Choose another name.` });
@@ -90,7 +90,7 @@ export function validate(config: PaneDefinitionConfig, accessibleTables?: Set<st
   if (target.pageType === 'generative') {
     if (!normalizeGuid(target.pageId)) errors.push({ field: 'target.pageId', message: 'Page ID must be the GUID of a generative page.' });
     pushJsonObjectError(errors, target.data, 'Page data must be a JSON object.');
-    if (sendsRecord || target.data.trim()) {
+    if (sendsRecordId || target.data.trim()) {
       warnings.push({ field: 'target.pageType', message: 'recordId, entityName and data reach the page only if its prompt sets it up to accept input parameters.' });
     }
   }

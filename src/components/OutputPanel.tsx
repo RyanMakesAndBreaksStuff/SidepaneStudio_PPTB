@@ -13,7 +13,6 @@ import { SummaryCard } from './SummaryCard';
 import { Callout } from './Callout';
 import { CommandStepsTab, deploySteps } from './CommandStepsTab';
 import { describeConfigText } from '../services/describeConfig';
-import { escapeHtml } from './previewHelpers';
 import runtimeSource from '../runtime/sidepane.runtime.js?raw';
 
 export interface OutputPanelProps {
@@ -125,7 +124,7 @@ export const OutputPanel = React.memo(function OutputPanel({ config, xrm, valida
           <>
             <SummaryCard
               title="📋 What this script does"
-              body={escapeHtml(describeConfigText(config))}
+              body={describeConfigText(config)}
               steps={deploySteps(config.trigger)}
             />
             {validation.errors.length > 0 && (
@@ -167,7 +166,7 @@ export const OutputPanel = React.memo(function OutputPanel({ config, xrm, valida
             )}
             <SummaryCard
               title="📚 Shared library version"
-              body={`Shorter snippet that calls the pre-deployed <strong>SidePaneHelper</strong> runtime.`}
+              body={<>Shorter snippet that calls the pre-deployed <strong>SidePaneHelper</strong> runtime.</>}
               steps={deploySteps(config.trigger)}
             />
             {validation.errors.length > 0 && (
