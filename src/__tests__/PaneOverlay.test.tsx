@@ -103,3 +103,43 @@ describe('PaneOverlay', () => {
     expect(recordIdentity?.textContent).toContain('Pat Lee · actual-contact-id');
   });
 });
+
+describe('PaneOverlay rendered output', () => {
+  const targets: Array<React.ComponentProps<typeof PaneOverlay>['target']> = [
+    { pageType: 'entityrecord', entityName: 'contact', formId: '', tabName: '', data: '' },
+    { pageType: 'entitylist', entityName: 'account', viewId: 'view-1', viewType: 'savedquery' },
+    { pageType: 'webresource', name: 'sps_/pane.html' },
+    { pageType: 'custom', name: 'sps_SidePaneBuilderPage' },
+    { pageType: 'dashboard', dashboardId: 'dash-1', dashboardName: 'Sales Overview' },
+    { pageType: 'search', searchText: 'contoso' },
+    { pageType: 'generative', pageId: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee', data: '' },
+  ];
+
+  for (const target of targets) {
+    it(`keeps the recorded markup for a ${target.pageType} pane`, async () => {
+      await render(
+        <PaneOverlay
+          pane={DEFAULT_CONFIG.pane}
+          target={target}
+          record={{ id: 'rec-1', name: 'Pat Lee', entityName: 'contact' }}
+          validation={{ isValid: true, errors: [], warnings: [{ field: 'width', message: 'Check the width' }] }}
+        />
+      );
+      expect(host?.innerHTML).toMatchSnapshot();
+    });
+  }
+
+  for (const layout of ['inline', 'stacked'] as const) {
+    it(`renders nothing for an unselected pane in ${layout} layout`, async () => {
+      await render(
+        <PaneOverlay
+          pane={{ ...DEFAULT_CONFIG.pane, isSelected: false }}
+          target={DEFAULT_CONFIG.target}
+          validation={{ isValid: true, errors: [], warnings: [] }}
+          layout={layout}
+        />
+      );
+      expect(host?.innerHTML).toBe('');
+    });
+  }
+});

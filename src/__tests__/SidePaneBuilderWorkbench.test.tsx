@@ -152,7 +152,7 @@ describe('SidePaneBuilderWorkbench', () => {
         'metadataFilters.allowedStandardTables': ['contact'],
       })
       .mockResolvedValue({ lastConfig: '{"pane":{}}' });
-    const setAll = vi.fn().mockResolvedValue(undefined);
+    const settingsSet = vi.fn().mockResolvedValue(undefined);
 
     vi.stubGlobal('toolboxAPI', {
       connections: {
@@ -164,9 +164,8 @@ describe('SidePaneBuilderWorkbench', () => {
       },
       settings: {
         get: vi.fn().mockResolvedValue(null),
-        set: vi.fn().mockResolvedValue(undefined),
+        set: settingsSet,
         getAll,
-        setAll,
       },
     });
 
@@ -192,12 +191,10 @@ describe('SidePaneBuilderWorkbench', () => {
       });
     });
 
-    expect(setAll).toHaveBeenCalledWith({
-      lastConfig: '{"pane":{}}',
-      'metadataFilters.denyPrefixes': ['abc_'],
-      'metadataFilters.denyExact': ['webresource'],
-      'metadataFilters.allowedStandardTables': ['account'],
-    });
+    expect(settingsSet).toHaveBeenCalledWith('metadataFilters.denyPrefixes', ['abc_']);
+    expect(settingsSet).toHaveBeenCalledWith('metadataFilters.denyExact', ['webresource']);
+    expect(settingsSet).toHaveBeenCalledWith('metadataFilters.allowedStandardTables', ['account']);
+    expect(settingsSet).not.toHaveBeenCalledWith('lastConfig', expect.anything());
     expect(workbenchShellState.props?.metadataFilterConfig).toEqual({
       denyPrefixes: ['abc_'],
       denyExact: ['webresource'],
@@ -401,7 +398,7 @@ describe('SidePaneBuilderWorkbench', () => {
 
   it('surfaces a metadata filter save failure as an error instead of clearing it', async () => {
     const getAll = vi.fn().mockResolvedValue({ lastConfig: '{"pane":{}}' });
-    const setAll = vi.fn().mockRejectedValue(new Error('metadata settings backend offline'));
+    const settingsSet = vi.fn().mockRejectedValue(new Error('metadata settings backend offline'));
 
     vi.stubGlobal('toolboxAPI', {
       connections: {
@@ -413,9 +410,8 @@ describe('SidePaneBuilderWorkbench', () => {
       },
       settings: {
         get: vi.fn().mockResolvedValue(null),
-        set: vi.fn().mockResolvedValue(undefined),
+        set: settingsSet,
         getAll,
-        setAll,
       },
     });
 
@@ -434,7 +430,7 @@ describe('SidePaneBuilderWorkbench', () => {
       });
     });
 
-    expect(setAll).toHaveBeenCalled();
+    expect(settingsSet).toHaveBeenCalledWith('metadataFilters.denyPrefixes', expect.anything());
     expect(workbenchShellState.props?.metadataFilterError).toBe('metadata settings backend offline');
     // The failed write must not have been applied to displayed state.
     expect(workbenchShellState.props?.metadataFilterConfig).toEqual(DEFAULT_METADATA_FILTER_CONFIG);
@@ -442,7 +438,7 @@ describe('SidePaneBuilderWorkbench', () => {
 
   it('surfaces a metadata filter reset failure as an error instead of clearing it', async () => {
     const getAll = vi.fn().mockResolvedValue({ lastConfig: '{"pane":{}}' });
-    const setAll = vi.fn().mockRejectedValue(new Error('metadata settings backend offline'));
+    const settingsSet = vi.fn().mockRejectedValue(new Error('metadata settings backend offline'));
 
     vi.stubGlobal('toolboxAPI', {
       connections: {
@@ -454,9 +450,8 @@ describe('SidePaneBuilderWorkbench', () => {
       },
       settings: {
         get: vi.fn().mockResolvedValue(null),
-        set: vi.fn().mockResolvedValue(undefined),
+        set: settingsSet,
         getAll,
-        setAll,
       },
     });
 
@@ -469,7 +464,7 @@ describe('SidePaneBuilderWorkbench', () => {
       await reset();
     });
 
-    expect(setAll).toHaveBeenCalled();
+    expect(settingsSet).toHaveBeenCalledWith('metadataFilters.denyPrefixes', expect.anything());
     expect(workbenchShellState.props?.metadataFilterError).toBe('metadata settings backend offline');
     expect(workbenchShellState.props?.metadataFilterConfig).toEqual(DEFAULT_METADATA_FILTER_CONFIG);
   });

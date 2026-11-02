@@ -5,6 +5,7 @@ import { DEFAULT_METADATA_FILTER_CONFIG } from '../types/MetadataFilterConfig';
 function makeSettings(initial: Record<string, unknown> = {}) {
   return {
     getAll: vi.fn().mockResolvedValue(initial),
+    set: vi.fn().mockResolvedValue(undefined),
     setAll: vi.fn().mockResolvedValue(undefined),
   };
 }
@@ -37,7 +38,7 @@ describe('MetadataFilterSettingsService', () => {
     );
   });
 
-  it('normalizes valid arrays before save and preserves unrelated settings', async () => {
+  it('normalizes valid arrays before save and never writes unrelated settings', async () => {
     const settings = makeSettings({ lastConfig: '{"pane":{}}' });
     const service = new MetadataFilterSettingsService(settings);
 
@@ -53,27 +54,27 @@ describe('MetadataFilterSettingsService', () => {
       denyExact: ['account'],
       allowedStandardTables: ['contact', 'account'],
     });
-    expect(settings.setAll).toHaveBeenCalledWith({
-      lastConfig: '{"pane":{}}',
-      'metadataFilters.denyPrefixes': ['new_'],
-      'metadataFilters.denyExact': ['account'],
-      'metadataFilters.allowedStandardTables': ['contact', 'account'],
-    });
+    expect(settings.set).toHaveBeenCalledTimes(3);
+    expect(settings.set).toHaveBeenNthCalledWith(1, 'metadataFilters.denyPrefixes', ['new_']);
+    expect(settings.set).toHaveBeenNthCalledWith(2, 'metadataFilters.denyExact', ['account']);
+    expect(settings.set).toHaveBeenNthCalledWith(3, 'metadataFilters.allowedStandardTables', ['contact', 'account']);
+    expect(settings.set).not.toHaveBeenCalledWith('lastConfig', expect.anything());
+    expect(settings.setAll).not.toHaveBeenCalled();
   });
 
-  it('reset persists defaults without removing unrelated settings', async () => {
+  it('reset persists defaults without touching unrelated settings', async () => {
     const settings = makeSettings({ lastConfig: '{"pane":{}}' });
     const service = new MetadataFilterSettingsService(settings);
 
     const result = await service.reset();
 
     expect(result.config).toEqual(DEFAULT_METADATA_FILTER_CONFIG);
-    expect(settings.setAll).toHaveBeenCalledWith({
-      lastConfig: '{"pane":{}}',
-      'metadataFilters.denyPrefixes': DEFAULT_METADATA_FILTER_CONFIG.denyPrefixes,
-      'metadataFilters.denyExact': DEFAULT_METADATA_FILTER_CONFIG.denyExact,
-      'metadataFilters.allowedStandardTables': DEFAULT_METADATA_FILTER_CONFIG.allowedStandardTables,
-    });
+    expect(settings.set).toHaveBeenCalledTimes(3);
+    expect(settings.set).toHaveBeenNthCalledWith(1, 'metadataFilters.denyPrefixes', DEFAULT_METADATA_FILTER_CONFIG.denyPrefixes);
+    expect(settings.set).toHaveBeenNthCalledWith(2, 'metadataFilters.denyExact', DEFAULT_METADATA_FILTER_CONFIG.denyExact);
+    expect(settings.set).toHaveBeenNthCalledWith(3, 'metadataFilters.allowedStandardTables', DEFAULT_METADATA_FILTER_CONFIG.allowedStandardTables);
+    expect(settings.set).not.toHaveBeenCalledWith('lastConfig', expect.anything());
+    expect(settings.setAll).not.toHaveBeenCalled();
   });
 
   it('reports persistence unavailable without settings API', async () => {

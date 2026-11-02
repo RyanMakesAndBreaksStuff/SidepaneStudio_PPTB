@@ -3,6 +3,7 @@ import type { ConfigurePanelProps } from '../ConfigurePanel';
 import type { TriggerKind } from '../../types/PaneDefinitionConfig';
 import { TRIGGER_CAPABILITIES, TRIGGER_KINDS } from '../../services/triggerCapabilities';
 import { changeHostTable } from '../../services/relatedRecordConfig';
+import { resolveTriggerNames } from '../../services/CodeGenerationService';
 import { Field } from '../Field';
 import { ChoiceGroup } from '../ChoiceGroup';
 import { TablePicker } from '../TablePicker';
@@ -26,6 +27,8 @@ export function TriggerSection({ config, onChange, metadataService, readOnly, on
   formXmlService, errors }: TriggerSectionProps): React.ReactElement {
   const { trigger, host } = config;
   const caps = TRIGGER_CAPABILITIES[trigger.kind];
+  // CR-001 — the full call is the name the generated script defines; no hint while the names are invalid.
+  const names = resolveTriggerNames(config);
   return (
     <>
       <Field label="Trigger type" required>
@@ -87,11 +90,12 @@ export function TriggerSection({ config, onChange, metadataService, readOnly, on
       )}
       {caps.family !== 'manual' && (
         <>
-          <Field label="Function name" hint={`Full call: ${trigger.namespace || 'Ns'}.${trigger.functionName || 'fn'}`}>
+          <Field label="Function name" error={errors['trigger.functionName']}
+            hint={names.ok ? `Full call: ${names.ns}.${names.fn}` : undefined}>
             <Input value={trigger.functionName} disabled={readOnly} placeholder="openRelatedRecordsPane"
               onChange={functionName => onChange(prev => ({ ...prev, trigger: { ...prev.trigger, functionName } }))} />
           </Field>
-          <Field label="Namespace" hint="JavaScript namespace prefix">
+          <Field label="Namespace" error={errors['trigger.namespace']} hint="JavaScript namespace prefix, such as Contoso or Contoso.Panes">
             <Input value={trigger.namespace} disabled={readOnly} placeholder="Contoso"
               onChange={namespace => onChange(prev => ({ ...prev, trigger: { ...prev.trigger, namespace } }))} />
           </Field>

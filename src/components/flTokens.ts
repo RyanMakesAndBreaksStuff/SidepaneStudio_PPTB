@@ -13,6 +13,7 @@ export const FL = {
   green: '#107C10',
   navBg: '#FAFAFA',
   pageBg: 'transparent',
+  paneFont: "'Segoe UI', system-ui, sans-serif",
   purple: '#A426D1',
   shadow: '0 1px 2px rgba(0,0,0,.14),0 0 2px rgba(0,0,0,.10)',
   shadowPanel: '0 8px 20px rgba(0,0,0,.16),0 0 2px rgba(0,0,0,.10)',

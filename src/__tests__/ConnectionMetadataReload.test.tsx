@@ -26,6 +26,7 @@ vi.mock('../components/ConfigurePanel', async () => {
       />
       <output data-testid="lookup">{config.context.source.kind === 'lookup' ? config.context.source.attribute : ''}</output>
       <output data-testid="host">{config.host.entityName}</output>
+      <output data-testid="target">{JSON.stringify(config.target)}</output>
     </>,
   };
 });
@@ -159,6 +160,38 @@ it('clears the related-record lookup column when the connection switches orgs', 
   await emit('connection:updated');
   expect(lookup()).toBe('');
   expect(host.querySelector('[data-testid="host"]')?.textContent).toBe('');
+});
+
+function storeTarget(target: PaneDefinitionConfig['target']) {
+  const settings = (window.toolboxAPI as unknown as { settings: { get: ReturnType<typeof vi.fn> } }).settings;
+  settings.get.mockImplementation(async (key: string) => key === 'lastConfig' ? JSON.stringify({
+    ...DEFAULT_CONFIG,
+    target,
+  }) : null);
+}
+
+async function switchOrg() {
+  org = 'b';
+  getActiveConnection.mockResolvedValue({ id: 'b' });
+  await emit('connection:updated');
+}
+
+function currentTarget() {
+  return JSON.parse(host.querySelector('[data-testid="target"]')?.textContent ?? 'null');
+}
+
+it('clears the generative page id and data when the connection switches orgs', async () => {
+  storeTarget({ pageType: 'generative', pageId: 'page-a', data: 'row-a' });
+  await mount();
+  await switchOrg();
+  expect(currentTarget()).toEqual({ pageType: 'generative', pageId: '', data: '' });
+});
+
+it('keeps a custom page name when the connection switches orgs', async () => {
+  storeTarget({ pageType: 'custom', name: 'new_page' });
+  await mount();
+  await switchOrg();
+  expect(currentTarget()).toEqual({ pageType: 'custom', name: 'new_page' });
 });
 
 it.each(['connection:created', 'connection:updated'] as const)(

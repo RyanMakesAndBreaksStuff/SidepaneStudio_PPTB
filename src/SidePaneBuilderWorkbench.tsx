@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { PaneDefinitionConfig, DEFAULT_CONFIG } from './types/PaneDefinitionConfig';
+import { PaneDefinitionConfig, DEFAULT_CONFIG, PageType, TargetConfig } from './types/PaneDefinitionConfig';
 import { parseStoredConfig } from './services/configGuards';
 import { coerceConfig } from './services/triggerCapabilities';
 import { WorkbenchShell } from './components/WorkbenchShell';
@@ -30,16 +30,25 @@ function reportSettingsFailure(action: string, err: unknown): void {
   ).catch(() => { /* notification is best-effort; never mask the original failure */ });
 }
 
-/** Table, form, view, dashboard, and record selections only exist in the org they were picked from. */
+/** Target fields that only exist in the org they were picked from; exhaustive so a new page type must decide. */
+const ORG_SCOPED_TARGET_FIELDS = {
+  entityrecord: ['entityName', 'formId', 'tabName'],
+  entitylist: ['entityName', 'viewId', 'viewType'],
+  dashboard: ['dashboardId', 'dashboardName'],
+  generative: ['pageId', 'data'],
+  custom: [],
+  webresource: [],
+  search: [],
+} as const satisfies Record<PageType, readonly string[]>;
+
+/** Table, form, view, dashboard, page, and record selections only exist in the org they were picked from. */
 function clearOrgSelections(config: PaneDefinitionConfig): PaneDefinitionConfig {
   const { target, context: { source } } = config;
+  const cleared: Record<string, unknown> = { ...target };
+  for (const field of ORG_SCOPED_TARGET_FIELDS[target.pageType]) cleared[field] = '';
   return coerceConfig({
     ...config,
-    target:
-      target.pageType === 'entityrecord' ? { ...target, entityName: '', formId: '', tabName: '' } :
-      target.pageType === 'entitylist' ? { ...target, entityName: '', viewId: '', viewType: '' } :
-      target.pageType === 'dashboard' ? { ...target, dashboardId: '', dashboardName: '' } :
-      target,
+    target: cleared as TargetConfig,
     host: { ...config.host, entityName: '', formId: '', viewId: '', viewType: '', attribute: '', lookupControls: [] },
     context: { ...config.context, source:
       source.kind === 'fixed' ? { kind: 'fixed', entityName: '', id: '' } :

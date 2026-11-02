@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { GENERATED_NAMES, generateBasicScript, generateLibraryScript } from '../services/CodeGenerationService';
+import { GENERATED_NAMES, generateBasicScript, generateLibraryScript, namespaceDeclaration, resolveTriggerNames } from '../services/CodeGenerationService';
 import { cfg } from './testHelpers';
 import { TRIGGER_KINDS } from '../services/triggerCapabilities';
 import type { PaneDefinitionConfig, TriggerKind } from '../types/PaneDefinitionConfig';
@@ -132,23 +132,64 @@ describe('generateBasicScript — pending cache', () => {
   });
 });
 
-describe('generateBasicScript — safe generated identifiers', () => {
-  it('falls back for malicious namespace and function names', () => {
-    const code = generateBasicScript(
-      cfg({
-        trigger: {
-          kind: 'FormButton',
-          namespace: 'Bad;window.hacked=1//',
-          functionName: 'open);window.hacked=1;//',
-        },
-      })
-    );
+describe('trigger names — CR-001', () => {
+  const named = (kind: TriggerKind, namespace: string, functionName = 'openPane') => cfg({
+    trigger: { kind, namespace, functionName },
+    host: { entityName: 'account', attribute: 'new_field', lookupControls: ['parentaccountid'] },
+  });
+  const outputs = (config: PaneDefinitionConfig) => [generateBasicScript(config), generateLibraryScript(config)];
 
-    expect(isValidJS(code)).toBe(true);
-    expect(code).toContain('var MyNamespace = MyNamespace || {};');
-    expect(code).toContain('MyNamespace.openPane = function');
-    expect(code).not.toContain('Bad;window.hacked=1//');
-    expect(code).not.toContain('open);window.hacked=1;//');
+  it('emits one declaration line per namespace segment', () => {
+    expect(namespaceDeclaration(['Contoso'])).toBe('var Contoso = Contoso || {};');
+    expect(namespaceDeclaration(['A', 'B', 'C'])).toBe('var A = A || {};\nA.B = A.B || {};\nA.B.C = A.B.C || {};');
+  });
+
+  it('Contoso.Panes declares both levels and the function in basic and library output', () => {
+    for (const code of outputs(named('FormButton', 'Contoso.Panes'))) {
+      expect(code).toContain('var Contoso = Contoso || {};\nContoso.Panes = Contoso.Panes || {};\n');
+      expect(code).toContain('Contoso.Panes.openPane = ');
+      expect(isValidJS(code)).toBe(true);
+    }
+  });
+
+  it.each(TRIGGER_KINDS)('%s defines the dotted name the resolver reports', kind => {
+    const config = named(kind, 'Contoso.Panes');
+    const names = resolveTriggerNames(config);
+    expect(names).toEqual({ ok: true, segments: ['Contoso', 'Panes'], ns: 'Contoso.Panes', fn: 'openPane' });
+    const [basic, library] = outputs(config);
+    const definesName = (code: string) => new Function('window', 'Xrm', `${code}\nreturn Contoso.Panes.openPane;`)({}, {});
+    expect(typeof definesName(library)).toBe('function');
+    // ManualJS basic output is a console snippet: a top-level function, not a namespace member.
+    if (kind === 'ManualJS') expect(basic).toContain('async function openPane()');
+    else expect(typeof definesName(basic)).toBe('function');
+  });
+
+  it('keeps a single-segment namespace output unchanged', () => {
+    for (const code of outputs(named('FormButton', 'Contoso'))) {
+      expect(code.startsWith('var Contoso = Contoso || {};\n')).toBe(true);
+      expect(code).not.toContain('Contoso.Contoso');
+    }
+  });
+
+  it.each([
+    ['Contoso Panes', 'openPane', ['trigger.namespace']],
+    ['', 'openPane', ['trigger.namespace']],
+    ['class', 'openPane', ['trigger.namespace']],
+    ['Contoso.', 'openPane', ['trigger.namespace']],
+    ['Xrm', 'openPane', ['trigger.namespace']],
+    ['Contoso', '', ['trigger.functionName']],
+    ['Bad;window.hacked=1//', 'open);window.hacked=1;//', ['trigger.namespace', 'trigger.functionName']],
+  ])('namespace %p + function %p: error, and no script under any fallback name', (namespace, functionName, fieldNames) => {
+    const config = named('FormButton', namespace, functionName);
+    const names = resolveTriggerNames(config);
+    expect(names.ok).toBe(false);
+    if (!names.ok) expect(names.errors.map(error => error.field)).toEqual(fieldNames);
+    for (const code of outputs(config)) {
+      expect(code).not.toMatch(/=\s*(async\s+)?function/);
+      expect(code).not.toContain('var ');
+      expect(code).not.toContain('hacked');
+      expect(isValidJS(code)).toBe(true);
+    }
   });
 });
 

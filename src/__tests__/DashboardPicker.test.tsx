@@ -91,6 +91,20 @@ describe('DashboardPicker', () => {
     expect(input.placeholder).toBe('');
   });
 
+  it('clears the selection when Clear selection is clicked', async () => {
+    const onChange = vi.fn();
+    const dashboards: DashboardInfo[] = [{ id: 'aaa', name: 'Sales Dashboard', isPersonal: false }];
+    const service = makeService(Promise.resolve({ status: 'ok', dashboards }));
+    await render(<DashboardPicker value="aaa" onChange={onChange} metadataService={service} />);
+    await act(async () => { await Promise.resolve(); });
+    const clear = host?.querySelector<HTMLButtonElement>('button[aria-label="Clear selection"]');
+    expect(clear).toBeTruthy();
+    await act(async () => {
+      clear!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(onChange).toHaveBeenCalledWith('', '');
+  });
+
   it('shows error state and retry button on failure', async () => {
     const service = makeService(Promise.resolve({ status: 'error', reason: 'Network error' }));
     await render(<DashboardPicker value="" onChange={() => {}} metadataService={service} />);

@@ -7,7 +7,7 @@ import {
 
 export interface MetadataFilterSettingsAPI {
   getAll: () => Promise<Record<string, unknown>>;
-  setAll: (settings: Record<string, unknown>) => Promise<void>;
+  set: (key: string, value: unknown) => Promise<void>;
 }
 
 export interface MetadataFilterSettingsResult {
@@ -62,11 +62,7 @@ export class MetadataFilterSettingsService {
       return { config: normalized, persistenceAvailable: false };
     }
 
-    const allSettings = await this.settings.getAll();
-    await this.settings.setAll({
-      ...allSettings,
-      ...toSettings(normalized),
-    });
+    await this.writeConfig(this.settings, normalized);
     return { config: normalized, persistenceAvailable: true };
   }
 
@@ -75,11 +71,14 @@ export class MetadataFilterSettingsService {
       return { config: DEFAULT_METADATA_FILTER_CONFIG, persistenceAvailable: false };
     }
 
-    const allSettings = await this.settings.getAll();
-    await this.settings.setAll({
-      ...allSettings,
-      ...toSettings(DEFAULT_METADATA_FILTER_CONFIG),
-    });
+    await this.writeConfig(this.settings, DEFAULT_METADATA_FILTER_CONFIG);
     return { config: DEFAULT_METADATA_FILTER_CONFIG, persistenceAvailable: true };
+  }
+
+  // Per-key writes: a getAll/setAll read-modify-write could clobber a concurrent 'lastConfig' write.
+  private async writeConfig(settings: MetadataFilterSettingsAPI, config: MetadataFilterConfig): Promise<void> {
+    for (const [key, value] of Object.entries(toSettings(config))) {
+      await settings.set(key, value);
+    }
   }
 }

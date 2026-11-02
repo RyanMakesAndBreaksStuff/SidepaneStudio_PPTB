@@ -124,20 +124,61 @@ describe('ValidationService warnings', () => {
     expect(r.warnings.map(w => w.field)).toContain('pane.paneId');
   });
 
+  it('warns on special characters in the title without blocking', () => {
+    const r = validate(cfg({ pane: { title: "It's" } }));
+    expect(r.isValid).toBe(true);
+    expect(r.warnings.map(w => w.field)).toContain('pane.title');
+  });
+
   it.each([
-    ['title', { pane: { title: "It's" } }, 'pane.title'],
     ['namespace', { trigger: { namespace: 'My\\Ns' } }, 'trigger.namespace'],
     ['function name', { trigger: { functionName: 'open"Pane' } }, 'trigger.functionName'],
-  ] as const)('warns on special characters in the %s without blocking', (_label, overrides, field) => {
+  ] as const)('warns on special characters in the %s and blocks the invalid name', (_label, overrides, field) => {
     const r = validate(cfg(overrides));
-    expect(r.isValid).toBe(true);
     expect(r.warnings.map(w => w.field)).toContain(field);
+    expect(r.errors.map(e => e.field)).toEqual([field]);
   });
 
   it('accepts an ordinary function name and namespace without warning', () => {
     const w = warned(cfg({ trigger: { namespace: 'Contoso.Panes', functionName: 'openPane' } }));
     expect(w).not.toContain('trigger.namespace');
     expect(w).not.toContain('trigger.functionName');
+  });
+});
+
+describe('validate — trigger names (CR-001)', () => {
+  it('accepts a dotted namespace', () => {
+    expect(validate(cfg({ trigger: { namespace: 'Contoso.Panes' } })).errors).toEqual([]);
+    expect(validate(cfg({ trigger: { namespace: 'Contoso.Sales.Panes', functionName: 'openPane' } })).errors).toEqual([]);
+  });
+
+  it.each(['Contoso Panes', '', '   ', 'class', 'Contoso.', '.Panes', 'Contoso..Panes', '1Contoso'])('blocks namespace %p', namespace => {
+    expect(fields(cfg({ trigger: { namespace } }))).toEqual(['trigger.namespace']);
+  });
+
+  it('requires a namespace', () => {
+    expect(validate(cfg({ trigger: { namespace: '' } })).errors).toEqual([{ field: 'trigger.namespace', message: 'Namespace is required.' }]);
+  });
+
+  it.each(['Xrm', 'Contoso.window'])('blocks namespace %p, which shadows a name the script uses', namespace => {
+    expect(validate(cfg({ trigger: { namespace } })).errors)
+      .toContainEqual({ field: 'trigger.namespace', message: `${namespace.split('.').pop()} is used by the generated script. Choose another namespace.` });
+  });
+
+  it('reports one namespace error when several segments are invalid', () => {
+    expect(fields(cfg({ trigger: { namespace: 'a b.c d' } }))).toEqual(['trigger.namespace']);
+  });
+
+  it.each(['', 'open pane', 'for', '1open', 'pane'])('blocks function name %p', functionName => {
+    expect(fields(cfg({ trigger: { functionName } }))).toEqual(['trigger.functionName']);
+  });
+
+  it('requires a function name', () => {
+    expect(validate(cfg({ trigger: { functionName: '' } })).errors).toEqual([{ field: 'trigger.functionName', message: 'Function name is required.' }]);
+  });
+
+  it('checks the names for a console trigger too, because the library output defines them', () => {
+    expect(fields(cfg({ trigger: { kind: 'ManualJS', namespace: 'Contoso Panes' }, context: none }))).toEqual(['trigger.namespace']);
   });
 });
 

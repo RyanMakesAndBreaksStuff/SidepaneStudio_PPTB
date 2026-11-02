@@ -3,7 +3,7 @@ import { act } from 'react';
 import { createRoot, Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ConfigurePanel } from '../components/ConfigurePanel';
-import { capGridFetchXml, GridPreview } from '../components/GridPreview';
+import { GridPreview } from '../components/GridPreview';
 import { PreviewPanel } from '../components/PreviewPanel';
 import { PreviewSessionProvider } from '../contexts/PreviewSessionContext';
 import { ThemeProvider } from '../contexts/ThemeContext';
@@ -107,20 +107,6 @@ describe('grid preview', () => {
     const aliasColumns = await resolveGridColumns(aliasView, 'account', service);
     expect(aliasColumns[0].label).toBe('Account Name');
     expect(gridCellText({ caption: 'Aliased' }, aliasColumns[0])).toBe('Aliased');
-  });
-
-  it('caps the root while preserving filters, joins, ordering and smaller limits', () => {
-    const xml = '<?xml version="1.0"?><fetch top="25" count="200" page="2" paging-cookie="cookie" returntotalrecordcount="true"><entity name="account"><filter><condition attribute="name" operator="eq" value="A &amp; B"/></filter><order attribute="name"/><link-entity name="contact" from="parentcustomerid" to="accountid" alias="c"/></entity></fetch>';
-    const doc = new DOMParser().parseFromString(capGridFetchXml(xml, 'account'), 'text/xml');
-    expect(doc.documentElement.getAttribute('top')).toBe('10');
-    for (const key of ['count', 'page', 'paging-cookie', 'returntotalrecordcount']) expect(doc.documentElement.hasAttribute(key)).toBe(false);
-    expect(doc.querySelector('condition')?.getAttribute('value')).toBe('A & B');
-    expect(doc.querySelector('link-entity')?.getAttribute('alias')).toBe('c');
-    expect(doc.querySelector('order')?.getAttribute('attribute')).toBe('name');
-    expect(capGridFetchXml('<fetch top="3"><entity name="account"/></fetch>', 'account')).toContain('top="3"');
-    for (const bad of ['<fetch>', '<fetch top="oops"><entity name="account"/></fetch>', '<fetch><entity name="contact"/></fetch>', '<!DOCTYPE fetch><fetch><entity name="account"/></fetch>']) {
-      expect(() => capGridFetchXml(bad, 'account')).toThrow();
-    }
   });
 
   it('reads only on Generate, caps displayed rows, uses annotations, and simulates selection', async () => {
@@ -317,17 +303,6 @@ describe('grid preview', () => {
     await click('Grid');
     expect(host!.textContent).not.toContain('Session row');
     expect(fetchXmlQuery).toHaveBeenCalledTimes(1);
-  });
-
-  it('adds a RelatedRecord lookup column once, and never beside all-attributes', () => {
-    const attributes = (xml: string) => Array.from(new DOMParser().parseFromString(xml, 'text/xml')
-      .querySelectorAll('entity > attribute')).map(a => a.getAttribute('name'));
-    expect(attributes(capGridFetchXml('<fetch><entity name="account"><attribute name="name"/></entity></fetch>', 'account', 'primarycontactid')))
-      .toEqual(['name', 'primarycontactid']);
-    expect(attributes(capGridFetchXml('<fetch><entity name="account"><attribute name="primarycontactid"/></entity></fetch>', 'account', 'primarycontactid')))
-      .toEqual(['primarycontactid']);
-    expect(capGridFetchXml('<fetch><entity name="account"><all-attributes/></entity></fetch>', 'account', 'primarycontactid'))
-      .not.toContain('<attribute');
   });
 
   it('previews RelatedRecord on the source table and opens the selected row lookup record', async () => {

@@ -7,7 +7,6 @@ export interface ChoiceGroupOption {
   value: string;
   label: string;
   desc?: string;
-  phase?: string;
   disabled?: boolean;
 }
 
@@ -22,7 +21,6 @@ export interface ChoiceGroupProps {
  * Pill-style single-select. Wraps to multiple rows, highlights the active
  * choice with the accent color, and surfaces `desc` of the selected option
  * below the pill row so descriptions stay visible without bloating each pill.
- * `phase` renders as a small inline subscript (e.g. "Dashboard · Soon") and
  * `disabled` greys the pill + blocks selection.
  */
 export function ChoiceGroup({ name, options, value, onChange }: ChoiceGroupProps): React.ReactElement {
@@ -78,23 +76,6 @@ export function ChoiceGroup({ name, options, value, onChange }: ChoiceGroupProps
                 />
               )}
               <span>{opt.label}</span>
-              {opt.phase && (
-                <span
-                  style={{
-                    fontFamily: T.mono,
-                    fontSize: 10,
-                    fontWeight: 500,
-                    color: T.fg3,
-                    paddingLeft: 6,
-                    borderLeft: `1px solid ${T.stroke1}`,
-                    marginLeft: 2,
-                    textTransform: 'uppercase',
-                    letterSpacing: '.4px',
-                  }}
-                >
-                  {opt.phase}
-                </span>
-              )}
             </button>
           );
         })}

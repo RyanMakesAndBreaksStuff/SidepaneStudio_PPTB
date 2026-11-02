@@ -9,7 +9,7 @@ import { Field } from './Field';
 import { Callout } from './Callout';
 import { RUNTIME_WEB_RESOURCE_NAME } from '../constants';
 import { copyText } from '../services/clipboard';
-import { lookupRegistrarName } from '../services/CodeGenerationService';
+import { lookupRegistrarName, resolveTriggerNames } from '../services/CodeGenerationService';
 
 const STEPS: Record<Exclude<TriggerKind, 'GridButton' | 'GridRowSelect'>, string[]> = {
   FormOnLoad: [
@@ -66,13 +66,17 @@ export function CommandStepsTab({ config }: CommandStepsTabProps): React.ReactEl
   const T = theme(isDark);
   const [copyFallback, setCopyFallback] = useState(false);
 
-  const fn = config.trigger.functionName || 'fn';
-  const fqn = `${config.trigger.namespace || 'Ns'}.${config.trigger.kind === 'LookupTagClick' ? lookupRegistrarName(fn) : fn}`;
+  // CR-001 — exactly the name the generated script defines; null while the names fail validation.
+  const names = resolveTriggerNames(config);
+  const fqn = names.ok
+    ? `${names.ns}.${config.trigger.kind === 'LookupTagClick' ? lookupRegistrarName(names.fn) : names.fn}`
+    : null;
+  const nameError = names.ok ? '' : names.errors.map(error => error.message).join(' ');
   const steps = deploySteps(config.trigger);
   const isManual = config.trigger.kind === 'ManualJS';
 
-  const copyFqn = () => {
-    copyText(fqn)
+  const copyFqn = (value: string) => {
+    copyText(value)
       .then(() => setCopyFallback(false))
       .catch(() => setCopyFallback(true));
   };
@@ -95,10 +99,12 @@ export function CommandStepsTab({ config }: CommandStepsTabProps): React.ReactEl
           background: T.surface3, border: `1px solid ${T.stroke1}`, borderRadius: T.rM,
           padding: '8px 10px', fontFamily: T.mono, fontSize: 12, gap: 8,
         }}>
-          <span>{isManual ? '(Paste the full code block)' : fqn}</span>
-          {!isManual && (
+          {isManual ? <span>(Paste the full code block)</span>
+            : fqn !== null ? <span>{fqn}</span>
+              : <span role="alert" style={{ color: T.error, fontFamily: T.font }}>{nameError}</span>}
+          {!isManual && fqn !== null && (
             <button
-              onClick={copyFqn}
+              onClick={() => copyFqn(fqn)}
               style={{
                 padding: '2px 8px', background: T.surface1, border: `1px solid ${T.stroke1}`,
                 borderRadius: T.rS, fontSize: 11, fontFamily: T.font, cursor: 'pointer',
@@ -111,7 +117,7 @@ export function CommandStepsTab({ config }: CommandStepsTabProps): React.ReactEl
         </div>
       </Field>
 
-      {copyFallback && (
+      {copyFallback && fqn !== null && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           <Callout type="warn" icon="⚠">Clipboard access blocked. Select the text below and copy manually (Ctrl+C / Cmd+C).</Callout>
           <textarea
