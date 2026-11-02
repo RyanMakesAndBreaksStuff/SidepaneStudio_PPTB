@@ -626,13 +626,6 @@ describe('buildPaneOptions — isSelected and canClose', () => {
       }
     });
 
-  it('never emits isResizable — it is not a documented paneOption', () => {
-    for (const isResizable of [true, false]) {
-      const code = generateBasicScript(cfg({ pane: { isResizable } }));
-      expect(code).not.toContain('isResizable');
-    }
-  });
-
   it('badge is assigned on the pane after navigate, never inside createPane', () => {
     const code = generateBasicScript(cfg({ pane: { badgeValue: 5 } }));
     expect(isValidJS(code)).toBe(true);
@@ -720,11 +713,6 @@ describe('generateLibraryScript', () => {
     );
     expect(code).toContain('name: "sps_Page"');
     expect(code).not.toContain('webresourceName');
-  });
-
-  it('never emits isResizable (contract C3)', () => {
-    const code = generateLibraryScript(cfg({ pane: { isResizable: false } }));
-    expect(code).not.toContain('isResizable');
   });
 });
 

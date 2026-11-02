@@ -7,7 +7,7 @@ import { PaneDefinitionConfig, TriggerConfig, TriggerKind } from '../types/PaneD
 import { TRIGGER_CAPABILITIES } from '../services/triggerCapabilities';
 import { Field } from './Field';
 import { Callout } from './Callout';
-import { RUNTIME_WEB_RESOURCE_NAME } from '../constants';
+import { RUNTIME_WEB_RESOURCE_SUFFIX } from '../constants';
 import { copyText } from '../services/clipboard';
 import { lookupRegistrarName, resolveTriggerNames } from '../services/CodeGenerationService';
 
@@ -41,7 +41,7 @@ const STEPS: Record<Exclude<TriggerKind, 'GridButton' | 'GridRowSelect'>, React.
 };
 
 const RUNTIME_STEP = (
-  <>If using Shared Library output, select <strong>Shared Library → Download runtime</strong>, upload the file as <code>{RUNTIME_WEB_RESOURCE_NAME}</code>, and publish it. Load that library before the generated handler; Basic Script output needs no shared runtime.</>
+  <>If using Shared Library output, select <strong>Shared Library → Download runtime</strong>, upload it as <code>{'<prefix>_'}{RUNTIME_WEB_RESOURCE_SUFFIX}</code> (your publisher prefix), and publish it. Load that library before the generated handler; Basic Script output needs no shared runtime.</>
 );
 
 /** Deployment steps for a trigger; grid steps name the configured surface. */

@@ -30,6 +30,7 @@ afterEach(async () => {
   host = undefined;
 });
 
+const PAGE_TARGET = { ...DEFAULT_CONFIG.target, name: 'sps_SidePaneBuilderPage' };
 const mockValidation = { isValid: true, errors: [], warnings: [] };
 
 describe('NativeMdaFrame', () => {
@@ -37,7 +38,7 @@ describe('NativeMdaFrame', () => {
     await render(
       <NativeMdaFrame
         pane={DEFAULT_CONFIG.pane}
-        paneTarget={DEFAULT_CONFIG.target}
+        paneTarget={PAGE_TARGET}
         validation={mockValidation}
         variant={{ kind: 'mock' }}
       >
@@ -57,7 +58,7 @@ describe('NativeMdaFrame', () => {
     await render(
       <NativeMdaFrame
         pane={DEFAULT_CONFIG.pane}
-        paneTarget={DEFAULT_CONFIG.target}
+        paneTarget={PAGE_TARGET}
         validation={mockValidation}
         variant={{ kind: 'form', hostEntity: 'contact', record: null }}
       >
@@ -74,7 +75,7 @@ describe('NativeMdaFrame', () => {
     await render(
       <NativeMdaFrame
         pane={DEFAULT_CONFIG.pane}
-        paneTarget={DEFAULT_CONFIG.target}
+        paneTarget={PAGE_TARGET}
         validation={mockValidation}
         variant={{ kind: 'form', hostEntity: 'contact', record: null }}
       >
@@ -96,7 +97,7 @@ describe('NativeMdaFrame', () => {
     await render(
       <NativeMdaFrame
         pane={DEFAULT_CONFIG.pane}
-        paneTarget={DEFAULT_CONFIG.target}
+        paneTarget={PAGE_TARGET}
         validation={mockValidation}
         variant={{ kind: 'form', hostEntity: 'sales order', record: null }}
       >
@@ -120,7 +121,7 @@ function atWidth(width: number, element: React.ReactElement): React.ReactElement
 
 function mockFrame(pane = DEFAULT_CONFIG.pane): React.ReactElement {
   return (
-    <NativeMdaFrame pane={pane} paneTarget={DEFAULT_CONFIG.target} validation={mockValidation} variant={{ kind: 'mock' }}>
+    <NativeMdaFrame pane={pane} paneTarget={PAGE_TARGET} validation={mockValidation} variant={{ kind: 'mock' }}>
       <div>Content</div>
     </NativeMdaFrame>
   );

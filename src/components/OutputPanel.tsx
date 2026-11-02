@@ -22,7 +22,7 @@ export interface OutputPanelProps {
 }
 
 
-import { RUNTIME_WEB_RESOURCE_NAME } from '../constants';
+import { RUNTIME_FILE_NAME, RUNTIME_WEB_RESOURCE_NAME, RUNTIME_WEB_RESOURCE_SUFFIX } from '../constants';
 
 function generateRawConfig(config: PaneDefinitionConfig): string {
   return JSON.stringify(config, null, 2);
@@ -42,6 +42,7 @@ export const OutputPanel = React.memo(function OutputPanel({ config, xrm, valida
   const [activeTab, setActiveTab] = useState('basic');
   const [showRaw, setShowRaw] = useState(false);
   const [runtimeExists, setRuntimeExists] = useState<boolean | null>(null);
+  const [runtimeName, setRuntimeName] = useState<string | null>(null);
   const [runtimeCheckError, setRuntimeCheckError] = useState<string | null>(null);
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [savingRuntime, setSavingRuntime] = useState(false);
@@ -59,14 +60,14 @@ export const OutputPanel = React.memo(function OutputPanel({ config, xrm, valida
     setSavingRuntime(true);
     try {
       if (window.toolboxAPI?.fileSystem?.saveFile) {
-        await window.toolboxAPI.fileSystem.saveFile('sidepane.runtime.js', runtimeSource);
+        await window.toolboxAPI.fileSystem.saveFile(RUNTIME_FILE_NAME, runtimeSource);
         return;
       }
       const url = URL.createObjectURL(new Blob([runtimeSource], { type: 'text/javascript;charset=utf-8' }));
       const anchor = document.createElement('a');
       try {
         anchor.href = url;
-        anchor.download = 'sidepane.runtime.js';
+        anchor.download = RUNTIME_FILE_NAME;
         document.body.appendChild(anchor);
         anchor.click();
       } finally {
@@ -84,9 +85,13 @@ export const OutputPanel = React.memo(function OutputPanel({ config, xrm, valida
   useEffect(() => {
     if (activeTab === 'library') {
       setRuntimeExists(null);
+      setRuntimeName(null);
       setRuntimeCheckError(null);
-      xrm.checkWebResourceExists(RUNTIME_WEB_RESOURCE_NAME)
-        .then(exists => setRuntimeExists(exists))
+      xrm.checkWebResourceExists(RUNTIME_WEB_RESOURCE_SUFFIX)
+        .then(name => {
+          setRuntimeExists(Boolean(name));
+          setRuntimeName(typeof name === 'string' ? name : null);
+        })
         .catch((err) => setRuntimeCheckError(err instanceof Error ? err.message : String(err)));
     }
   }, [activeTab, xrm]);
@@ -158,11 +163,11 @@ export const OutputPanel = React.memo(function OutputPanel({ config, xrm, valida
             )}
             {runtimeExists === false && !runtimeCheckError && (
               <Callout type="warn" icon="⚠">
-                <strong>Prerequisite not detected:</strong> The shared runtime library (<code>{RUNTIME_WEB_RESOURCE_NAME}</code>) is not deployed in this environment. Deploy it before using this output.
+                <strong>Prerequisite not detected:</strong> No web resource ending in <code>{RUNTIME_WEB_RESOURCE_SUFFIX}</code> was found in this environment. Deploy the shared runtime (recommended name: <code>{RUNTIME_WEB_RESOURCE_NAME}</code>) before using this output.
               </Callout>
             )}
             {runtimeExists === true && (
-              <Callout type="ok" icon="✓">Shared runtime library detected in this environment.</Callout>
+              <Callout type="ok" icon="✓">Shared runtime library detected in this environment{runtimeName && <> (<code>{runtimeName}</code>)</>}.</Callout>
             )}
             <SummaryCard
               title="📚 Shared library version"

@@ -24,11 +24,15 @@ type SectionOverrides = {
   [K in Exclude<keyof PaneDefinitionConfig, 'target'>]?: Partial<PaneDefinitionConfig[K]>;
 };
 
+// WR-010: DEFAULT_CONFIG ships blank names, so tests that are not about them supply explicit values.
+export const TEST_TARGET_NAME = 'sps_SidePaneBuilderPage';
+export const TEST_NAMESPACE = 'YourNamespace';
+
 export function cfg(overrides: SectionOverrides & { target?: TargetConfig } = {}): PaneDefinitionConfig {
   return {
     pane:     { ...DEFAULT_CONFIG.pane,     ...(overrides.pane     ?? {}) },
-    target:   overrides.target ?? DEFAULT_CONFIG.target,
-    trigger:  { ...DEFAULT_CONFIG.trigger,  ...(overrides.trigger  ?? {}) },
+    target:   overrides.target ?? { pageType: 'custom', name: TEST_TARGET_NAME },
+    trigger:  { ...DEFAULT_CONFIG.trigger,  namespace: TEST_NAMESPACE, ...(overrides.trigger  ?? {}) },
     host:     { ...DEFAULT_CONFIG.host,     ...(overrides.host     ?? {}) },
     context:  { ...DEFAULT_CONFIG.context,  ...(overrides.context  ?? {}) },
     behavior: { ...DEFAULT_CONFIG.behavior, ...(overrides.behavior ?? {}) },

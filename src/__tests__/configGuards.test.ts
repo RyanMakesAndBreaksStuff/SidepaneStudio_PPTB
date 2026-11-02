@@ -48,6 +48,12 @@ describe('parseStoredConfig', () => {
     expect(parsed).toEqual(DEFAULT_CONFIG);
   });
 
+  it('ignores a stored isResizable key that is no longer part of the config', () => {
+    const parsed = parseStoredConfig(JSON.stringify({ ...DEFAULT_CONFIG, pane: { ...DEFAULT_CONFIG.pane, isResizable: false } }));
+    expect(parsed).toEqual(DEFAULT_CONFIG);
+    expect(parsed?.pane).not.toHaveProperty('isResizable');
+  });
+
   it('fills sections missing from an older stored config', () => {
     const legacy = { ...DEFAULT_CONFIG } as Record<string, unknown>;
     delete legacy.behavior;

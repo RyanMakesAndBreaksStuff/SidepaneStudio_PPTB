@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { RESERVED_VARIABLES, validate } from '../services/ValidationService';
 import { cfg } from './testHelpers';
+import { DEFAULT_CONFIG } from '../types/PaneDefinitionConfig';
 import type { PaneDefinitionConfig } from '../types/PaneDefinitionConfig';
 
 const guid = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
@@ -143,6 +144,12 @@ describe('ValidationService warnings', () => {
     const w = warned(cfg({ trigger: { namespace: 'Contoso.Panes', functionName: 'openPane' } }));
     expect(w).not.toContain('trigger.namespace');
     expect(w).not.toContain('trigger.functionName');
+  });
+});
+
+describe('validate — environment-neutral defaults (WR-010)', () => {
+  it('flags the blank page name and namespace of a fresh config', () => {
+    expect(validate(DEFAULT_CONFIG).errors.map(e => e.field).sort()).toEqual(['target.name', 'trigger.namespace']);
   });
 });
 
