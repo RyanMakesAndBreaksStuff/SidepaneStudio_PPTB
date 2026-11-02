@@ -6,6 +6,7 @@ import { OutputPanel } from '../components/OutputPanel';
 import { DEFAULT_CONFIG } from '../types/PaneDefinitionConfig';
 import { xrmStub } from './testHelpers';
 import runtimeSource from '../runtime/sidepane.runtime.js?raw';
+import { describeConfigText } from '../services/describeConfig';
 
 let root: Root | undefined;
 let host: HTMLDivElement | undefined;
@@ -123,8 +124,21 @@ describe('runtime download', () => {
 });
 
 describe('OutputPanel', () => {
+  it('summarizes the script with the configuration sentence', async () => {
+    await render(<OutputPanel config={DEFAULT_CONFIG} xrm={xrmStub()} validation={{ isValid: true, errors: [], warnings: [] }} />);
+    expect(host!.textContent).toContain(describeConfigText(DEFAULT_CONFIG));
+  });
+
+  it('names the subgrid in Command Steps for a subgrid button', async () => {
+    const config = { ...DEFAULT_CONFIG, trigger: { ...DEFAULT_CONFIG.trigger, kind: 'GridButton' as const, surface: 'subgrid' as const }, context: { ...DEFAULT_CONFIG.context, source: { kind: 'selectedRow' as const } } };
+    await render(<OutputPanel config={config} xrm={xrmStub()} validation={{ isValid: true, errors: [], warnings: [] }} />);
+    const tab = Array.from(host!.querySelectorAll('[role="tab"]')).find(t => t.textContent === 'Command Steps') as HTMLButtonElement;
+    await act(async () => { tab.click(); });
+    expect(host!.textContent).toContain('Subgrid commands');
+  });
+
   it('names the generated lookup registrar and the Dependencies step in Command Steps', async () => {
-    const config = { ...DEFAULT_CONFIG, trigger: { kind: 'LookupTagClick' as const, namespace: 'Contoso', functionName: 'openTag', fieldName: 'parentcustomerid' } };
+    const config = { ...DEFAULT_CONFIG, trigger: { ...DEFAULT_CONFIG.trigger, kind: 'LookupTagClick' as const, namespace: 'Contoso', functionName: 'openTag' }, host: { ...DEFAULT_CONFIG.host, entityName: 'account', lookupControls: ['parentaccountid'] }, context: { ...DEFAULT_CONFIG.context, source: { kind: 'clickedTag' as const } } };
     await render(<OutputPanel config={config} xrm={xrmStub()} validation={{ isValid: true, errors: [], warnings: [] }} />);
     const tab = Array.from(host!.querySelectorAll('[role="tab"]')).find(t => t.textContent === 'Command Steps') as HTMLButtonElement;
     await act(async () => { tab.click(); });
@@ -150,8 +164,8 @@ describe('OutputPanel', () => {
       trigger: {
         ...DEFAULT_CONFIG.trigger,
         kind: 'FormOnChange' as const,
-        fieldName: 'statuscode',
       },
+      host: { ...DEFAULT_CONFIG.host, attribute: 'statuscode' },
     };
 
     await render(

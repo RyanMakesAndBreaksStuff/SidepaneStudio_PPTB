@@ -3,26 +3,15 @@ import * as React from 'react';
 import { useState } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 import { theme } from '../theme/tokens';
-import { PaneDefinitionConfig, TriggerKind } from '../types/PaneDefinitionConfig';
+import { PaneDefinitionConfig, TriggerConfig, TriggerKind } from '../types/PaneDefinitionConfig';
+import { TRIGGER_CAPABILITIES } from '../services/triggerCapabilities';
 import { Field } from './Field';
 import { Callout } from './Callout';
 import { RUNTIME_WEB_RESOURCE_NAME } from '../constants';
 import { copyText } from '../services/clipboard';
 import { lookupRegistrarName } from '../services/CodeGenerationService';
 
-const TRIGGER_SUMMARIES: Record<TriggerKind, string> = {
-  FormOnLoad:     'Opens automatically when a record form loads.',
-  FormOnChange:   'Opens when a specific form field changes value.',
-  LookupTagClick: 'Cancels lookup tag navigation and opens the pane with the clicked tag.',
-  FormButton:     'Opens when a command bar button is clicked on a record form.',
-  MainGridButton:  'Opens when a command bar button is clicked in a main grid view.',
-  SubgridButton:   'Opens when a command bar button is clicked in a subgrid.',
-  MainGridOnSelect: 'Opens when a single row is selected in a main grid view.',
-  SubgridOnSelect:  'Opens when a single row is selected in a subgrid.',
-  ManualJS:        'Paste directly into the browser console (F12) to open the pane on demand.',
-};
-
-const DEPLOY_STEPS: Record<TriggerKind, string[]> = {
+const STEPS: Record<Exclude<TriggerKind, 'GridButton' | 'GridRowSelect'>, string[]> = {
   FormOnLoad: [
     'Paste this function into a new JavaScript web resource and publish it.',
     'In the form editor, open <strong>Events → OnLoad</strong>.',
@@ -44,26 +33,6 @@ const DEPLOY_STEPS: Record<TriggerKind, string[]> = {
     'Add the web resource to your solution and publish all customizations.',
     'Wire the function to a command bar button using <strong>Command Designer</strong>. In Action parameters, add <code>primaryControl</code> (Primary Control type) as the first argument.',
   ],
-  MainGridButton: [
-    'Paste this function into a new JavaScript web resource and publish it.',
-    'In Command Designer, select <strong>Grid commands</strong> and create a new button with Action: Run JavaScript.',
-    'Select your web resource as the library and enter the full function name (including namespace). In Action parameters, add <code>primaryControl</code> (Primary Control type) as the first argument.',
-  ],
-  SubgridButton: [
-    'Paste this function into a new JavaScript web resource and publish it.',
-    'In Command Designer, select <strong>Subgrid commands</strong> and create a button with Action: Run JavaScript.',
-    'Select your web resource and enter the full function name. In Action parameters, add <code>primaryControl</code> (Primary Control type) as the first argument. This is required — the function reads selected row data from it.',
-  ],
-  MainGridOnSelect: [
-    'Paste this function into a new JavaScript web resource and publish it.',
-    'Enable the <strong>Power Apps grid control</strong> on the table views. An <strong>Events</strong> tab appears on the control.',
-    'Add the web resource as a library, then add an <strong>OnRecordSelect</strong> handler. Select the function name and enable <strong>Pass execution context as first parameter</strong>.',
-  ],
-  SubgridOnSelect: [
-    'Paste this function into a new JavaScript web resource and publish it.',
-    'Enable the <strong>Power Apps grid control</strong> on the form subgrid. An <strong>Events</strong> tab appears on the control.',
-    'Add the web resource as a library, then add an <strong>OnRecordSelect</strong> handler. Select the function name and enable <strong>Pass execution context as first parameter</strong>.',
-  ],
   ManualJS: [
     'Copy the entire code block.',
     'Open a model-driven app in your browser and press <strong>F12</strong> to open DevTools.',
@@ -71,11 +40,22 @@ const DEPLOY_STEPS: Record<TriggerKind, string[]> = {
   ],
 };
 
-for (const steps of Object.values(DEPLOY_STEPS)) {
-  steps.unshift(`If using Shared Library output, select <strong>Shared Library → Download runtime</strong>, upload the file as <code>${RUNTIME_WEB_RESOURCE_NAME}</code>, and publish it. Load that library before the generated handler; Basic Script output needs no shared runtime.`);
-}
+const RUNTIME_STEP = `If using Shared Library output, select <strong>Shared Library → Download runtime</strong>, upload the file as <code>${RUNTIME_WEB_RESOURCE_NAME}</code>, and publish it. Load that library before the generated handler; Basic Script output needs no shared runtime.`;
 
-export { TRIGGER_SUMMARIES, DEPLOY_STEPS };
+/** Deployment steps for a trigger; grid steps name the configured surface. */
+export function deploySteps(trigger: TriggerConfig): string[] {
+  const subgrid = trigger.surface === 'subgrid';
+  const steps = trigger.kind === 'GridButton' ? [
+    'Paste this function into a new JavaScript web resource and publish it.',
+    `In Command Designer, select <strong>${subgrid ? 'Subgrid commands' : 'Grid commands'}</strong> and create a new button with Action: Run JavaScript.`,
+    'Select your web resource as the library and enter the full function name (including namespace). In Action parameters, add <code>primaryControl</code> (Primary Control type) as the first argument. This is required — the function reads selected row data from it.',
+  ] : trigger.kind === 'GridRowSelect' ? [
+    'Paste this function into a new JavaScript web resource and publish it.',
+    `Enable the <strong>Power Apps grid control</strong> on the ${subgrid ? 'form subgrid' : 'table views'}. An <strong>Events</strong> tab appears on the control.`,
+    'Add the web resource as a library, then add an <strong>OnRecordSelect</strong> handler. Select the function name and enable <strong>Pass execution context as first parameter</strong>.',
+  ] : STEPS[trigger.kind];
+  return [RUNTIME_STEP, ...steps];
+}
 
 export interface CommandStepsTabProps {
   config: PaneDefinitionConfig;
@@ -88,7 +68,7 @@ export function CommandStepsTab({ config }: CommandStepsTabProps): React.ReactEl
 
   const fn = config.trigger.functionName || 'fn';
   const fqn = `${config.trigger.namespace || 'Ns'}.${config.trigger.kind === 'LookupTagClick' ? lookupRegistrarName(fn) : fn}`;
-  const steps = DEPLOY_STEPS[config.trigger.kind] ?? [];
+  const steps = deploySteps(config.trigger);
   const isManual = config.trigger.kind === 'ManualJS';
 
   const copyFqn = () => {
@@ -105,7 +85,7 @@ export function CommandStepsTab({ config }: CommandStepsTabProps): React.ReactEl
       }}>
         <div style={{ fontSize: 12, fontWeight: 700, color: T.info }}>🛠 Command Designer deployment steps</div>
         <div style={{ fontSize: 12, color: T.info, lineHeight: 1.6 }}>
-          Your trigger is a <strong>{config.trigger.kind}</strong>. Follow these steps to wire the generated function to your model-driven app.
+          Your trigger is a <strong>{TRIGGER_CAPABILITIES[config.trigger.kind].label}</strong>. Follow these steps to wire the generated function to your model-driven app.
         </div>
       </div>
 

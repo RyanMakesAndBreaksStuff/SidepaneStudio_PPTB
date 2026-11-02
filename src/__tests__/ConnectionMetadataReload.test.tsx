@@ -21,10 +21,11 @@ vi.mock('../components/ConfigurePanel', async () => {
     }) => <>
       <TablePicker
         metadataService={metadataService}
-        value={config.target.pageType === 'entityrecord' ? config.target.entityName : ''}
+        value={config.host.entityName}
         onChange={() => {}}
       />
-      <output data-testid="lookup">{config.context.lookupAttribute}</output>
+      <output data-testid="lookup">{config.context.source.kind === 'lookup' ? config.context.source.attribute : ''}</output>
+      <output data-testid="host">{config.host.entityName}</output>
     </>,
   };
 });
@@ -117,6 +118,7 @@ function storeTargetTable(entityName: string) {
   const settings = (window.toolboxAPI as unknown as { settings: { get: ReturnType<typeof vi.fn> } }).settings;
   settings.get.mockImplementation(async (key: string) => key === 'lastConfig' ? JSON.stringify({
     ...DEFAULT_CONFIG,
+    host: { ...DEFAULT_CONFIG.host, entityName },
     target: { pageType: 'entityrecord', entityName, formId: 'form-a', tabName: 'tab-a', data: '' },
   }) : null);
 }
@@ -146,7 +148,8 @@ it('clears the related-record lookup column when the connection switches orgs', 
   const settings = (window.toolboxAPI as unknown as { settings: { get: ReturnType<typeof vi.fn> } }).settings;
   settings.get.mockImplementation(async (key: string) => key === 'lastConfig' ? JSON.stringify({
     ...DEFAULT_CONFIG,
-    context: { ...DEFAULT_CONFIG.context, mode: 'RelatedRecord', entityName: 'new_a', lookupAttribute: 'new_contactid' },
+    host: { ...DEFAULT_CONFIG.host, entityName: 'new_a' },
+    context: { ...DEFAULT_CONFIG.context, source: { kind: 'lookup', attribute: 'new_contactid' } },
   }) : null);
   await mount();
   const lookup = () => host.querySelector('[data-testid="lookup"]')?.textContent;
@@ -155,6 +158,7 @@ it('clears the related-record lookup column when the connection switches orgs', 
   getActiveConnection.mockResolvedValue({ id: 'b' });
   await emit('connection:updated');
   expect(lookup()).toBe('');
+  expect(host.querySelector('[data-testid="host"]')?.textContent).toBe('');
 });
 
 it.each(['connection:created', 'connection:updated'] as const)(
