@@ -11,7 +11,7 @@ import { MetadataService, type LookupAttributeInfo } from '../services/MetadataS
 import { validate } from '../services/ValidationService';
 import { gridCellText, relatedRecordOf, resolveGridColumns } from '../services/GridViewModel';
 import type { IXrmContext } from '../adapters/PptbContextAdapter';
-import { cfg, deferred, xrmStub } from './testHelpers';
+import { cfg, chooseOption, deferred, xrmStub } from './testHelpers';
 
 let xrm = xrmStub();
 function setFetch(fn: unknown) { xrm = { ...xrmStub(), fetchXml: fn as IXrmContext['fetchXml'] }; }
@@ -23,7 +23,7 @@ const view = {
   fetchXml: '<fetch><entity name="account"><attribute name="name"/><attribute name="statuscode"/><attribute name="primarycontactid"/><link-entity name="contact" alias="c" from="contactid" to="primarycontactid"><attribute name="emailaddress1"/></link-entity></entity></fetch>',
   layoutXml: '<grid jump="name"><row id="accountid"><cell name="name" width="240"/><cell name="statuscode" width="100"/><cell name="primarycontactid" width="180"/><cell name="c.emailaddress1" width="200"/></row></grid>',
 };
-const config = cfg({ target: { pageType: 'entitylist', entityName: 'account', viewId: view.id, viewType: view.viewType } });
+const config = cfg({ trigger: { kind: 'GridButton' }, host: { entityName: 'account', viewId: view.id, viewType: view.viewType } });
 const validation = { isValid: true, errors: [], warnings: [] };
 function metadata() {
   return { listViewsForEntity: vi.fn().mockResolvedValue({ status: 'ok', views: [view] }),
@@ -58,8 +58,7 @@ async function chooseTable(input: HTMLInputElement, logicalName: string) {
   await act(async () => { option!.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })); });
 }
 function preview(service = metadata(), key = 'account') {
-  return <GridPreview key={key} config={config} validation={validation} metadataService={service} xrm={xrm}
-    entityName="account" allowEntityChange={false} onEntityNameChange={() => undefined} />;
+  return <GridPreview key={key} config={config} validation={validation} metadataService={service} xrm={xrm} />;
 }
 afterEach(async () => {
   await act(async () => { root?.unmount(); });
@@ -172,10 +171,10 @@ describe('grid preview', () => {
     expect(boxes().every(b => !b.checked)).toBe(true);
   });
 
-  it.each(['MainGridOnSelect', 'SubgridOnSelect'] as const)('simulates %s only for one selected row', async kind => {
+  it.each(['main', 'subgrid'] as const)('simulates row selection on %s only for one selected row', async surface => {
     setFetch(vi.fn().mockResolvedValue({ value: [{ name: 'Acme' }, { name: 'Beta' }] }));
-    await render(<GridPreview config={{ ...config, trigger: { ...config.trigger, kind } }} validation={validation}
-      metadataService={metadata()} xrm={xrm} entityName="account" allowEntityChange={false} onEntityNameChange={() => undefined} />);
+    await render(<GridPreview config={{ ...config, trigger: { ...config.trigger, kind: 'GridRowSelect', surface } }} validation={validation}
+      metadataService={metadata()} xrm={xrm} />);
     await click('Generate grid preview');
     await act(async () => { host!.querySelector<HTMLInputElement>('input[aria-label="Select row 2"]')!.click(); });
     expect(host!.textContent).toContain('SelectedRow: row 2');
@@ -231,7 +230,7 @@ describe('grid preview', () => {
     await render(panel(cfg()));
     await render(panel(config));
     await click('Grid');
-    expect(host!.querySelector('[role="group"][aria-label="Preview entity"]')).toBeTruthy();
+    expect(host!.querySelector('[role="group"][aria-label="Grid source"]')).toBeTruthy();
     const generate = Array.from(host!.querySelectorAll('button')).find(b => b.textContent === 'Generate grid preview');
     expect(generate?.disabled).toBe(false);
     expect(listViewsForEntity).toHaveBeenCalledWith('account');
@@ -240,7 +239,7 @@ describe('grid preview', () => {
     expect(fetchXmlQuery.mock.calls[0][0]).toContain('name="account"');
   });
 
-  it('offers the local entity picker when a grid trigger target has no entity', async () => {
+  it('writes a grid source table into the host', async () => {
     const listAccessibleTables = vi.fn().mockResolvedValue({ status: 'ok', tables: [] });
     const service = { ...metadata(), listAccessibleTables } as unknown as MetadataService;
     listAccessibleTables.mockResolvedValue({ status: 'ok', tables: [
@@ -248,37 +247,38 @@ describe('grid preview', () => {
     ] });
     const fetchXmlQuery = vi.fn();
     setFetch(fetchXmlQuery);
-    await render(<PreviewPanel config={cfg({ trigger: { ...config.trigger, kind: 'MainGridButton' } })}
-      validation={validation} metadataService={service} xrm={xrm} />);
+    function ControlledPanel() {
+      const [current, setCurrent] = React.useState(cfg({ trigger: { kind: 'GridButton' } }));
+      return <><output aria-label="host table">{current.host.entityName}</output><PreviewPanel config={current}
+        onChange={updater => setCurrent(updater)} validation={validation} metadataService={service} xrm={xrm} /></>;
+    }
+    await render(<ControlledPanel />);
     await click('Grid');
-    const entityGroup = host!.querySelector('[role="group"][aria-label="Preview entity"]');
+    const entityGroup = host!.querySelector('[role="group"][aria-label="Grid source"]');
     const entityInput = entityGroup?.querySelector<HTMLInputElement>('[role="combobox"]');
     expect(entityInput).toBeTruthy();
     await chooseTable(entityInput!, 'account');
-    const viewOption = Array.from(host!.querySelectorAll('option')).find(option => option.textContent?.includes(view.name));
-    expect(viewOption).toBeTruthy();
-    await act(async () => {
-      const select = viewOption!.closest('select')!;
-      select.value = viewOption!.value;
-      select.dispatchEvent(new Event('change', { bubbles: true }));
-    });
+    expect(host!.querySelector('[aria-label="host table"]')?.textContent).toBe('account');
+    await chooseOption(host!, 'View', view.name);
     const generate = Array.from(host!.querySelectorAll('button')).find(b => b.textContent === 'Generate grid preview');
     expect(generate?.disabled).toBe(false);
     expect(fetchXmlQuery).not.toHaveBeenCalled();
   });
 
-  it('gates the Grid tab by target or grid trigger and clears it when eligibility changes', async () => {
+  it('gates the Grid tab by trigger and clears it when eligibility changes', async () => {
     const service = metadata();
     const xrm = xrmStub();
     const panel = (value: ReturnType<typeof cfg>) => <PreviewPanel config={value} validation={validation} metadataService={service} xrm={xrm} />;
     await render(panel(cfg()));
+    expect(Array.from(host!.querySelectorAll('button')).some(b => b.textContent === 'Grid')).toBe(false);
+    await render(panel(cfg({ target: { pageType: 'entitylist', entityName: 'account', viewId: view.id, viewType: view.viewType } })));
     expect(Array.from(host!.querySelectorAll('button')).some(b => b.textContent === 'Grid')).toBe(false);
     await render(panel(config));
     await click('Grid');
     expect(host!.textContent).toContain('Generate grid preview');
     await render(panel(cfg()));
     expect(host!.textContent).not.toContain('Generate grid preview');
-    for (const kind of ['MainGridButton', 'SubgridButton', 'MainGridOnSelect', 'SubgridOnSelect'] as const) {
+    for (const kind of ['GridButton', 'GridRowSelect'] as const) {
       await render(panel(cfg({ trigger: { ...config.trigger, kind } })));
       expect(Array.from(host!.querySelectorAll('button')).some(b => b.textContent === 'Grid')).toBe(true);
     }
@@ -345,18 +345,14 @@ describe('grid preview', () => {
     ] });
     setFetch(fetchXmlQuery);
     const related = cfg({
-      trigger: { kind: 'MainGridOnSelect' },
-      target: { pageType: 'entityrecord', entityName: 'contact', formId: '', tabName: '', data: '' },
-      context: { mode: 'RelatedRecord', entityName: 'account', lookupAttribute: 'primarycontactid' },
+      trigger: { kind: 'GridRowSelect' },
+      target: { pageType: 'entityrecord', entityName: 'contact', formId: '', tabName: '', data: '', createNew: false },
+      host: { entityName: 'account', viewId: nameOnly.id, viewType: nameOnly.viewType },
+      context: { source: { kind: 'lookup', attribute: 'primarycontactid' } },
     });
     await render(<PreviewPanel config={related} validation={validation} metadataService={service} xrm={xrm} />);
     await click('Grid');
-    expect(host!.querySelector('[role="group"][aria-label="Related record source"]')).toBeTruthy();
-    const viewSelect = host!.querySelector<HTMLSelectElement>('select[aria-label="View"]')!;
-    await act(async () => {
-      viewSelect.value = `savedquery:${nameOnly.id}`;
-      viewSelect.dispatchEvent(new Event('change', { bubbles: true }));
-    });
+    expect(host!.querySelector('[role="group"][aria-label="Grid source"]')).toBeTruthy();
     await click('Generate grid preview');
     expect(fetchXmlQuery.mock.calls[0][0]).toContain('name="primarycontactid"');
     const row = (n: number) => host!.querySelector<HTMLInputElement>(`input[aria-label="Select row ${n}"]`)!;
@@ -377,13 +373,12 @@ describe('grid preview', () => {
     setFetch(vi.fn().mockResolvedValue({ value: [{ name: 'Fabrikam', _customerid_value: 'customer-id',
       '_customerid_value@OData.Community.Display.V1.FormattedValue': 'Pat Lee',
       '_customerid_value@Microsoft.Dynamics.CRM.lookuplogicalname': logicalName }] }));
-    const related = cfg({ trigger: { kind: 'MainGridOnSelect' },
-      target: { pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '' },
-      context: { mode: 'RelatedRecord', entityName: 'account', lookupAttribute: 'customerid' } });
+    const related = cfg({ trigger: { kind: 'GridRowSelect' },
+      target: { pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '', createNew: false },
+      host: { entityName: 'account', viewId: view.id, viewType: view.viewType },
+      context: { source: { kind: 'lookup', attribute: 'customerid' } } });
     await render(<PreviewPanel config={related} validation={validation} metadataService={service} xrm={xrm} />);
     await click('Grid');
-    const viewSelect = host!.querySelector<HTMLSelectElement>('select[aria-label="View"]')!;
-    await act(async () => { viewSelect.value = `savedquery:${view.id}`; viewSelect.dispatchEvent(new Event('change', { bubbles: true })); });
     await click('Generate grid preview');
     await act(async () => { host!.querySelector<HTMLInputElement>('input[aria-label="Select row 1"]')!.click(); });
     const record = host!.querySelector('[title="customer-id"]');
@@ -397,12 +392,11 @@ describe('grid preview', () => {
         DisplayName: { UserLocalizedLabel: { Label: 'Customer' } } }]) } as unknown as MetadataService;
     setFetch(vi.fn().mockResolvedValue({ value: [{ name: 'Fabrikam', _customerid_value: 'customer-id',
       '_customerid_value@OData.Community.Display.V1.FormattedValue': 'Pat Lee' }] }));
-    const related = cfg({ trigger: { kind: 'MainGridOnSelect' }, target: { pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '' },
-      context: { mode: 'RelatedRecord', entityName: 'account', lookupAttribute: 'customerid' } });
+    const related = cfg({ trigger: { kind: 'GridRowSelect' }, target: { pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '', createNew: false },
+      host: { entityName: 'account', viewId: view.id, viewType: view.viewType },
+      context: { source: { kind: 'lookup', attribute: 'customerid' } } });
     await render(<PreviewPanel config={related} validation={validation} metadataService={service} xrm={xrm} />);
     await click('Grid');
-    const viewSelect = host!.querySelector<HTMLSelectElement>('select[aria-label="View"]')!;
-    await act(async () => { viewSelect.value = `savedquery:${view.id}`; viewSelect.dispatchEvent(new Event('change', { bubbles: true })); });
     await click('Generate grid preview');
     await act(async () => { host!.querySelector<HTMLInputElement>('input[aria-label="Select row 1"]')!.click(); });
     const record = host!.querySelector('[title="customer-id"]');
@@ -413,12 +407,11 @@ describe('grid preview', () => {
     const service = { ...metadata(), listViewsForEntity: vi.fn().mockResolvedValue({ status: 'ok', views: [view] }),
       listLookupAttributes: vi.fn().mockResolvedValue([{ LogicalName: 'customerid', Targets: ['account', 'contact'] }]) } as unknown as MetadataService;
     setFetch(vi.fn().mockResolvedValue({ value: [{ name: 'Fabrikam', _customerid_value: 'customer-id' }] }));
-    const related = cfg({ trigger: { kind: 'MainGridOnSelect' }, target: { pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '' },
-      context: { mode: 'RelatedRecord', entityName: 'account', lookupAttribute: 'customerid' } });
+    const related = cfg({ trigger: { kind: 'GridRowSelect' }, target: { pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '', createNew: false },
+      host: { entityName: 'account', viewId: view.id, viewType: view.viewType },
+      context: { source: { kind: 'lookup', attribute: 'customerid' } } });
     await render(<PreviewPanel config={related} validation={validation} metadataService={service} xrm={xrm} />);
     await click('Grid');
-    const viewSelect = host!.querySelector<HTMLSelectElement>('select[aria-label="View"]')!;
-    await act(async () => { viewSelect.value = `savedquery:${view.id}`; viewSelect.dispatchEvent(new Event('change', { bubbles: true })); });
     await click('Generate grid preview');
     await act(async () => { host!.querySelector<HTMLInputElement>('input[aria-label="Select row 1"]')!.click(); });
     expect(host!.textContent).toContain("The related record's table could not be determined");
@@ -430,12 +423,11 @@ describe('grid preview', () => {
       listLookupAttributes: vi.fn().mockResolvedValue([{ LogicalName: 'customerid', Targets: ['contact'] }]) } as unknown as MetadataService;
     setFetch(vi.fn().mockResolvedValue({ value: [{ name: 'Fabrikam', _customerid_value: 'customer-id',
       '_customerid_value@Microsoft.Dynamics.CRM.lookuplogicalname': annotation }] }));
-    const related = cfg({ trigger: { kind: 'MainGridOnSelect' }, target: { pageType: 'entityrecord', entityName: 'contact', formId: '', tabName: '', data: '' },
-      context: { mode: 'RelatedRecord', entityName: 'account', lookupAttribute: 'customerid' } });
+    const related = cfg({ trigger: { kind: 'GridRowSelect' }, target: { pageType: 'entityrecord', entityName: 'contact', formId: '', tabName: '', data: '', createNew: false },
+      host: { entityName: 'account', viewId: view.id, viewType: view.viewType },
+      context: { source: { kind: 'lookup', attribute: 'customerid' } } });
     await render(<PreviewPanel config={related} validation={validation} metadataService={service} xrm={xrm} />);
     await click('Grid');
-    const viewSelect = host!.querySelector<HTMLSelectElement>('select[aria-label="View"]')!;
-    await act(async () => { viewSelect.value = `savedquery:${view.id}`; viewSelect.dispatchEvent(new Event('change', { bubbles: true })); });
     await click('Generate grid preview');
     await act(async () => { host!.querySelector<HTMLInputElement>('input[aria-label="Select row 1"]')!.click(); });
     expect(host!.textContent).toContain('not an allowed destination table');
@@ -446,12 +438,11 @@ describe('grid preview', () => {
     const service = { ...metadata(), listViewsForEntity: vi.fn().mockResolvedValue({ status: 'ok', views: [view] }),
       listLookupAttributes: vi.fn().mockResolvedValue([{ LogicalName: 'customerid', Targets: ['contact', 'account'] }]) } as unknown as MetadataService;
     setFetch(vi.fn().mockResolvedValue({ value: [{ name: 'No customer', _customerid_value: null }] }));
-    const related = cfg({ trigger: { kind: 'MainGridOnSelect' }, target: { pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '' },
-      context: { mode: 'RelatedRecord', entityName: 'account', lookupAttribute: 'customerid' } });
+    const related = cfg({ trigger: { kind: 'GridRowSelect' }, target: { pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '', createNew: false },
+      host: { entityName: 'account', viewId: view.id, viewType: view.viewType },
+      context: { source: { kind: 'lookup', attribute: 'customerid' } } });
     await render(<PreviewPanel config={related} validation={validation} metadataService={service} xrm={xrm} />);
     await click('Grid');
-    const viewSelect = host!.querySelector<HTMLSelectElement>('select[aria-label="View"]')!;
-    await act(async () => { viewSelect.value = `savedquery:${view.id}`; viewSelect.dispatchEvent(new Event('change', { bubbles: true })); });
     await click('Generate grid preview');
     await act(async () => { host!.querySelector<HTMLInputElement>('input[aria-label="Select row 1"]')!.click(); });
     expect(host!.textContent).toContain('No customerid value on row 1');
@@ -459,36 +450,34 @@ describe('grid preview', () => {
     expect(host!.querySelector('[title="customer-id"]')).toBeNull();
   });
 
-  it('keeps a destination entity-list view out of the RelatedRecord source view picker', async () => {
+  it('uses the host view independently of the destination target', async () => {
     const service = metadata();
     const related = cfg({
-      target: { pageType: 'entitylist', entityName: 'contact', viewId: 'destination-view', viewType: 'savedquery' },
-      context: { mode: 'RelatedRecord', entityName: 'account', lookupAttribute: 'primarycontactid' },
+      trigger: { kind: 'GridRowSelect' },
+      target: { pageType: 'custom', name: 'destination' },
+      host: { entityName: 'account' },
+      context: { source: { kind: 'lookup', attribute: 'primarycontactid' } },
     });
     await render(<PreviewPanel config={related} validation={validation} metadataService={service} xrm={xrm} />);
     await click('Grid');
-    const sourceView = host!.querySelector<HTMLSelectElement>('select[aria-label="View"]')!;
+    const sourceView = host!.querySelector<HTMLInputElement>('[role="combobox"][aria-label="View"]')!;
     expect(sourceView.value).toBe('');
-    expect(Array.from(sourceView.options).some(option => option.textContent === 'Configured view (unavailable)')).toBe(false);
     const listViewsForEntityMock = Reflect.get(service, 'listViewsForEntity') as ReturnType<typeof vi.fn>;
     expect(listViewsForEntityMock).toHaveBeenCalledWith('account');
   });
 
   it('disables Generate while the selected RelatedRecord view is loading, failed, or unavailable', async () => {
-    const related = cfg({ trigger: { kind: 'MainGridOnSelect' },
-      target: { pageType: 'entityrecord', entityName: 'contact', formId: '', tabName: '', data: '' },
-      context: { mode: 'RelatedRecord', entityName: 'account', lookupAttribute: 'primarycontactid' } });
+    const related = cfg({ trigger: { kind: 'GridRowSelect' },
+      target: { pageType: 'entityrecord', entityName: 'contact', formId: '', tabName: '', data: '', createNew: false },
+      host: { entityName: 'account', viewId: view.id, viewType: view.viewType },
+      context: { source: { kind: 'lookup', attribute: 'primarycontactid' } } });
     const panel = (service: MetadataService) => <PreviewPanel config={related} validation={validation} metadataService={service} xrm={xrm} />;
     const available = metadata();
     const failed = { ...metadata(), listViewsForEntity: vi.fn().mockResolvedValue({ status: 'error', reason: 'Views unavailable' }) } as unknown as MetadataService;
     const unavailable = { ...metadata(), listViewsForEntity: vi.fn().mockResolvedValue({ status: 'ok', views: [] }) } as unknown as MetadataService;
     await render(panel(available));
     await click('Grid');
-    const viewPicker = () => host!.querySelector<HTMLSelectElement>('select[aria-label="View"]')!;
-    await act(async () => {
-      viewPicker().value = `savedquery:${view.id}`;
-      viewPicker().dispatchEvent(new Event('change', { bubbles: true }));
-    });
+    const viewPicker = () => host!.querySelector<HTMLInputElement>('[role="combobox"][aria-label="View"]')!;
     const generate = () => Array.from(host!.querySelectorAll('button')).find(button => button.textContent === 'Generate grid preview')!;
     expect(generate().disabled).toBe(false);
 
@@ -497,7 +486,7 @@ describe('grid preview', () => {
     expect(host!.querySelector('[role="alert"]')?.textContent).toContain('Views unavailable');
 
     await render(panel(unavailable));
-    expect(viewPicker().selectedOptions[0].textContent).toBe('Configured view (unavailable)');
+    expect(viewPicker().getAttribute('aria-invalid')).toBe('true');
     expect(generate().disabled).toBe(true);
   });
 });
@@ -518,17 +507,13 @@ describe('related-record lookup metadata remounts', () => {
       ]),
     } as unknown as MetadataService;
     const relatedConfig = cfg({
-      trigger: { kind: 'MainGridOnSelect' },
-      target: { pageType: 'entityrecord', entityName: 'contact', formId: '', tabName: '', data: '' },
-      context: { mode: 'RelatedRecord', entityName: 'account', lookupAttribute: 'primarycontactid' },
+      trigger: { kind: 'GridRowSelect' },
+      target: { pageType: 'entityrecord', entityName: 'contact', formId: '', tabName: '', data: '', createNew: false },
+      host: { entityName: 'account', viewId: view.id, viewType: view.viewType },
+      context: { source: { kind: 'lookup', attribute: 'primarycontactid' } },
     });
     await render(<PreviewPanel config={relatedConfig} validation={validation} metadataService={service} xrm={xrm} />);
     await click('Grid');
-    const viewSelect = host!.querySelector<HTMLSelectElement>('select[aria-label="View"]')!;
-    await act(async () => {
-      viewSelect.value = `savedquery:${view.id}`;
-      viewSelect.dispatchEvent(new Event('change', { bubbles: true }));
-    });
     await click('Generate grid preview');
     await act(async () => { host!.querySelector<HTMLInputElement>('input[aria-label="Select row 1"]')!.click(); });
     expect(host!.textContent).toContain('Pat Lee');
@@ -545,7 +530,9 @@ describe('related-record lookup metadata remounts', () => {
 describe('related-record cross-component transitions', () => {
   it('does not change the related source or custom-only state when the Source table label is clicked', async () => {
     const relatedConfig = cfg({
-      context: { mode: 'RelatedRecord', entityName: 'new_event', lookupAttribute: '' },
+      trigger: { kind: 'GridRowSelect' },
+      host: { entityName: 'new_event' },
+      context: { source: { kind: 'lookup', attribute: '' } },
     });
     const service = {
       ...metadata(),
@@ -554,8 +541,7 @@ describe('related-record cross-component transitions', () => {
         { logicalName: 'new_event', displayName: 'Event', objectTypeCode: 10001, isCustomEntity: true },
       ] }),
     } as unknown as MetadataService;
-    await render(<GridPreview config={relatedConfig} validation={validation} metadataService={service} xrm={xrm}
-      entityName="new_event" allowEntityChange={false} onEntityNameChange={() => undefined} />);
+    await render(<GridPreview config={relatedConfig} validation={validation} metadataService={service} xrm={xrm} />);
 
     const sourceLabel = Array.from(host!.querySelectorAll('label'))
       .find(label => label.textContent?.startsWith('Source table'))!;
@@ -616,17 +602,19 @@ describe('related-record cross-component transitions', () => {
       { name: 'Fabrikam', _primarycontactid_value: 'contact-id', '_primarycontactid_value@OData.Community.Display.V1.FormattedValue': 'Pat Lee', '_primarycontactid_value@Microsoft.Dynamics.CRM.lookuplogicalname': 'contact' },
     ] }));
     const initial = cfg({
-      trigger: { kind: 'MainGridOnSelect' },
+      trigger: { kind: 'GridRowSelect' },
+      host: { entityName: 'account' },
       target: { pageType: 'entityrecord', entityName: 'account', formId: 'old-form', tabName: 'old-tab', data: '' },
-      context: { mode: 'RelatedRecord', entityName: 'account', lookupAttribute: '' },
+      context: { source: { kind: 'lookup', attribute: '' } },
     });
     const service = workflowService();
     function Workflow(): React.ReactElement {
       const [config, setConfig] = React.useState(initial);
       const targetState = config.target.pageType === 'entityrecord'
         ? `${config.target.entityName}|${config.target.formId}|${config.target.tabName}` : '';
+      const attribute = config.context.source.kind === 'lookup' ? config.context.source.attribute : '';
       return <>
-        <output aria-label="shared config">{config.context.entityName}|{config.context.lookupAttribute}|{targetState}</output>
+        <output aria-label="shared config">{config.host.entityName}|{attribute}|{targetState}</output>
         <div data-surface="configure">
           <ConfigurePanel config={config} onChange={updater => setConfig(prev => updater(prev))} validation={validate(config)} metadataService={service} />
         </div>
@@ -637,14 +625,8 @@ describe('related-record cross-component transitions', () => {
     }
     await render(<ThemeProvider><Workflow /></ThemeProvider>);
     const configure = surface('configure');
-    await expand(configure, 'Record context');
-    const lookup = configure.querySelector<HTMLSelectElement>('select[aria-label="Lookup column"]')!;
-    expect(Array.from(lookup.options).map(option => option.textContent)).toContain('Primary Contact (primarycontactid)');
-    await act(async () => {
-      lookup.value = 'primarycontactid';
-      lookup.dispatchEvent(new Event('change', { bubbles: true }));
-    });
-    await expand(configure, 'What opens in the pane');
+    await expand(configure, 'Destination');
+    await chooseOption(configure, 'Lookup column', 'Primary Contact (primarycontactid)');
     expect(configure.textContent).toContain('Destination table: contact');
     expect(host!.querySelector('[aria-label="shared config"]')?.textContent).toBe('account|primarycontactid|contact||');
     const tabField = Array.from(configure.querySelectorAll('label')).find(label => label.textContent?.includes('Tab name'))?.parentElement;
@@ -653,14 +635,10 @@ describe('related-record cross-component transitions', () => {
 
     await openGrid();
     const preview = surface('preview');
-    const gridLookup = preview.querySelector<HTMLSelectElement>('select[aria-label="Lookup column"]')!;
-    expect(gridLookup.value).toBe('primarycontactid');
+    const gridLookup = preview.querySelector<HTMLInputElement>('[role="combobox"][aria-label="Lookup column"]')!;
+    expect(gridLookup.value).toContain('Primary Contact');
     expect(preview.textContent).toContain('Destination table: contact');
-    const viewSelect = preview.querySelector<HTMLSelectElement>('select[aria-label="View"]')!;
-    await act(async () => {
-      viewSelect.value = `savedquery:${accountView.id}`;
-      viewSelect.dispatchEvent(new Event('change', { bubbles: true }));
-    });
+    await chooseOption(preview, 'View', accountView.name);
     const generate = Array.from(preview.querySelectorAll('button')).find(button => button.textContent === 'Generate grid preview')!;
     expect(generate.disabled).toBe(false);
     await act(async () => { generate.click(); });
@@ -671,7 +649,7 @@ describe('related-record cross-component transitions', () => {
     const source = preview.querySelector<HTMLInputElement>('[aria-label="Source table"]')!;
     await chooseTable(source, 'contact');
     expect(host!.querySelector('[aria-label="shared config"]')?.textContent).toBe('contact||||');
-    expect(configure.querySelector<HTMLSelectElement>('select[aria-label="Lookup column"]')!.value).toBe('');
+    expect(configure.querySelector<HTMLInputElement>('[role="combobox"][aria-label="Lookup column"]')!.value).toBe('');
     expect(configure.textContent).not.toContain('Destination table: contact');
     expect(preview.textContent).not.toContain('Pat Lee');
 
@@ -695,9 +673,10 @@ describe('related-record cross-component transitions', () => {
       '_customerid_value@Microsoft.Dynamics.CRM.lookuplogicalname': 'contact',
     }] }));
     const initial = cfg({
-      trigger: { kind: 'MainGridOnSelect' },
+      trigger: { kind: 'GridRowSelect' },
+      host: { entityName: 'account' },
       target: { pageType: 'entityrecord', entityName: 'account', formId: 'saved-form', tabName: 'saved-tab', data: '' },
-      context: { mode: 'RelatedRecord', entityName: 'account', lookupAttribute: 'customerid' },
+      context: { source: { kind: 'lookup', attribute: 'customerid' } },
     });
     function Workflow({ service }: { service: MetadataService }): React.ReactElement {
       const [config, setConfig] = React.useState(initial);
@@ -711,7 +690,7 @@ describe('related-record cross-component transitions', () => {
       </>;
     }
     await render(<ThemeProvider><Workflow service={oldService} /></ThemeProvider>);
-    await expand(surface('configure'), 'Record context');
+    await expand(surface('configure'), 'Destination');
     expect(surface('configure').textContent).toContain('Loading lookup columns');
     await openGrid();
     expect(surface('preview').textContent).toContain('Loading lookup columns');
@@ -721,20 +700,15 @@ describe('related-record cross-component transitions', () => {
     oldLookupMetadata.resolve([{ LogicalName: 'staleaccountlookup', Targets: ['account'] }]);
     await act(async () => { await Promise.resolve(); });
     expect(host!.textContent).not.toContain('staleaccountlookup');
-    expect(surface('configure').querySelector<HTMLSelectElement>('select[aria-label="Lookup column"]')?.value).toBe('customerid');
-    expect(surface('preview').querySelector<HTMLSelectElement>('select[aria-label="Lookup column"]')?.value).toBe('customerid');
-    await expand(surface('configure'), 'What opens in the pane');
+    expect(surface('configure').querySelector<HTMLInputElement>('[role="combobox"][aria-label="Lookup column"]')?.value).toContain('Customer');
+    expect(surface('preview').querySelector<HTMLInputElement>('[role="combobox"][aria-label="Lookup column"]')?.value).toContain('Customer');
     expect(surface('configure').textContent).toContain('Possible destination tables: account, contact.');
     expect(surface('configure').textContent).toContain('Determined by the selected row');
     const tabField = Array.from(surface('configure').querySelectorAll('label')).find(label => label.textContent?.includes('Tab name'))?.parentElement;
     expect(tabField?.querySelector('input')?.disabled).toBe(true);
     const preview = surface('preview');
     expect(preview.textContent).toContain('Possible destination tables: account, contact.');
-    const viewSelect = preview.querySelector<HTMLSelectElement>('select[aria-label="View"]')!;
-    await act(async () => {
-      viewSelect.value = `savedquery:${accountView.id}`;
-      viewSelect.dispatchEvent(new Event('change', { bubbles: true }));
-    });
+    await chooseOption(preview, 'View', accountView.name);
     const generate = Array.from(preview.querySelectorAll('button')).find(button => button.textContent === 'Generate grid preview')!;
     expect(generate.disabled).toBe(false);
     await act(async () => { generate.click(); });
