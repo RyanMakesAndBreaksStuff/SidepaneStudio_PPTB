@@ -11,7 +11,8 @@ import { IXrmContext } from '../adapters/PptbContextAdapter';
 import { CodeBlock } from './CodeBlock';
 import { SummaryCard } from './SummaryCard';
 import { Callout } from './Callout';
-import { CommandStepsTab, TRIGGER_SUMMARIES, DEPLOY_STEPS } from './CommandStepsTab';
+import { CommandStepsTab, deploySteps } from './CommandStepsTab';
+import { describeConfigText } from '../services/describeConfig';
 import { escapeHtml } from './previewHelpers';
 import runtimeSource from '../runtime/sidepane.runtime.js?raw';
 
@@ -124,8 +125,8 @@ export const OutputPanel = React.memo(function OutputPanel({ config, xrm, valida
           <>
             <SummaryCard
               title="📋 What this script does"
-              body={`Opens a side pane showing <strong>${escapeHtml(config.pane.title || 'Side Pane')}</strong>. ${TRIGGER_SUMMARIES[config.trigger.kind] || ''}`}
-              steps={DEPLOY_STEPS[config.trigger.kind] || []}
+              body={escapeHtml(describeConfigText(config))}
+              steps={deploySteps(config.trigger)}
             />
             {validation.errors.length > 0 && (
               <Callout type="err" icon="✕">
@@ -167,7 +168,7 @@ export const OutputPanel = React.memo(function OutputPanel({ config, xrm, valida
             <SummaryCard
               title="📚 Shared library version"
               body={`Shorter snippet that calls the pre-deployed <strong>SidePaneHelper</strong> runtime.`}
-              steps={DEPLOY_STEPS[config.trigger.kind] || []}
+              steps={deploySteps(config.trigger)}
             />
             {validation.errors.length > 0 && (
               <Callout type="err" icon="✕">

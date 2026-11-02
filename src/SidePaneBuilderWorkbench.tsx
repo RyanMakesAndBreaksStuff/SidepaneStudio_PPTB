@@ -2,6 +2,7 @@ import * as React from 'react';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { PaneDefinitionConfig, DEFAULT_CONFIG } from './types/PaneDefinitionConfig';
 import { parseStoredConfig } from './services/configGuards';
+import { coerceConfig } from './services/triggerCapabilities';
 import { WorkbenchShell } from './components/WorkbenchShell';
 import { PptbContextAdapter } from './adapters/PptbContextAdapter';
 import { MetadataService } from './services/MetadataService';
@@ -31,16 +32,19 @@ function reportSettingsFailure(action: string, err: unknown): void {
 
 /** Table, form, view, dashboard, and record selections only exist in the org they were picked from. */
 function clearOrgSelections(config: PaneDefinitionConfig): PaneDefinitionConfig {
-  const { target } = config;
-  return {
+  const { target, context: { source } } = config;
+  return coerceConfig({
     ...config,
     target:
       target.pageType === 'entityrecord' ? { ...target, entityName: '', formId: '', tabName: '' } :
       target.pageType === 'entitylist' ? { ...target, entityName: '', viewId: '', viewType: '' } :
       target.pageType === 'dashboard' ? { ...target, dashboardId: '', dashboardName: '' } :
       target,
-    context: { ...config.context, entityName: '', staticRecordId: '', lookupAttribute: '' },
-  };
+    host: { ...config.host, entityName: '', formId: '', viewId: '', viewType: '', attribute: '', lookupControls: [] },
+    context: { ...config.context, source:
+      source.kind === 'fixed' ? { kind: 'fixed', entityName: '', id: '' } :
+      source.kind === 'lookup' ? { kind: 'lookup', attribute: '' } : source },
+  });
 }
 
 export function SidePaneBuilderWorkbench(): React.ReactElement {
@@ -207,7 +211,7 @@ export function SidePaneBuilderWorkbench(): React.ReactElement {
   const handleChange = useCallback(
     (updater: (prev: PaneDefinitionConfig) => PaneDefinitionConfig) => {
       configDirtyRef.current = true;
-      setConfig(prev => updater(prev));
+      setConfig(prev => coerceConfig(updater(prev)));
     },
     []
   );

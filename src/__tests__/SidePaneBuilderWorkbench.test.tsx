@@ -69,6 +69,23 @@ afterEach(async () => {
 });
 
 describe('SidePaneBuilderWorkbench', () => {
+  it('snaps an illegal selection through coerceConfig on change', async () => {
+    const settingsSet = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('toolboxAPI', {
+      connections: { getActiveConnection: vi.fn().mockResolvedValue({ id: 'conn-1' }) },
+      events: { on: vi.fn(), off: vi.fn() },
+      settings: { get: vi.fn().mockResolvedValue(null), set: settingsSet },
+    });
+    await render(<SidePaneBuilderWorkbench />);
+    await act(async () => { await Promise.resolve(); });
+    await act(async () => {
+      const onChange = workbenchShellState.props?.onChange as (update: (prev: PaneDefinitionConfig) => PaneDefinitionConfig) => void;
+      onChange(prev => ({ ...prev, trigger: { ...prev.trigger, kind: 'ManualJS' } }));
+    });
+    await act(async () => { vi.advanceTimersByTime(500); await Promise.resolve(); });
+    const saved = settingsSet.mock.calls.find(([key]) => key === 'lastConfig');
+    expect(JSON.parse(saved![1]).context.source.kind).toBe('fixed');
+  });
   it('does not save default config before hydration and persists user edits after hydration', async () => {
     const restoredConfig = {
       ...DEFAULT_CONFIG,
