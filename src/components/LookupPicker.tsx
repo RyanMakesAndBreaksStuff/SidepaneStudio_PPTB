@@ -15,6 +15,8 @@ export interface LookupPickerProps {
   metadataService: Pick<MetadataService, 'listLookupAttributes'>;
   disabled?: boolean;
   error?: boolean;
+  /** Render the resolved destination table(s) under the picker. Off where the surrounding form already states them. */
+  showDestination?: boolean;
 }
 
 function lookupLabel(lookup: LookupAttributeInfo): string {
@@ -23,7 +25,7 @@ function lookupLabel(lookup: LookupAttributeInfo): string {
 }
 
 /** Lookup columns on the RelatedRecord source table. Same load/retry lifecycle as ViewPicker. */
-export function LookupPicker({ entityName, value, onChange, onSelectionChange, onResolvedSelection, onStatusChange, metadataService, disabled, error }: LookupPickerProps): React.ReactElement {
+export function LookupPicker({ entityName, value, onChange, onSelectionChange, onResolvedSelection, onStatusChange, metadataService, disabled, error, showDestination = true }: LookupPickerProps): React.ReactElement {
   const request = useMetadataRequest(
     entityName
       ? () => metadataService.listLookupAttributes(entityName)
@@ -74,9 +76,9 @@ export function LookupPicker({ entityName, value, onChange, onSelectionChange, o
       {loaded && lookups.length === 0 && <div role="status">This table has no lookup columns.</div>}
       {selectedLookup && (!Array.isArray(targetSummary) || targetSummary.length === 0) &&
         <div role="status">Destination table information is unavailable.</div>}
-      {selectedLookup && Array.isArray(targetSummary) && targetSummary.length === 1 &&
+      {showDestination && selectedLookup && Array.isArray(targetSummary) && targetSummary.length === 1 &&
         <div role="status">Destination table: {targetSummary[0]}</div>}
-      {selectedLookup && Array.isArray(targetSummary) && targetSummary.length > 1 &&
+      {showDestination && selectedLookup && Array.isArray(targetSummary) && targetSummary.length > 1 &&
         <div role="status">Possible destination tables: {[...new Set(targetSummary)].join(', ')}. Determined by the selected row.</div>}
     </div>
   );

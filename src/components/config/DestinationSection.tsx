@@ -141,7 +141,7 @@ export function DestinationSection({ config, onChange, metadataService, formXmlS
         <Field label="Lookup column" required hint="Lookup on the trigger table whose value opens in the pane"
           error={errors['context.source.attribute']}>
           <LookupPicker entityName={host.entityName} value={source.attribute} metadataService={metadataService}
-            disabled={readOnly} error={!!errors['context.source.attribute']}
+            disabled={readOnly} error={!!errors['context.source.attribute']} showDestination={false}
             onChange={(value, selected) => onChange(prev => applyLookup(prev, host.entityName,
               selected ?? (value ? { LogicalName: value } : null)))}
             onSelectionChange={lookup => setResolvedLookup({

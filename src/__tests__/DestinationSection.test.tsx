@@ -175,6 +175,9 @@ describe('DestinationSection — lookup destination copy', () => {
     expect(Array.from(status.children).map(line => line.textContent)).toEqual([
       'Contact', 'Destination table: determined by the primarycontactid lookup.']);
     expect(get().target).toMatchObject({ entityName: 'contact', formId: '', tabName: '' });
+    // The Lookup column picker does not repeat the destination under itself.
+    expect(host!.querySelectorAll('[role="status"]')).toHaveLength(1);
+    expect(host!.textContent).not.toContain('Destination table: contact');
     expect(host!.textContent).not.toContain('Choose a table to pick a form.');
     expect(host!.querySelector<HTMLInputElement>('[role="combobox"][aria-label="Form"]')?.disabled).toBe(false);
     expect(getFormsForEntityResult).toHaveBeenCalledWith('contact');

@@ -245,7 +245,7 @@ describe('ConfigurePanel — destination table', () => {
       target: { pageType: 'entityrecord', entityName: '', formId: '', tabName: '', data: '' },
       context: { source: { kind: 'lookup', attribute: 'parentcustomerid' } } }),
     makeMetadataService({ listLookupAttributes }));
-    expect(host?.textContent).toContain('Possible destination tables: account, contact.');
+    expect(host?.textContent).toContain('Possible destination tables: Account, Contact.');
     const tabField = Array.from(host!.querySelectorAll('label')).find(label => label.textContent?.includes('Tab name'))?.parentElement;
     expect(tabField?.querySelector('input')?.disabled).toBe(true);
   });
