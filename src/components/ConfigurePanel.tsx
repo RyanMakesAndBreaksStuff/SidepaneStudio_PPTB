@@ -2,6 +2,7 @@ import * as React from 'react';
 import { useMemo, useState } from 'react';
 import type { PaneDefinitionConfig } from '../types/PaneDefinitionConfig';
 import type { MetadataFilterConfig } from '../types/MetadataFilterConfig';
+import type { MetadataFilterDraft } from './config/MetadataFilterConfigEditor';
 import type { ValidationResult } from '../services/ValidationService';
 import type { MetadataService } from '../services/MetadataService';
 import type { FormXmlService } from '../services/FormXmlService';
@@ -26,12 +27,15 @@ export interface ConfigurePanelProps {
   metadataFilterError?: string | null;
   onSaveMetadataFilterConfig?: (config: MetadataFilterConfig) => Promise<void> | void;
   onResetMetadataFilterConfig?: () => Promise<void> | void;
+  metadataFilterDraft?: MetadataFilterDraft | null;
+  onMetadataFilterDraftChange?: (draft: MetadataFilterDraft | null) => void;
 }
 
 export function ConfigurePanel(props: ConfigurePanelProps): React.ReactElement {
   const { config, onChange, validation, readOnly, metadataService, onAccessibleTablesChange,
     formXmlService, metadataFilterConfig, defaultMetadataFilterConfig, metadataFilterPersistenceAvailable,
-    metadataFilterError, onSaveMetadataFilterConfig, onResetMetadataFilterConfig } = props;
+    metadataFilterError, onSaveMetadataFilterConfig, onResetMetadataFilterConfig,
+    metadataFilterDraft, onMetadataFilterDraftChange } = props;
   const [paneOpen, setPaneOpen] = useState(false);
   const [triggerOpen, setTriggerOpen] = useState(true);
   const [destinationOpen, setDestinationOpen] = useState(true);
@@ -59,7 +63,8 @@ export function ConfigurePanel(props: ConfigurePanelProps): React.ReactElement {
           metadataFilterPersistenceAvailable={metadataFilterPersistenceAvailable}
           metadataFilterError={metadataFilterError}
           onSaveMetadataFilterConfig={onSaveMetadataFilterConfig}
-          onResetMetadataFilterConfig={onResetMetadataFilterConfig} />
+          onResetMetadataFilterConfig={onResetMetadataFilterConfig}
+          metadataFilterDraft={metadataFilterDraft} onMetadataFilterDraftChange={onMetadataFilterDraftChange} />
       </Section>
     </div>
   );

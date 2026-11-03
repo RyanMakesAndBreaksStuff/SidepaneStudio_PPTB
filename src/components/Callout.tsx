@@ -25,7 +25,7 @@ export function Callout({ type = 'warn', icon, children }: CalloutProps): React.
   const c = colors[type] ?? colors.warn;
 
   return (
-    <div style={{
+    <div role={type === 'err' ? 'alert' : undefined} style={{
       display: 'flex', gap: 8, padding: '8px 10px',
       background: c.bg, borderLeft: `3px solid ${c.border}`,
       borderRadius: T.rM, fontSize: 12, color: c.fg, lineHeight: 1.5,

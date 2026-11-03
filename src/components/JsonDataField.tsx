@@ -22,10 +22,12 @@ export function JsonDataField({ label, hint, value, onChange, error, placeholder
   const T = theme(isDark);
   return (
     <Field label={label} hint={hint} error={error}>
-      <textarea aria-label={label} value={value} disabled={disabled} rows={4} placeholder={placeholder}
-        style={{ width: '100%', boxSizing: 'border-box', color: T.fg1, background: T.surface1, border: `1px solid ${T.stroke1}`, borderRadius: T.rS, fontFamily: T.mono, fontSize: 12 }}
-        onChange={event => onChange(event.target.value)} />
-      {children}
+      {control => <>
+        <textarea {...control} aria-label={label} value={value} disabled={disabled} rows={4} placeholder={placeholder}
+          style={{ width: '100%', boxSizing: 'border-box', color: T.fg1, background: T.surface1, border: `1px solid ${T.stroke1}`, borderRadius: T.rS, fontFamily: T.mono, fontSize: 12 }}
+          onChange={event => onChange(event.target.value)} />
+        {children}
+      </>}
     </Field>
   );
 }
