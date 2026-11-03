@@ -169,7 +169,8 @@ describe('TablePicker', () => {
     await act(async () => { await Promise.resolve(); });
 
     expect(combo().value).toBe('account');
-    expect(host?.textContent).toContain('Saved table “account” is no longer accessible.');
+    expect(host?.textContent).toContain('Table "account" is not in the current table list for this environment.');
+    expect(host?.textContent).not.toContain('no longer accessible');
     await openPicker();
     expect(options().some(option => option.textContent?.includes('account'))).toBe(false);
   });

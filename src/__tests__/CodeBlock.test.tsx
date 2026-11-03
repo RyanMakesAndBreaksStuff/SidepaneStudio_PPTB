@@ -54,4 +54,50 @@ describe('CodeBlock', () => {
 
     expect(writeText).toHaveBeenCalledWith(code);
   });
+
+  // Regression pin for ffaacfa -> 5f95b64: tokenizing escaped text split `&#39;` and leaked it as visible text.
+  const spanStyle = (text: string) =>
+    Array.from(host?.querySelectorAll('pre span') ?? []).find(s => s.textContent === text)?.getAttribute('style');
+
+  it('renders quotes, angle brackets, ampersands and entity-like text in JS strings and comments verbatim', async () => {
+    const str = '"it\'s <b> & &#60; done"';
+    const line = "// it's <i> & &#60; note";
+    const block = "/* 'x' <y> & &#60; */";
+    const code = `const msg = ${str}; ${line}\n${block}\nvar n = 39;`;
+
+    await render(<CodeBlock code={code} lang="js" />);
+
+    const pre = host?.querySelector('pre');
+    expect(pre?.textContent).toBe(code);
+    expect(pre?.querySelector('b, i, y')).toBeNull();
+    expect(spanStyle(str)).toContain('#CE9178');
+    expect(spanStyle(line)).toContain('#6A9955');
+    expect(spanStyle(block)).toContain('#6A9955');
+    expect(spanStyle('const')).toContain('#569CD6');
+    expect(spanStyle('39')).toContain('#B5CEA8');
+  });
+
+  it('renders quotes, angle brackets, ampersands and entity-like text in JSON verbatim', async () => {
+    const code = '{\n  "o\'key": "O\'Brien <x> & &#60;",\n  "count": 39,\n  "ok": true\n}';
+
+    await render(<CodeBlock code={code} lang="json" />);
+
+    const pre = host?.querySelector('pre');
+    expect(pre?.textContent).toBe(code);
+    expect(pre?.querySelector('x')).toBeNull();
+    expect(spanStyle('"o\'key"')).toContain('#9CDCFE');
+    expect(spanStyle('"O\'Brien <x> & &#60;"')).toContain('#CE9178');
+    expect(spanStyle('39')).toContain('#B5CEA8');
+    expect(spanStyle('true')).toContain('#569CD6');
+  });
+
+  it('renders plain text verbatim', async () => {
+    const code = "it's <b> & &#60; done";
+
+    await render(<CodeBlock code={code} lang="text" />);
+
+    const pre = host?.querySelector('pre');
+    expect(pre?.textContent).toBe(code);
+    expect(pre?.querySelector('b')).toBeNull();
+  });
 });

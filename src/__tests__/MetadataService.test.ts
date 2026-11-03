@@ -59,7 +59,16 @@ const ENTITY_CUSTOM = {
 
 const ENTITY_INTERSECT = { ...ENTITY_ACCOUNT, LogicalName: 'accountleads', IsIntersect: true };
 const ENTITY_PRIVATE = { ...ENTITY_ACCOUNT, LogicalName: 'something', IsPrivate: true };
-const ENTITY_ACTIVITY = { ...ENTITY_ACCOUNT, LogicalName: 'task', IsActivity: true };
+const ENTITY_ACTIVITY = { ...ENTITY_ACCOUNT, LogicalName: 'letter', SchemaName: 'Letter', EntitySetName: 'letters', IsActivity: true };
+const ENTITY_CUSTOM_ACTIVITY = { ...ENTITY_CUSTOM, LogicalName: 'new_visit', SchemaName: 'new_Visit', EntitySetName: 'new_visits', IsActivity: true };
+const activity = (logicalName: string) => ({
+  ...ENTITY_ACCOUNT,
+  LogicalName: logicalName,
+  SchemaName: logicalName,
+  EntitySetName: `${logicalName}s`,
+  IsActivity: true,
+  IsCustomizable: { Value: false },
+});
 const ENTITY_NO_ENTITY_SET = { ...ENTITY_ACCOUNT, EntitySetName: null };
 const ENTITY_DENY_PREFIX = { ...ENTITY_CUSTOM, LogicalName: 'msdyn_something' };
 const ENTITY_DENY_EXACT = { ...ENTITY_ACCOUNT, LogicalName: 'webresource' };
@@ -125,10 +134,44 @@ describe('MetadataService', () => {
       expect(result.tables).toHaveLength(0);
     });
 
-    it('excludes activity entities', async () => {
-      const xrm = makeXrm([ENTITY_ACTIVITY]);
+    it('excludes activity entities that are not on the allowlist', async () => {
+      const xrm = makeXrm([ENTITY_ACTIVITY, ENTITY_CUSTOM_ACTIVITY]);
       const svc = new MetadataService(xrm);
       const result = await svc.listAccessibleTables();
+      expect(result.status).toBe('ok');
+      if (result.status !== 'ok') return;
+      expect(result.tables).toHaveLength(0);
+    });
+
+    it('keeps activity tables on the default allowlist', async () => {
+      const xrm = makeXrm(['task', 'phonecall', 'appointment', 'email'].map(activity));
+      const svc = new MetadataService(xrm);
+      const result = await svc.listAccessibleTables();
+      expect(result.status).toBe('ok');
+      if (result.status !== 'ok') return;
+      expect(result.tables.map(t => t.logicalName).sort()).toEqual(['appointment', 'email', 'phonecall', 'task']);
+    });
+
+    it('keeps an activity table the user adds to the allowlist', async () => {
+      const xrm = makeXrm([ENTITY_ACTIVITY]);
+      const svc = new MetadataService(xrm, {
+        ...DEFAULT_METADATA_FILTER_CONFIG,
+        allowedStandardTables: [...DEFAULT_METADATA_FILTER_CONFIG.allowedStandardTables, 'letter'],
+      });
+      const result = await svc.listAccessibleTables();
+      expect(result.status).toBe('ok');
+      if (result.status !== 'ok') return;
+      expect(result.tables.map(t => t.logicalName)).toEqual(['letter']);
+    });
+
+    it('still excludes an allowlisted activity table that is exact-denied', async () => {
+      const xrm = makeXrm([activity('task')]);
+      const svc = new MetadataService(xrm, {
+        ...DEFAULT_METADATA_FILTER_CONFIG,
+        denyExact: [...DEFAULT_METADATA_FILTER_CONFIG.denyExact, 'task'],
+      });
+      const result = await svc.listAccessibleTables();
+      expect(result.status).toBe('ok');
       if (result.status !== 'ok') return;
       expect(result.tables).toHaveLength(0);
     });
