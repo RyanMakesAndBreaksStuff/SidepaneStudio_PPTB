@@ -75,7 +75,7 @@ export function LookupPicker({ entityName, value, onChange, onSelectionChange, o
       {loaded && value && !selectedLookup && <div role="status">Saved lookup “{value}” is unavailable on this source table. Choose an available lookup before generating preview rows.</div>}
       {loaded && lookups.length === 0 && <div role="status">This table has no lookup columns.</div>}
       {selectedLookup && (!Array.isArray(targetSummary) || targetSummary.length === 0) &&
-        <div role="status">Destination table information is unavailable.</div>}
+        <div role="status">The “{selectedLookup.LogicalName}” lookup has no related tables, so there is no record to open. Choose a different lookup column.</div>}
       {showDestination && selectedLookup && Array.isArray(targetSummary) && targetSummary.length === 1 &&
         <div role="status">Destination table: {targetSummary[0]}</div>}
       {showDestination && selectedLookup && Array.isArray(targetSummary) && targetSummary.length > 1 &&
