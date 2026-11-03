@@ -168,12 +168,12 @@ describe('DestinationSection — lookup destination copy', () => {
     expect(destinationStatus().textContent).toBe("Destination table is determined by the 'Lookup column' selector.");
   });
 
-  it('shows the display name, then the lookup copy, and enables the form picker for that table', async () => {
+  it('shows the table name, then the lookup copy, and enables the form picker for that table', async () => {
     const get = await renderSection(related(''), lookupService());
     await chooseOption(host!, 'Lookup column', 'Primary Contact');
     const status = destinationStatus();
     expect(Array.from(status.children).map(line => line.textContent)).toEqual([
-      'Contact', 'Destination table: determined by the primarycontactid lookup.']);
+      'contact', 'Destination table: determined by the primarycontactid lookup.']);
     expect(get().target).toMatchObject({ entityName: 'contact', formId: '', tabName: '' });
     // The Lookup column picker does not repeat the destination under itself.
     expect(host!.querySelectorAll('[role="status"]')).toHaveLength(1);
@@ -183,10 +183,10 @@ describe('DestinationSection — lookup destination copy', () => {
     expect(getFormsForEntityResult).toHaveBeenCalledWith('contact');
   });
 
-  it('lists display names for a polymorphic lookup and keeps the form picker off', async () => {
+  it('lists logical names for a polymorphic lookup and keeps the form picker off', async () => {
     await renderSection(related(''), lookupService());
     await chooseOption(host!, 'Lookup column', 'Parent Customer');
-    expect(destinationStatus().textContent).toBe('Possible destination tables: Account, Contact. Determined by the selected row.');
+    expect(destinationStatus().textContent).toBe('Possible destination tables: account, contact. Determined by the selected row.');
     expect(host!.textContent).toContain('Choose a table to pick a form.');
   });
 });

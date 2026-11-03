@@ -677,7 +677,7 @@ describe('related-record cross-component transitions', () => {
     expect(host!.textContent).not.toContain('staleaccountlookup');
     expect(surface('configure').querySelector<HTMLInputElement>('[role="combobox"][aria-label="Lookup column"]')?.value).toContain('Customer');
     expect(surface('preview').querySelector<HTMLInputElement>('[role="combobox"][aria-label="Lookup column"]')?.value).toContain('Customer');
-    expect(surface('configure').textContent).toContain('Possible destination tables: Account, Contact.');
+    expect(surface('configure').textContent).toContain('Possible destination tables: account, contact.');
     expect(surface('configure').textContent).toContain('Determined by the selected row');
     const tabField = Array.from(surface('configure').querySelectorAll('label')).find(label => label.textContent?.includes('Tab name'))?.parentElement;
     expect(tabField?.querySelector('input')?.disabled).toBe(true);
