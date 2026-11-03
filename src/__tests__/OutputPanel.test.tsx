@@ -153,6 +153,16 @@ describe('OutputPanel', () => {
     expect(host!.textContent).toContain('Command Designer');
   });
 
+  it('shows the runtime dependency step on the Shared Library tab only (codegen-config-model-006)', async () => {
+    const dependencyStep = 'Command Designer runs one library per command, so open the generated handler\'s web resource and add the runtime on its Dependencies tab.';
+    await render(<OutputPanel config={cfg()} xrm={xrmStub()} validation={{ isValid: true, errors: [], warnings: [] }} />);
+    expect(host!.textContent).not.toContain(dependencyStep);
+    expect(host!.textContent).not.toContain('<prefix>_');
+    await clickLibraryTab();
+    expect(host!.textContent).toContain(dependencyStep);
+    expect(host!.textContent).toContain('<prefix>_/scripts/sidepane.runtime.js');
+  });
+
   it('shows generated FormOnChange entitylist code with double-quoted pageType', async () => {
     const config = {
       ...DEFAULT_CONFIG,

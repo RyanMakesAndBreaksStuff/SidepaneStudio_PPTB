@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { GENERATED_NAMES, generateBasicScript, generateLibraryScript, namespaceDeclaration, resolveTriggerNames } from '../services/CodeGenerationService';
-import { cfg } from './testHelpers';
+import { cfg, deferred } from './testHelpers';
 import { TRIGGER_KINDS } from '../services/triggerCapabilities';
 import { parseStoredConfig } from '../services/configGuards';
 import type { PaneDefinitionConfig, RecordSource, TargetConfig, TriggerKind } from '../types/PaneDefinitionConfig';
@@ -210,6 +210,13 @@ describe('generateBasicScript — reuseExistingPane', () => {
     const code = generateBasicScript(cfg({ behavior: { reuseExistingPane: true } }));
     expect(code.indexOf('await existing.navigate(')).toBeGreaterThan(-1);
     expect(code.indexOf('existing.select()')).toBeGreaterThan(code.indexOf('await existing.navigate('));
+  });
+
+  it.each(['FormOnLoad', 'FormButton'] as const)('%s with isSelected: false navigates an existing pane without selecting it', kind => {
+    const code = generateBasicScript(cfg({ trigger: { kind }, pane: { isSelected: false }, behavior: { reuseExistingPane: true } }));
+    expect(isValidJS(code)).toBe(true);
+    expect(code).toContain('await existing.navigate(');
+    expect(code).not.toContain('existing.select()');
   });
 
   it('generated FormButton closes other panes after reusing one', async () => {
@@ -761,7 +768,7 @@ describe('Basic and Shared Library emit the same keys (WR-007)', () => {
     getAttribute: () => ({ getValue: () => [{ id: '{C1}', entityType: 'account' }] }),
   };
   const row = { getId: () => '{B1}', getEntityName: () => 'account' };
-  /** Serves as primaryControl or executionContext for every trigger. */
+  /** Serves as selectedControl, primaryControl or executionContext for every trigger. */
   const triggerArg = {
     ...form,
     getFormContext: () => form,
@@ -1561,5 +1568,208 @@ describe('form-event record and pre-fill expressions', () => {
     expect(open).toHaveBeenCalledTimes(2);
     expect(open).toHaveBeenNthCalledWith(1, LIBRARY_PREFILL_OPEN);
     expect(open).toHaveBeenNthCalledWith(2, LIBRARY_PREFILL_OPEN);
+  });
+});
+
+/** Fake Xrm whose createPane makes the new pane the one getPane returns, as the platform does. */
+function trackedPanes(navigate = vi.fn().mockResolvedValue(undefined)) {
+  const pane = { paneId: 'p', navigate, select: vi.fn() };
+  const getPane = vi.fn().mockReturnValue(undefined);
+  const createPane = vi.fn(async () => { getPane.mockReturnValue(pane); return pane; });
+  const xrm = {
+    App: { sidePanes: { state: 0, getPane, createPane, getAllPanes: vi.fn().mockReturnValue([]) } },
+    Navigation: { openErrorDialog: vi.fn(), openAlertDialog: vi.fn() },
+  };
+  return { pane, xrm };
+}
+
+describe('grid commands read SelectedControl (codegen-config-model-001)', () => {
+  const grid = (surface: 'main' | 'subgrid') => cfg({
+    pane: { paneId: 'p' },
+    trigger: { kind: 'GridButton', namespace: 'TestNs', functionName: 'open', surface },
+    target: { pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '' },
+    host: { entityName: 'account' }, context: { source: { kind: 'selectedRow' } },
+  });
+  const row = { getId: () => '{B1}', getEntityName: () => 'account' };
+  // Subgrid commands: PrimaryControl is the form, SelectedControl is the grid.
+  const formContextShaped = { data: { entity: { getEntityName: () => 'account', getId: () => '{A1}' } } };
+  const gridShaped = { getGrid: () => ({ getSelectedRows: () => ({ getLength: () => 1, get: () => ({ getData: () => ({ getEntity: () => row }) }) }) }) };
+
+  it.each(['main', 'subgrid'] as const)('%s grid: both outputs take selectedControl and read its grid', surface => {
+    for (const code of [generateBasicScript(grid(surface)), generateLibraryScript(grid(surface))]) {
+      expect(code).toContain('function(selectedControl)');
+      expect(code).toContain('selectedControl.getGrid()');
+      expect(code).not.toContain('primaryControl.getGrid');
+    }
+  });
+
+  it('Basic opens the selected row when PrimaryControl is passed before SelectedControl', async () => {
+    const { pane, xrm } = trackedPanes();
+    const open = new Function('window', 'Xrm', `${generateBasicScript(grid('subgrid'))}\nreturn TestNs.open;`)({}, xrm) as (...args: unknown[]) => void;
+    expect(() => open(formContextShaped, gridShaped)).not.toThrow();
+    await vi.waitFor(() => expect(pane.navigate).toHaveBeenCalledWith({ pageType: 'entityrecord', entityName: 'account', entityId: '{B1}' }));
+    expect(xrm.Navigation.openErrorDialog).not.toHaveBeenCalled();
+  });
+
+  it('Shared Library opens the selected row when PrimaryControl is passed before SelectedControl', () => {
+    const helperOpen = vi.fn();
+    const open = new Function('Xrm', 'SidePaneHelper', `${generateLibraryScript(grid('subgrid'))}\nreturn TestNs.open;`)(
+      { Navigation: { openErrorDialog: vi.fn() } }, { open: helperOpen }) as (...args: unknown[]) => void;
+    expect(() => open(formContextShaped, gridShaped)).not.toThrow();
+    expect(helperOpen.mock.calls[0][0]).toMatchObject({ pageType: 'entityrecord', entityName: 'account', entityId: '{B1}' });
+  });
+
+  it.each(['Basic', 'Shared Library'] as const)('%s asks for SelectedControl when no argument is a grid', label => {
+    const { xrm } = trackedPanes();
+    const helperOpen = vi.fn();
+    const code = label === 'Basic' ? generateBasicScript(grid('subgrid')) : generateLibraryScript(grid('subgrid'));
+    const open = new Function('window', 'Xrm', 'SidePaneHelper', `${code}\nreturn TestNs.open;`)({}, xrm, { open: helperOpen }) as (...args: unknown[]) => void;
+    expect(() => open(formContextShaped)).not.toThrow();
+    expect(xrm.Navigation.openErrorDialog).toHaveBeenCalledWith({
+      message: 'This command needs the grid. In Command Designer, add SelectedControl as the first Action parameter.',
+    });
+    expect(xrm.App.sidePanes.createPane).not.toHaveBeenCalled();
+    expect(helperOpen).not.toHaveBeenCalled();
+  });
+});
+
+describe('GridRowSelect opens the latest selection (codegen-config-model-002)', () => {
+  const rowSelect = (kind: 'GridRowSelect' | 'GridButton') => cfg({
+    pane: { paneId: 'p' },
+    trigger: { kind, namespace: 'TestNs', functionName: 'open' },
+    target: { pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '' },
+    host: { entityName: 'account' }, context: { source: { kind: 'selectedRow' } },
+  });
+  const selection = (id: string) => ({ getEventSource: () => ({ getId: () => id, getEntityName: () => 'account' }) });
+
+  it('navigates to a row selected while the first selection is still opening', async () => {
+    const first = deferred<void>();
+    const { pane, xrm } = trackedPanes(vi.fn().mockReturnValueOnce(first.promise).mockResolvedValue(undefined));
+    const win: { __spstudio_pendingPanes?: Record<string, number> } = {};
+    const open = new Function('window', 'Xrm', `${generateBasicScript(rowSelect('GridRowSelect'))}\nreturn TestNs.open;`)(win, xrm) as (arg: unknown) => void;
+    open(selection('{A1}'));
+    await vi.waitFor(() => expect(pane.navigate).toHaveBeenCalledOnce());
+    open(selection('{B2}'));
+    first.resolve();
+    await vi.waitFor(() => expect(pane.navigate).toHaveBeenCalledTimes(2));
+    expect(pane.navigate.mock.calls[1][0]).toEqual({ pageType: 'entityrecord', entityName: 'account', entityId: '{B2}' });
+    await vi.waitFor(() => expect(win.__spstudio_pendingPanes).toEqual({}));
+    expect(xrm.App.sidePanes.createPane).toHaveBeenCalledOnce();
+    expect(xrm.Navigation.openErrorDialog).not.toHaveBeenCalled();
+  });
+
+  it('ends on the newest selection when an expired lock is taken over', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      const start = new Date('2026-11-02T12:00:00Z').getTime();
+      vi.setSystemTime(start);
+      const hung = deferred<void>();
+      const { pane, xrm } = trackedPanes(vi.fn().mockReturnValueOnce(hung.promise).mockResolvedValue(undefined));
+      const win: { __spstudio_pendingPanes?: Record<string, number>; __spstudio_latestSelection?: Record<string, unknown> } = {};
+      const open = new Function('window', 'Xrm', `${generateBasicScript(rowSelect('GridRowSelect'))}\nreturn TestNs.open;`)(win, xrm) as (arg: unknown) => void;
+      open(selection('{A1}'));
+      await vi.waitFor(() => expect(pane.navigate).toHaveBeenCalledOnce());
+      vi.setSystemTime(start + 1000);
+      open(selection('{B2}')); // A still holds the lock, so B is saved as the latest selection.
+      vi.setSystemTime(start + 2500);
+      open(selection('{C3}')); // A's lock has expired, so C takes it over and opens.
+      await vi.waitFor(() => expect(pane.navigate).toHaveBeenCalledTimes(2));
+      hung.resolve(); // A finishes last: it must neither release C's lock nor replay B.
+      await new Promise(resolve => setTimeout(resolve, 0));
+      expect(pane.navigate.mock.calls.map(call => call[0].entityId)).toEqual(['{A1}', '{C3}']);
+      expect(win.__spstudio_pendingPanes).toEqual({});
+      expect(win.__spstudio_latestSelection).toEqual({});
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('logs a replayed selection that throws instead of leaving an unhandled rejection', async () => {
+    const first = deferred<void>();
+    const { pane, xrm } = trackedPanes(vi.fn().mockReturnValueOnce(first.promise).mockResolvedValue(undefined));
+    const win: { __spstudio_pendingPanes?: Record<string, number> } = {};
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const open = new Function('window', 'Xrm', `${generateBasicScript(rowSelect('GridRowSelect'))}\nreturn TestNs.open;`)(win, xrm) as (arg: unknown) => void;
+      const stale = new Error('stale execution context');
+      let reads = 0;
+      const staleSelection = { getEventSource: () => {
+        if (reads++ > 0) throw stale;
+        return { getId: () => '{B2}', getEntityName: () => 'account' };
+      } };
+      open(selection('{A1}'));
+      await vi.waitFor(() => expect(pane.navigate).toHaveBeenCalledOnce());
+      open(staleSelection);
+      first.resolve();
+      await vi.waitFor(() => expect(error).toHaveBeenCalledWith('TestNs.open', stale));
+      expect(win.__spstudio_pendingPanes).toEqual({});
+      expect(pane.navigate).toHaveBeenCalledOnce();
+    } finally {
+      error.mockRestore();
+    }
+  });
+
+  it('keeps dropping repeat grid button clicks while a pane is opening', () => {
+    expect(generateBasicScript(rowSelect('GridButton'))).not.toContain('__spstudio_latestSelection');
+    expect(generateBasicScript(rowSelect('GridRowSelect'))).toContain('__spstudio_latestSelection');
+  });
+});
+
+describe('Shared Library output checks for the runtime (codegen-config-model-006)', () => {
+  const MESSAGE = 'SidePaneHelper library (sidepane.runtime.js) is not loaded.';
+  const library = (kind: TriggerKind) => cfg({
+    pane: { paneId: 'p' },
+    trigger: { kind, namespace: 'TestNs', functionName: 'open' },
+    host: { entityName: 'account', attribute: 'new_field', lookupControls: ['parentaccountid'] },
+    context: { source: { kind: 'none' } },
+  });
+  const isCommand = (kind: TriggerKind) => kind === 'FormButton' || kind === 'GridButton';
+
+  it.each(TRIGGER_KINDS)('%s checks for SidePaneHelper before it reads the trigger or calls the runtime', kind => {
+    const code = generateLibraryScript(library(kind));
+    const guard = code.indexOf("if (typeof SidePaneHelper === 'undefined')");
+    expect(guard).toBeGreaterThan(code.indexOf('TestNs.open = function('));
+    expect(guard).toBeLessThan(code.indexOf('SidePaneHelper.open('));
+    expect(code).toContain(isCommand(kind) ? 'Xrm.Navigation.openErrorDialog(' : 'console.error(');
+  });
+
+  it.each(TRIGGER_KINDS)('%s reports a missing runtime instead of throwing', kind => {
+    const openErrorDialog = vi.fn();
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      expect(() => {
+        const handler = new Function('Xrm', `${generateLibraryScript(library(kind))}\nreturn TestNs.open;`)({ Navigation: { openErrorDialog } }) as (arg: unknown) => void;
+        handler({});
+      }).not.toThrow();
+      if (isCommand(kind)) {
+        expect(openErrorDialog).toHaveBeenCalledWith({ message: MESSAGE });
+        expect(error).not.toHaveBeenCalled();
+      } else {
+        expect(error).toHaveBeenCalledWith(MESSAGE);
+        expect(openErrorDialog).not.toHaveBeenCalled();
+      }
+    } finally {
+      error.mockRestore();
+    }
+  });
+});
+
+describe('ManualJS Shared Library output runs itself (codegen-config-model-008)', () => {
+  const library = (kind: TriggerKind) => generateLibraryScript(cfg({
+    trigger: { kind, namespace: 'TestNs', functionName: 'open' },
+    host: { entityName: 'account', attribute: 'new_field', lookupControls: ['parentaccountid'] },
+    context: { source: { kind: 'none' } },
+  }));
+
+  it('ends by calling the function it defines, so pasting it opens the pane', () => {
+    const code = library('ManualJS');
+    expect(code.trimEnd().endsWith('\nTestNs.open();')).toBe(true);
+    const open = vi.fn();
+    new Function('Xrm', 'SidePaneHelper', code)({}, { open });
+    expect(open).toHaveBeenCalledOnce();
+  });
+
+  it.each(TRIGGER_KINDS.filter(kind => kind !== 'ManualJS'))('%s only defines its handler', kind => {
+    expect(library(kind)).not.toContain('TestNs.open();');
   });
 });

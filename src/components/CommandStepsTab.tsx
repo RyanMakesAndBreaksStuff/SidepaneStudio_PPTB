@@ -3,7 +3,7 @@ import * as React from 'react';
 import { useState } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 import { theme } from '../theme/tokens';
-import { PaneDefinitionConfig, TriggerConfig, TriggerKind } from '../types/PaneDefinitionConfig';
+import { COMMAND_TRIGGERS, PaneDefinitionConfig, TriggerConfig, TriggerKind } from '../types/PaneDefinitionConfig';
 import { TRIGGER_CAPABILITIES } from '../services/triggerCapabilities';
 import { Field } from './Field';
 import { Callout } from './Callout';
@@ -24,7 +24,7 @@ const STEPS: Record<Exclude<TriggerKind, 'GridButton' | 'GridRowSelect'>, React.
   ],
   LookupTagClick: [
     'Paste this script into a new JavaScript web resource and publish it.',
-    <React.Fragment key="s4">In the form editor, open <strong>Form libraries</strong> and add the web resource. With Shared Library output, add the runtime library to the same form too: the handler calls it when a tag is clicked.</React.Fragment>,
+    <React.Fragment key="s4">In the form editor, open <strong>Form libraries</strong> and add the web resource.</React.Fragment>,
     <React.Fragment key="s5">Open <strong>Events → OnLoad</strong> and add the function shown under <strong>Your function name</strong> (the generated <code>register…</code> function). Keep it enabled and turn on <strong>Pass execution context as first parameter</strong>.</React.Fragment>,
     <React.Fragment key="s6">In the classic form editor, open that handler&apos;s <strong>Dependencies</strong> tab and add each lookup column as a dependent column. The new form designer lists column dependencies for On Save events only, so skip this step there.</React.Fragment>,
   ],
@@ -40,23 +40,33 @@ const STEPS: Record<Exclude<TriggerKind, 'GridButton' | 'GridRowSelect'>, React.
   ],
 };
 
-const RUNTIME_STEP = (
-  <>If using Shared Library output, select <strong>Shared Library → Download runtime</strong>, upload it as <code>{'<prefix>_'}{RUNTIME_WEB_RESOURCE_SUFFIX}</code> (your publisher prefix), and publish it. Load that library before the generated handler; Basic Script output needs no shared runtime.</>
-);
+/** codegen-config-model-006 — Shared Library output calls SidePaneHelper, so the runtime must load wherever the handler runs. */
+function runtimeStep(kind: TriggerKind): React.ReactNode {
+  const download = <>Select <strong>Download runtime</strong></>;
+  if (kind === 'ManualJS') {
+    return <>{download}, then paste the runtime file into the console and press Enter before you paste the generated code.</>;
+  }
+  // A command runs one library, so the runtime rides along as a web resource dependency.
+  // https://learn.microsoft.com/power-apps/maker/model-driven-apps/use-command-designer#use-javascript-for-actions
+  const load = COMMAND_TRIGGERS.includes(kind)
+    ? <>Command Designer runs one library per command, so open the generated handler&apos;s web resource and add the runtime on its <strong>Dependencies</strong> tab.</>
+    : <>Add the runtime as a library everywhere you add the generated handler&apos;s library, such as <strong>Form libraries</strong>.</>;
+  return <>{download}, upload it as <code>{'<prefix>_'}{RUNTIME_WEB_RESOURCE_SUFFIX}</code> (your publisher prefix), and publish it. {load}</>;
+}
 
-/** Deployment steps for a trigger; grid steps name the configured surface. */
-export function deploySteps(trigger: TriggerConfig): React.ReactNode[] {
+/** Deployment steps for a trigger and output; grid steps name the configured surface. Only Shared Library output needs the runtime. */
+export function deploySteps(trigger: TriggerConfig, output: 'basic' | 'library'): React.ReactNode[] {
   const subgrid = trigger.surface === 'subgrid';
   const steps = trigger.kind === 'GridButton' ? [
     'Paste this function into a new JavaScript web resource and publish it.',
     <React.Fragment key="s9">In Command Designer, select <strong>{subgrid ? 'Subgrid commands' : 'Grid commands'}</strong> and create a new button with Action: Run JavaScript.</React.Fragment>,
-    <React.Fragment key="s10">Select your web resource as the library and enter the full function name (including namespace). In Action parameters, add <code>primaryControl</code> (Primary Control type) as the first argument. This is required — the function reads selected row data from it.</React.Fragment>,
+    <React.Fragment key="s10">Select your web resource as the library and enter the full function name (including namespace). In Action parameters, add <strong>SelectedControl</strong> as the first argument. This is required — SelectedControl is the grid on both main grids and subgrids, and the function reads the selected rows from it.</React.Fragment>,
   ] : trigger.kind === 'GridRowSelect' ? [
     'Paste this function into a new JavaScript web resource and publish it.',
     <React.Fragment key="s11">Enable the <strong>Power Apps grid control</strong> on the {subgrid ? 'form subgrid' : 'table views'}. An <strong>Events</strong> tab appears on the control.</React.Fragment>,
     <React.Fragment key="s12">Add the web resource as a library, then add an <strong>OnRecordSelect</strong> handler. Select the function name and enable <strong>Pass execution context as first parameter</strong>.</React.Fragment>,
   ] : STEPS[trigger.kind];
-  return [RUNTIME_STEP, ...steps];
+  return output === 'library' ? [runtimeStep(trigger.kind), ...steps] : steps;
 }
 
 export interface CommandStepsTabProps {
@@ -74,7 +84,8 @@ export function CommandStepsTab({ config }: CommandStepsTabProps): React.ReactEl
     ? `${names.ns}.${config.trigger.kind === 'LookupTagClick' ? lookupRegistrarName(names.fn) : names.fn}`
     : null;
   const nameError = names.ok ? '' : names.errors.map(error => error.message).join(' ');
-  const steps = deploySteps(config.trigger);
+  // The prerequisites below deploy the Basic Script, so these steps follow it.
+  const steps = deploySteps(config.trigger, 'basic');
   const isManual = config.trigger.kind === 'ManualJS';
 
   const copyFqn = (value: string) => {

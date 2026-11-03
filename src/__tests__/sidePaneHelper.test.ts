@@ -61,6 +61,14 @@ describe('SidePaneHelper.open — createPane options (contract C4/C3)', () => {
       .toBeLessThan(f.pane.select.mock.invocationCallOrder[0]);
   });
 
+  it('navigates a reused pane without selecting it when isSelected is false', async () => {
+    f.xrm.App.sidePanes.getPane.mockReturnValue(f.pane);
+    await open({ paneId: 'p', pageType: 'custom', name: 'sps_Page', isSelected: false });
+    expect(f.pane.navigate).toHaveBeenCalled();
+    expect(f.pane.select).not.toHaveBeenCalled();
+    expect(f.xrm.App.sidePanes.createPane).not.toHaveBeenCalled();
+  });
+
   it('shared helper closes other panes after reusing one', async () => {
     const events: string[] = [];
     const f = fakeXrm();
