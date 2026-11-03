@@ -4,6 +4,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { theme } from '../theme/tokens';
 import { PaneDefinitionConfig } from '../types/PaneDefinitionConfig';
 import { MetadataFilterConfig } from '../types/MetadataFilterConfig';
+import type { MetadataFilterDraft } from './config/MetadataFilterConfigEditor';
 import { IXrmContext } from '../adapters/PptbContextAdapter';
 import { MetadataService } from '../services/MetadataService';
 import { FormXmlService } from '../services/FormXmlService';
@@ -11,6 +12,7 @@ import { validate } from '../services/ValidationService';
 import { ConfigurePanel } from './ConfigurePanel';
 import { PreviewPanel } from './PreviewPanel';
 import { OutputPanel } from './OutputPanel';
+import { Callout } from './Callout';
 import { PreviewSessionProvider } from '../contexts/PreviewSessionContext';
 
 export interface WorkbenchShellProps {
@@ -26,7 +28,13 @@ export interface WorkbenchShellProps {
   metadataFilterError?: string | null;
   onSaveMetadataFilterConfig: (config: MetadataFilterConfig) => Promise<void> | void;
   onResetMetadataFilterConfig: () => Promise<void> | void;
+  /** Unsaved filter edits, owned above this shell so its remounts keep them. */
+  metadataFilterDraft?: MetadataFilterDraft | null;
+  onMetadataFilterDraftChange?: (draft: MetadataFilterDraft | null) => void;
   previewEpoch?: number;
+  /** W20 — the restored config was saved for another environment and the user has not confirmed it here. */
+  orgMismatch?: boolean;
+  onConfirmOrgMismatch?: () => void;
 }
 
 type NarrowTab = 'configure' | 'preview' | 'output';
@@ -56,6 +64,10 @@ function WorkbenchShellContent({
   metadataFilterError,
   onSaveMetadataFilterConfig,
   onResetMetadataFilterConfig,
+  metadataFilterDraft,
+  onMetadataFilterDraftChange,
+  orgMismatch = false,
+  onConfirmOrgMismatch,
 }: WorkbenchShellProps): React.ReactElement {
   const { isDark } = useTheme();
   const T = theme(isDark);
@@ -64,7 +76,7 @@ function WorkbenchShellContent({
   const [configPanelOpen, setConfigPanelOpen] = useState(true);
   const [codePanelOpen, setCodePanelOpen] = useState(true);
 
-  const validation = useMemo(() => validate(config, accessibleTables), [config, accessibleTables]);
+  const validation = useMemo(() => validate(config, accessibleTables, orgMismatch), [config, accessibleTables, orgMismatch]);
 
   const formXmlService = useMemo(() => new FormXmlService(xrm), [xrm]);
 
@@ -81,12 +93,25 @@ function WorkbenchShellContent({
     metadataFilterError,
     onSaveMetadataFilterConfig,
     onResetMetadataFilterConfig,
+    metadataFilterDraft,
+    onMetadataFilterDraftChange,
   };
   const previewPanelProps = { config, onChange, validation, metadataService, xrm };
-  const outputPanelProps = { config, xrm, validation };
+  const outputPanelProps = { config, xrm, validation, copyBlocked: orgMismatch };
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden', background: T.pageBg }}>
+      {orgMismatch && (
+        <div role="alert" style={{ padding: '8px 12px', borderBottom: `1px solid ${T.stroke1}`, flexShrink: 0 }}>
+          <Callout type="warn" icon="⚠">
+            This configuration was saved for a different environment; table, form, view and page selections are unverified.{' '}
+            <button type="button" onClick={onConfirmOrgMismatch} style={{
+              marginLeft: 4, padding: '2px 10px', border: `1px solid ${T.warning}`, borderRadius: T.rS,
+              background: 'transparent', color: T.warning, fontFamily: T.font, fontSize: 12, cursor: 'pointer',
+            }}>Use anyway</button>
+          </Callout>
+        </div>
+      )}
       {layoutMode === 'wide' && (
         <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
           <aside

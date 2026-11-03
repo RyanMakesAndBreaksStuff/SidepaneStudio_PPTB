@@ -1,6 +1,23 @@
 import { describe, it, expect } from 'vitest';
-import { parseLookupFieldNames, parseStoredConfig } from '../services/configGuards';
+import { parseLookupFieldNames, parseStoredConfig, parseStoredOrgKey } from '../services/configGuards';
 import { DEFAULT_CONFIG } from '../types/PaneDefinitionConfig';
+
+describe('parseStoredOrgKey (W20)', () => {
+  it('reads the org key stored alongside the config without disturbing the config', () => {
+    const raw = JSON.stringify({ ...DEFAULT_CONFIG, orgKey: 'orga.crm.dynamics.com' });
+    expect(parseStoredOrgKey(raw)).toBe('orga.crm.dynamics.com');
+    expect(parseStoredConfig(raw)).toEqual(DEFAULT_CONFIG);
+  });
+
+  it('treats a legacy bare config and unusable values as an unknown org', () => {
+    expect(parseStoredOrgKey(JSON.stringify(DEFAULT_CONFIG))).toBeNull();
+    expect(parseStoredOrgKey(JSON.stringify({ ...DEFAULT_CONFIG, orgKey: '' }))).toBeNull();
+    expect(parseStoredOrgKey(JSON.stringify({ ...DEFAULT_CONFIG, orgKey: 7 }))).toBeNull();
+    expect(parseStoredOrgKey('{not json')).toBeNull();
+    expect(parseStoredOrgKey('[]')).toBeNull();
+    expect(parseStoredOrgKey(null)).toBeNull();
+  });
+});
 
 describe('parseStoredConfig', () => {
   it('round-trips a generative page target and defaults wrong-typed fields', () => {
@@ -41,6 +58,18 @@ describe('parseStoredConfig', () => {
       host: { ...DEFAULT_CONFIG.host, lookupControls: ['parentaccountid'] },
     };
     expect(parseStoredConfig(JSON.stringify(config))?.trigger.kind).toBe('LookupTagClick');
+  });
+
+  it('clears a table record destination the clicked tag decides at runtime', () => {
+    const config = {
+      ...DEFAULT_CONFIG,
+      trigger: { ...DEFAULT_CONFIG.trigger, kind: 'LookupTagClick' },
+      host: { ...DEFAULT_CONFIG.host, lookupControls: ['parentaccountid'] },
+      target: { pageType: 'entityrecord', entityName: 'account', formId: 'form-1', tabName: 'tab-1', data: '{"a":1}', createNew: false },
+      context: { ...DEFAULT_CONFIG.context, source: { kind: 'clickedTag' } },
+    };
+    expect(parseStoredConfig(JSON.stringify(config))?.target)
+      .toEqual({ pageType: 'entityrecord', entityName: '', formId: '', tabName: '', data: '{"a":1}', createNew: false });
   });
 
   it('accepts a well-formed config', () => {
