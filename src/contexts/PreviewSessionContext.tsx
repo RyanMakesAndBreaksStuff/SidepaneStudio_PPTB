@@ -33,3 +33,25 @@ export function usePreviewSessionState<T>(
   }, [session, key]);
   return [value, setter];
 }
+
+export interface PreviewPaneState {
+  /** A preview open has created the pane in this session. */
+  exists: boolean;
+  /** The pane is the selected (visible) side pane. */
+  selected: boolean;
+}
+
+/**
+ * The simulated side pane outlives a single open, as Xrm.App.sidePanes panes do. Each open mirrors the
+ * generated script: reusing an existing pane selects it only when isSelected is true, so it otherwise keeps
+ * its current selection; creating it (the first open, or every open with reuse off) applies isSelected.
+ * Each preview surface simulates its own host page, so each keeps its own pane.
+ */
+export function usePreviewPane(surface: 'form' | 'grid'): [PreviewPaneState, (isSelected: boolean, reuseExistingPane: boolean) => void] {
+  const [pane, setPane] = usePreviewSessionState<PreviewPaneState>(`preview-pane:${surface}`, { exists: false, selected: false });
+  const open = React.useCallback((isSelected: boolean, reuseExistingPane: boolean) => setPane(prev => ({
+    exists: true,
+    selected: prev.exists && reuseExistingPane && !isSelected ? prev.selected : isSelected,
+  })), [setPane]);
+  return [pane, open];
+}

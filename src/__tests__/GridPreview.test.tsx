@@ -691,3 +691,38 @@ describe('related-record cross-component transitions', () => {
     expect(preview.querySelector('[title="customer-id"]')?.previousElementSibling?.textContent?.trim()).toBe('contact');
   });
 });
+
+describe('grid preview pane selection across commands', () => {
+  const grid = (value: ReturnType<typeof cfg>, service: MetadataService) =>
+    <GridPreview key="account" config={value} validation={validation} metadataService={service} xrm={xrm} />;
+  async function runCommandOnRowOne() {
+    await click('Generate grid preview');
+    await act(async () => { host!.querySelector<HTMLInputElement>('input[aria-label="Select row 1"]')!.click(); });
+    await click('Preview command');
+    expect(host!.textContent).toContain('SelectedRow: row 1');
+  }
+
+  it.each([true, false])('keeps an isSelected:false pane unselected on every command (reuseExistingPane=%s)', async reuseExistingPane => {
+    setFetch(vi.fn().mockResolvedValue({ value: [{ name: 'Acme' }] }));
+    await render(grid({ ...config, pane: { ...config.pane, isSelected: false },
+      behavior: { ...config.behavior, reuseExistingPane } }, metadata()));
+    await runCommandOnRowOne();
+    expect(host!.textContent).not.toContain(config.pane.title);
+    await click('Preview command');
+    expect(host!.textContent).not.toContain(config.pane.title);
+  });
+
+  it.each([[true, true], [false, false]])(
+    'after a selected open, an isSelected:false command keeps the pane only when reusing it (reuseExistingPane=%s)',
+    async (reuseExistingPane, visible) => {
+      setFetch(vi.fn().mockResolvedValue({ value: [{ name: 'Acme' }] }));
+      const service = metadata();
+      const base = { ...config, behavior: { ...config.behavior, reuseExistingPane } };
+      await render(grid(base, service));
+      await runCommandOnRowOne();
+      expect(host!.textContent).toContain(config.pane.title);
+      await render(grid({ ...base, pane: { ...base.pane, isSelected: false } }, service));
+      await click('Preview command');
+      expect(host!.textContent!.includes(config.pane.title)).toBe(visible);
+    });
+});

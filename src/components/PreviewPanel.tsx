@@ -5,7 +5,7 @@ import { theme } from '../theme/tokens';
 import { PaneDefinitionConfig } from '../types/PaneDefinitionConfig';
 import { IXrmContext } from '../adapters/PptbContextAdapter';
 import { ValidationResult } from '../services/ValidationService';
-import { FormXmlService, FormModel } from '../services/FormXmlService';
+import { FormXmlService, FormModel, type FormServiceError } from '../services/FormXmlService';
 import { MetadataService } from '../services/MetadataService';
 import { FormSelector, FormSelection } from './FormSelector';
 import { FormXmlRenderer } from './FormXmlRenderer';
@@ -13,7 +13,7 @@ import { GridPreview } from './GridPreview';
 import { MockMDAShell } from './MockMDAShell';
 import { NativeMdaFrame } from './NativeMdaFrame';
 import { PreviewSizeProvider, usePreviewSize } from './previewSize';
-import { PreviewSessionBoundary, usePreviewSessionState } from '../contexts/PreviewSessionContext';
+import { PreviewSessionBoundary, usePreviewPane, usePreviewSessionState } from '../contexts/PreviewSessionContext';
 import { buildRelatedSampleFetchXml, getRelatedLookup, relatedRecordOf } from '../services/GridViewModel';
 import type { PreviewRecord } from '../services/GridViewModel';
 import { TRIGGER_CAPABILITIES } from '../services/triggerCapabilities';
@@ -44,6 +44,16 @@ type SampleState =
   | { status: 'error'; reason: string }
   | { status: 'loaded'; record: PreviewRecord | null };
 
+/** Only a transport failure (no HTTP status, or status 0) points at the connection. */
+function formLoadFailureReason(error: FormServiceError): string {
+  if (error.code === 'invalid-formxml' || error.code === 'missing-formxml') return 'Form layout could not be read.';
+  if (error.code !== 'query-failed') return error.message;
+  const status = (error.cause as { status?: unknown } | null | undefined)?.status;
+  if (status === 404) return 'Form not found in this environment.';
+  if (typeof status === 'number' && status !== 0) return `Could not load form layout (HTTP ${status}).`;
+  return 'Could not load form layout. Check your connection.';
+}
+
 const PreviewPanelContent = React.memo(function PreviewPanelContent({
   config,
   onChange,
@@ -70,6 +80,7 @@ const PreviewPanelContent = React.memo(function PreviewPanelContent({
   const sampleKey = JSON.stringify([hostEntity, relatedLookup]);
   const [sample, setSample] = useState<{ key: string; state: SampleState }>({ key: '', state: { status: 'idle' } });
   const sampleState: SampleState = sample.key === sampleKey ? sample.state : { status: 'idle' };
+  const [samplePane, openSamplePane] = usePreviewPane('form');
   const sampleRequestRef = useRef(0);
   const formRequestIdRef = useRef(0);
   const mountedRef = useRef(true);
@@ -115,7 +126,7 @@ const PreviewPanelContent = React.memo(function PreviewPanelContent({
     if (!mountedRef.current || formRequestIdRef.current !== requestId) return;
 
     if (!result.ok) {
-      setFormState({ status: 'error', reason: 'Could not load form layout. Check your connection.' });
+      setFormState({ status: 'error', reason: formLoadFailureReason(result.error) });
     } else {
       setFormState({ status: 'loaded', model: result.model });
     }
@@ -134,8 +145,10 @@ const PreviewPanelContent = React.memo(function PreviewPanelContent({
       const response = await xrm.fetchXml(buildRelatedSampleFetchXml(hostEntity, relatedLookup));
       if (!mountedRef.current || sampleRequestRef.current !== requestId) return;
       const row = Array.isArray(response.value) ? response.value[0] : undefined;
-      setSample({ key: sampleKey, state: { status: 'loaded',
-        record: row && typeof row === 'object' ? relatedRecordOf(row, relatedLookup) : null } });
+      const record = row && typeof row === 'object' ? relatedRecordOf(row, relatedLookup) : null;
+      setSample({ key: sampleKey, state: { status: 'loaded', record } });
+      // Loading a sample whose lookup is set is one invocation of the generated script.
+      if (record) openSamplePane(config.pane.isSelected, config.behavior.reuseExistingPane);
     } catch (error) {
       if (!mountedRef.current || sampleRequestRef.current !== requestId) return;
       setSample({ key: sampleKey, state: { status: 'error',
@@ -252,7 +265,8 @@ const PreviewPanelContent = React.memo(function PreviewPanelContent({
 
               {formState.status === 'loaded' && (
                 <NativeMdaFrame
-                  pane={sampleState.status === 'loaded' ? { ...config.pane, isSelected: sampleState.record !== null } : config.pane}
+                  pane={sampleState.status === 'loaded'
+                    ? { ...config.pane, isSelected: sampleState.record !== null && samplePane.selected } : config.pane}
                   paneTarget={config.target}
                   validation={validation}
                   variant={{ kind: 'form', hostEntity, record: sampleState.status === 'loaded' ? sampleState.record : null }}
@@ -261,6 +275,13 @@ const PreviewPanelContent = React.memo(function PreviewPanelContent({
                 </NativeMdaFrame>
               )}
             </div>
+          </div>
+        )}
+
+        {/* The preview pane is scaled, so Form and Grid state the configured width as text, as Mock does. */}
+        {(mode === 'form' || (mode === 'grid' && gridEligible)) && (
+          <div style={{ flexShrink: 0, padding: '6px 12px', borderTop: `1px solid ${T.stroke1}` }}>
+            <PreviewMeta config={config} />
           </div>
         )}
       </PreviewSizeProvider>

@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { PreviewPanel } from '../components/PreviewPanel';
 import { DEFAULT_CONFIG } from '../types/PaneDefinitionConfig';
 import { MetadataService } from '../services/MetadataService';
-import type { IXrmContext } from '../adapters/PptbContextAdapter';
+import { DataverseError, type IXrmContext } from '../adapters/PptbContextAdapter';
 import { cfg, chooseOption, xrmStub } from './testHelpers';
 
 let root: Root | undefined;
@@ -112,6 +112,25 @@ describe('PreviewPanel', () => {
     expect(host?.textContent).toContain('Tab: tab_details');
   });
 
+  it('shows the configured pane width in Form and Grid modes', async () => {
+    const metadataService = {
+      ...mockMetadataService,
+      listViewsForEntity: vi.fn().mockResolvedValue({ status: 'ok', views: [] }),
+    } as unknown as MetadataService;
+    await render(
+      <PreviewPanel
+        config={cfg({ trigger: { kind: 'GridButton' }, pane: { width: 640 } })}
+        validation={{ isValid: true, errors: [], warnings: [] }}
+        metadataService={metadataService}
+        xrm={xrmStub()}
+      />
+    );
+    for (const tab of ['Form', 'Grid']) {
+      await act(async () => { Array.from(host!.querySelectorAll('button')).find(b => b.textContent === tab)!.click(); });
+      expect(host!.textContent, tab).toContain('Width: 640px');
+    }
+  });
+
   it('completes the form layout load under StrictMode', async () => {
     const xrm = { ...xrmStub(),
       webApiGet: vi.fn().mockResolvedValue([{ formid: '11111111-2222-3333-4444-555555555555', name: 'Account' }]),
@@ -195,14 +214,16 @@ describe('PreviewPanel — lookup-source Form preview', () => {
     context: { source: { kind: 'lookup', attribute: 'primarycontactid' } },
   });
 
-  async function openForm(fetchXmlQuery: ReturnType<typeof vi.fn>) {
+  async function openForm(fetchXmlQuery: ReturnType<typeof vi.fn>, config = related) {
     const xrm = { ...xrmStub(), fetchXml: fetchXmlQuery as IXrmContext['fetchXml'],
       webApiGet: vi.fn().mockResolvedValue([{ formid: '11111111-2222-3333-4444-555555555555', name: 'Account' }]),
       webApiGetEntity: vi.fn().mockResolvedValue({ formxml: '<form/>' }) };
-    await render(<PreviewPanel config={related} validation={{ isValid: true, errors: [], warnings: [] }}
-      metadataService={mockMetadataService} xrm={xrm} />);
+    const panel = (value: typeof related) => <PreviewPanel config={value} validation={{ isValid: true, errors: [], warnings: [] }}
+      metadataService={mockMetadataService} xrm={xrm} />;
+    await render(panel(config));
     const tab = Array.from(host!.querySelectorAll('button')).find(b => b.textContent === 'Form')!;
     await act(async () => { tab.click(); });
+    return async (value: typeof related) => { await act(async () => { root!.render(panel(value)); }); };
   }
 
   async function loadSample() {
@@ -231,6 +252,59 @@ describe('PreviewPanel — lookup-source Form preview', () => {
     await loadSample();
     expect(host!.textContent).toContain('No account record has a primarycontactid value, so the pane does not open.');
     expect(host!.textContent).not.toContain(related.pane.title);
+  });
+
+  const sampleRow = { value: [{
+    _primarycontactid_value: 'contact-id',
+    '_primarycontactid_value@OData.Community.Display.V1.FormattedValue': 'Pat Lee',
+  }] };
+
+  it.each([true, false])('keeps an isSelected:false pane unselected on every sample open (reuseExistingPane=%s)', async reuseExistingPane => {
+    const fetchXmlQuery = vi.fn().mockResolvedValue(sampleRow);
+    await openForm(fetchXmlQuery, { ...related, pane: { ...related.pane, isSelected: false },
+      behavior: { ...related.behavior, reuseExistingPane } });
+    await loadSample();
+    expect(host!.textContent).not.toContain('Pat Lee · contact-id');
+    await loadSample();
+    expect(fetchXmlQuery).toHaveBeenCalledTimes(2);
+    expect(host!.textContent).not.toContain('Pat Lee · contact-id');
+  });
+
+  it.each([[true, true], [false, false]])(
+    'after a selected open, an isSelected:false reopen keeps the pane only when reusing it (reuseExistingPane=%s)',
+    async (reuseExistingPane, visible) => {
+      const base = { ...related, behavior: { ...related.behavior, reuseExistingPane } };
+      const rerender = await openForm(vi.fn().mockResolvedValue(sampleRow), base);
+      await loadSample();
+      expect(host!.textContent).toContain('Pat Lee · contact-id');
+      await rerender({ ...base, pane: { ...base.pane, isSelected: false } });
+      await loadSample();
+      expect(host!.textContent!.includes('Pat Lee · contact-id')).toBe(visible);
+    });
+});
+
+describe('PreviewPanel — form layout load failures', () => {
+  const formId = '11111111-2222-3333-4444-555555555555';
+
+  async function loadForm(webApiGetEntity: IXrmContext['webApiGetEntity']) {
+    const xrm = { ...xrmStub(), webApiGet: vi.fn().mockResolvedValue([{ formid: formId, name: 'Account' }]), webApiGetEntity };
+    await render(<PreviewPanel config={cfg({ host: { entityName: 'account', formId } })}
+      validation={{ isValid: true, errors: [], warnings: [] }} metadataService={new MetadataService(xrm)} xrm={xrm} />);
+    const formTab = Array.from(host!.querySelectorAll('button')).find(b => b.textContent === 'Form')!;
+    await act(async () => { formTab.click(); });
+    await act(async () => { await Promise.resolve(); });
+  }
+
+  it.each([
+    ['a 404 response', () => Promise.reject(new DataverseError('Not Found', 404, 'Not Found')), 'Form not found in this environment.'],
+    ['unreadable FormXML', () => Promise.resolve({ formxml: 'NOT_XML<<<' }), 'Form layout could not be read.'],
+    ['a 403 response', () => Promise.reject(new DataverseError('Forbidden', 403, 'Forbidden')), 'Could not load form layout (HTTP 403).'],
+    ['a network failure', () => Promise.reject(new TypeError('Failed to fetch')), 'Could not load form layout. Check your connection.'],
+    ['a status 0 response', () => Promise.reject(new DataverseError('Network Error', 0)), 'Could not load form layout. Check your connection.'],
+  ])('explains %s with its own message', async (_label, respond, message) => {
+    await loadForm(vi.fn(respond) as IXrmContext['webApiGetEntity']);
+    const error = Array.from(host!.querySelectorAll('div')).find(el => el.textContent === message);
+    expect(error, message).toBeTruthy();
   });
 });
 
