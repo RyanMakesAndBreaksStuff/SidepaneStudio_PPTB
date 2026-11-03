@@ -14,7 +14,7 @@ import { NativeMdaFrame } from './NativeMdaFrame';
 import { MockGrid } from './MockGrid';
 import type { GridColumn } from '../services/GridViewModel';
 import { capGridFetchXml, getRelatedLookup, parseGridFetch, resolveGridColumns, resolveRelatedRecord } from '../services/GridViewModel';
-import { usePreviewSessionState } from '../contexts/PreviewSessionContext';
+import { usePreviewPane, usePreviewSessionState } from '../contexts/PreviewSessionContext';
 import { applyLookup, changeHostTable } from '../services/relatedRecordConfig';
 import type { LookupAttributeInfo } from '../services/MetadataService';
 import { isValidLogicalName } from '../services/odataGuards';
@@ -137,10 +137,21 @@ function GridData({ config, validation, metadataService, xrm, entityName, viewId
   const [state, setState] = useState<State>(() => completed ?? { status: 'idle' });
   const [selectedRows, setSelectedRows] = usePreviewSessionState<number[]>(`${selectionKey}:checked`, []);
   const [activeRow, setActiveRow] = usePreviewSessionState<number | null>(`${selectionKey}:active`, null);
+  const [paneSession, openPane] = usePreviewPane('grid');
+  // RelatedRecord: the pane opens the row's lookup record and stays closed when the lookup is empty.
+  const resolveRow = (index: number) => relatedLookup !== '' && state.status === 'loaded'
+    ? resolveRelatedRecord(state.rows[index], relatedLookup, relatedTargets) : null;
+  /** Each command or row selection is one invocation of the generated script. */
+  const invoke = (index: number | null) => {
+    setActiveRow(index);
+    if (index !== null && (relatedLookup === '' || resolveRow(index)?.status === 'resolved')) {
+      openPane(config.pane.isSelected, config.behavior.reuseExistingPane);
+    }
+  };
   const onSelectionChange = (indices: number[]) => {
     setSelectedRows(indices);
     const onSelect = config.trigger.kind === 'GridRowSelect';
-    setActiveRow(onSelect && indices.length === 1 ? indices[0] : null);
+    invoke(onSelect && indices.length === 1 ? indices[0] : null);
   };
   const request = useRef(0);
   useEffect(() => {
@@ -177,9 +188,7 @@ function GridData({ config, validation, metadataService, xrm, entityName, viewId
       setState({ status: 'error', reason: error instanceof Error ? error.message : 'Could not load grid rows.' });
     }
   };
-  // RelatedRecord: the pane opens the selected row's lookup record and stays closed when the lookup is empty.
-  const relatedResolution = relatedLookup !== '' && activeRow !== null && state.status === 'loaded'
-    ? resolveRelatedRecord(state.rows[activeRow], relatedLookup, relatedTargets) : null;
+  const relatedResolution = activeRow !== null ? resolveRow(activeRow) : null;
   const related = relatedResolution?.status === 'resolved' ? relatedResolution.record : null;
   const paneOpen = activeRow !== null && (relatedLookup === '' || relatedResolution?.status === 'resolved');
   return <>
@@ -212,11 +221,11 @@ function GridData({ config, validation, metadataService, xrm, entityName, viewId
     {relatedResolution?.status === 'unresolved' && relatedResolution.reason === 'table-not-allowed' &&
       <p role="alert" style={{ color: T.error, fontFamily: T.font, fontSize: 12 }}>The lookup annotation identifies a table that is not an allowed destination table.</p>}
     {state.status === 'loaded' && <NativeMdaFrame
-      pane={{ ...config.pane, isSelected: paneOpen }} paneTarget={config.target} validation={validation}
+      pane={{ ...config.pane, isSelected: paneOpen && paneSession.selected }} paneTarget={config.target} validation={validation}
       variant={{ kind: 'grid', caption: `${entityName} · ${state.viewName} · live data, simulated command`, record: related }}>
       <MockGrid rows={state.rows} columns={state.columns} viewName={state.viewName}
         selectedRows={selectedRows} activeRow={activeRow} onSelectionChange={onSelectionChange}
-        onCommand={() => { if (selectedRows.length === 1) setActiveRow(selectedRows[0]); }}
+        onCommand={() => { if (selectedRows.length === 1) invoke(selectedRows[0]); }}
         onRefresh={() => void generate()} />
     </NativeMdaFrame>}
   </>;

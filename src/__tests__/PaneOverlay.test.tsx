@@ -31,10 +31,10 @@ afterEach(async () => {
 });
 
 describe('preview helpers', () => {
-  it('scales pane widths across the full 300 to 1200 config range', () => {
-    // Two-segment linear interpolation: [300→120, 1000→270] then [1000→270, 1200→300]
-    expect(getPreviewPaneWidth(300)).toBe(120);
-    expect(getPreviewPaneWidth(1000)).toBe(270);
+  it('scales pane widths linearly across the full 300 to 1200 config range', () => {
+    expect(getPreviewPaneWidth(300)).toBe(160);
+    expect(getPreviewPaneWidth(480)).toBe(188);
+    expect(getPreviewPaneWidth(750)).toBe(230);
     expect(getPreviewPaneWidth(1200)).toBe(300);
   });
 
@@ -101,6 +101,23 @@ describe('PaneOverlay', () => {
     const recordIdentity = host?.querySelector('[title="actual-contact-id"]');
     expect(recordIdentity?.previousElementSibling?.textContent?.trim()).toBe('contact');
     expect(recordIdentity?.textContent).toContain('Pat Lee · actual-contact-id');
+  });
+
+  it('renders distinct inline widths for config widths 300 and 480', async () => {
+    const overlay = (width: number) => (
+      <PaneOverlay
+        pane={{ ...DEFAULT_CONFIG.pane, width }}
+        target={DEFAULT_CONFIG.target}
+        validation={{ isValid: true, errors: [], warnings: [] }}
+      />
+    );
+    await render(<>{overlay(300)}{overlay(480)}</>);
+    // jsdom does no layout, so the effective width is the larger of width and min-width.
+    const widths = Array.from(host!.children).map(el => {
+      const { width, minWidth } = (el as HTMLElement).style;
+      return Math.max(parseFloat(width), parseFloat(minWidth) || 0);
+    });
+    expect(widths).toEqual([160, 188]);
   });
 });
 

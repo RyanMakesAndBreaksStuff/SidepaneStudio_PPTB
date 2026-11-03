@@ -222,8 +222,8 @@ export const PaneOverlay = React.memo(function PaneOverlay({
   const imageSrc = getSafePreviewImageSrc(pane.imageSrc);
   const stacked = layout === 'stacked';
 
-  // Inline: keep the requested width but cap so it can't crowd out the form
-  //   when the simulated MDA window is narrow.
+  // Inline: the scaled width (never below 160) capped so it can't crowd out
+  //   the form when the simulated MDA window is narrow.
   // Stacked: full-width, fixed height — sits under the form on compact views.
   const wrapperStyle: React.CSSProperties = stacked
     ? {
@@ -241,7 +241,6 @@ export const PaneOverlay = React.memo(function PaneOverlay({
     : {
         flex: `0 1 ${requestedWidth}px`,
         width: requestedWidth,
-        minWidth: 160,
         maxWidth: '50%',
         display: 'flex',
         flexDirection: 'column',

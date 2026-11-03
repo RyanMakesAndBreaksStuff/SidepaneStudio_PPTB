@@ -33,25 +33,16 @@ export function filterTables<T extends ComboItem>(tables: T[], query: string): F
   return out;
 }
 
-const MID_CONFIG_WIDTH = 1000;
-const MIN_PREVIEW_WIDTH = 120;
-const MID_PREVIEW_WIDTH = 270;
+const MIN_PREVIEW_WIDTH = 160;
 const MAX_PREVIEW_WIDTH = 300;
 
+/** Inline preview width: the 300..1200 config range scaled linearly onto 160..300 px. */
 export function getPreviewPaneWidth(configWidth: number): number {
   const clamped = normalizeConfigWidth(configWidth);
-  if (clamped <= MID_CONFIG_WIDTH) {
-    return Math.round(
-      MIN_PREVIEW_WIDTH +
-      ((clamped - MIN_CONFIG_WIDTH) / (MID_CONFIG_WIDTH - MIN_CONFIG_WIDTH)) *
-        (MID_PREVIEW_WIDTH - MIN_PREVIEW_WIDTH)
-    );
-  }
-
   return Math.round(
-    MID_PREVIEW_WIDTH +
-    ((clamped - MID_CONFIG_WIDTH) / (MAX_CONFIG_WIDTH - MID_CONFIG_WIDTH)) *
-      (MAX_PREVIEW_WIDTH - MID_PREVIEW_WIDTH)
+    MIN_PREVIEW_WIDTH +
+    ((clamped - MIN_CONFIG_WIDTH) / (MAX_CONFIG_WIDTH - MIN_CONFIG_WIDTH)) *
+      (MAX_PREVIEW_WIDTH - MIN_PREVIEW_WIDTH)
   );
 }
 
