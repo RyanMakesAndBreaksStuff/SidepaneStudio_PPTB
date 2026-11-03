@@ -233,7 +233,7 @@ describe('ConfigurePanel — destination table', () => {
       context: { source: { kind: 'lookup', attribute: '' } } }), makeMetadataService({ listLookupAttributes }));
     await chooseOption('Lookup column', 'primarycontactid');
     expect(get().target).toMatchObject({ entityName: 'contact', formId: '', tabName: '' });
-    expect(host?.textContent).toContain('Destination table: contact');
+    expect(host?.textContent).toContain('Destination table: determined by the primarycontactid lookup.');
     expect(host?.querySelector<HTMLInputElement>('input[placeholder=""]')).toBeTruthy();
   });
 
@@ -263,7 +263,7 @@ describe('ConfigurePanel — destination table', () => {
     await act(async () => { await Promise.resolve(); });
     expect(host?.textContent).not.toContain('staleaccountlookup');
     await chooseOption('Lookup column', 'contactlookup');
-    expect(host?.textContent).toContain('Destination table: contact');
+    expect(host?.textContent).toContain('Destination table: determined by the contactlookup lookup.');
   });
 
   it('preserves saved destination on lookup error and retries into the resolved target', async () => {
@@ -277,7 +277,7 @@ describe('ConfigurePanel — destination table', () => {
     expect(host?.textContent).toContain('Saved table selection “account” is unconfirmed');
     expect(get().target).toMatchObject({ formId: 'saved-form', tabName: 'saved-tab' });
     await act(async () => { Array.from(host!.querySelectorAll('button')).find(button => button.textContent === 'Retry')?.click(); });
-    expect(host?.textContent).toContain('Destination table: contact');
+    expect(host?.textContent).toContain('Destination table: determined by the primarycontactid lookup.');
     expect(get().target).toMatchObject({ formId: '', tabName: '' });
     expect(listLookupAttributes).toHaveBeenCalledTimes(2);
   });
