@@ -14,6 +14,7 @@ import { ChoiceGroup } from '../ChoiceGroup';
 import { Field } from '../Field';
 import { Input } from '../Input';
 import { TablePicker } from '../TablePicker';
+import { useAccessibleTables } from '../useAccessibleTables';
 import { DashboardPicker } from '../DashboardPicker';
 import { LookupPicker } from '../LookupPicker';
 import { FormSelector } from '../FormSelector';
@@ -79,6 +80,9 @@ export function DestinationSection({ config, onChange, metadataService, formXmlS
   readOnly, onAccessibleTablesChange, errors, warnings }: DestinationSectionProps): React.ReactElement {
   const { isDark } = useTheme();
   const T = theme(isDark);
+  const { tables } = useAccessibleTables(metadataService);
+  const tableLabel = (logicalName: string): string =>
+    tables.find(table => table.logicalName === logicalName)?.displayName ?? logicalName;
   const { target, trigger, host, context } = config;
   const { source } = context;
   const creating = isCreating(target);
@@ -200,12 +204,20 @@ export function DestinationSection({ config, onChange, metadataService, formXmlS
               <div role="status" aria-live="polite" style={{ color: T.fg2, fontFamily: T.font, fontSize: 13 }}>
                 {relatedTarget
                   ? resolvedTargets.length === 1
-                    ? `Destination table: ${resolvedTargets[0]}`
+                    ? <>
+                        <div>{tableLabel(resolvedTargets[0])}</div>
+                        <div>Destination table: determined by the {source.attribute} lookup.</div>
+                      </>
                     : resolvedTargets.length > 1
-                      ? `Possible destination tables: ${resolvedTargets.join(', ')}. Determined by the selected row.`
-                      : target.entityName
-                        ? `Saved table selection “${target.entityName}” is unconfirmed until the lookup is resolved.`
-                        : 'Select a source lookup to determine the destination table.'
+                      ? `Possible destination tables: ${resolvedTargets.map(tableLabel).join(', ')}. Determined by the selected row.`
+                      : !source.attribute
+                        ? "Destination table is determined by the 'Lookup column' selector."
+                        : target.entityName
+                          ? <>
+                              <div>{tableLabel(target.entityName)}</div>
+                              <div>Saved table selection “{target.entityName}” is unconfirmed until the lookup is resolved.</div>
+                            </>
+                          : `Destination table: determined by the ${source.attribute} lookup.`
                   : source.kind === 'clickedTag'
                     ? 'Destination table: determined by the clicked tag.'
                     : `Destination table: ${destination || '(table)'}`}

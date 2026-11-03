@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { useState, act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DestinationSection } from '../components/config/DestinationSection';
 import { ThemeProvider } from '../contexts/ThemeContext';
 import type { PaneDefinitionConfig } from '../types/PaneDefinitionConfig';
@@ -30,7 +30,8 @@ function makeMetadataService(): MetadataService {
   } as unknown as MetadataService;
 }
 
-const formXmlService = { getFormsForEntityResult: vi.fn().mockResolvedValue({ ok: true, forms: [] }) } as unknown as FormXmlService;
+const getFormsForEntityResult = vi.fn().mockResolvedValue({ ok: true, forms: [] });
+const formXmlService = { getFormsForEntityResult } as unknown as FormXmlService;
 
 async function render(element: React.ReactElement): Promise<void> {
   host = document.createElement('div');
@@ -40,13 +41,13 @@ async function render(element: React.ReactElement): Promise<void> {
 }
 
 /** Renders the section against live state, the way the workbench coerces every change. */
-async function renderSection(initial: PaneDefinitionConfig): Promise<() => PaneDefinitionConfig> {
+async function renderSection(initial: PaneDefinitionConfig, metadataService = makeMetadataService()): Promise<() => PaneDefinitionConfig> {
   let current = initial;
   function Harness(): React.ReactElement {
     const [config, setConfig] = useState(initial);
     current = config;
     return <DestinationSection config={config} onChange={updater => setConfig(prev => coerceConfig(updater(prev)))}
-      metadataService={makeMetadataService()} formXmlService={formXmlService} errors={{}} warnings={{}} />;
+      metadataService={metadataService} formXmlService={formXmlService} errors={{}} warnings={{}} />;
   }
   await render(<Harness />);
   return () => current;
@@ -143,5 +144,46 @@ describe('DestinationSection — clicked tag source (W10)', () => {
     expect(host?.textContent?.toLowerCase()).toContain('determined by the clicked tag');
     expect(fieldLabel('Form')).toBeUndefined();
     expect(fieldLabel('Tab name')).toBeUndefined();
+  });
+});
+
+describe('DestinationSection — lookup destination copy', () => {
+  const lookups = [
+    { LogicalName: 'primarycontactid', Targets: ['contact'], DisplayName: { UserLocalizedLabel: { Label: 'Primary Contact' } } },
+    { LogicalName: 'parentcustomerid', Targets: ['account', 'contact'], DisplayName: { UserLocalizedLabel: { Label: 'Parent Customer' } } },
+  ];
+  const lookupService = () => Object.assign(makeMetadataService(), { listLookupAttributes: vi.fn().mockResolvedValue(lookups) });
+  // The Form combobox renders only once the table has forms; clear calls so each test proves its own request.
+  beforeEach(() => { getFormsForEntityResult.mockClear().mockResolvedValue({ ok: true, forms: [{ id: 'contact-main', name: 'Contact form' }] }); });
+  afterEach(() => { getFormsForEntityResult.mockResolvedValue({ ok: true, forms: [] }); });
+  const related = (attribute: string) => cfg({ trigger: { kind: 'GridRowSelect' }, host: { entityName: 'account' },
+    target: { pageType: 'entityrecord', entityName: '', formId: '', tabName: '', data: '', createNew: false },
+    context: { source: { kind: 'lookup', attribute } } });
+  // Field renders <div><label>Destination table</label>{children}…</div>, so the label's parent scopes the field.
+  const destinationStatus = () => Array.from(host!.querySelectorAll<HTMLElement>('[role="status"]'))
+    .find(status => fieldLabel('Destination table')?.parentElement?.contains(status))!;
+
+  it('says the Lookup column selector decides the table while no lookup is chosen', async () => {
+    await renderSection(related(''), lookupService());
+    expect(destinationStatus().textContent).toBe("Destination table is determined by the 'Lookup column' selector.");
+  });
+
+  it('shows the display name, then the lookup copy, and enables the form picker for that table', async () => {
+    const get = await renderSection(related(''), lookupService());
+    await chooseOption(host!, 'Lookup column', 'Primary Contact');
+    const status = destinationStatus();
+    expect(Array.from(status.children).map(line => line.textContent)).toEqual([
+      'Contact', 'Destination table: determined by the primarycontactid lookup.']);
+    expect(get().target).toMatchObject({ entityName: 'contact', formId: '', tabName: '' });
+    expect(host!.textContent).not.toContain('Choose a table to pick a form.');
+    expect(host!.querySelector<HTMLInputElement>('[role="combobox"][aria-label="Form"]')?.disabled).toBe(false);
+    expect(getFormsForEntityResult).toHaveBeenCalledWith('contact');
+  });
+
+  it('lists display names for a polymorphic lookup and keeps the form picker off', async () => {
+    await renderSection(related(''), lookupService());
+    await chooseOption(host!, 'Lookup column', 'Parent Customer');
+    expect(destinationStatus().textContent).toBe('Possible destination tables: Account, Contact. Determined by the selected row.');
+    expect(host!.textContent).toContain('Choose a table to pick a form.');
   });
 });

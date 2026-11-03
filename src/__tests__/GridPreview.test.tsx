@@ -602,7 +602,7 @@ describe('related-record cross-component transitions', () => {
     const configure = surface('configure');
     await expand(configure, 'Destination');
     await chooseOption(configure, 'Lookup column', 'Primary Contact (primarycontactid)');
-    expect(configure.textContent).toContain('Destination table: contact');
+    expect(configure.textContent).toContain('Destination table: determined by the primarycontactid lookup.');
     expect(host!.querySelector('[aria-label="shared config"]')?.textContent).toBe('account|primarycontactid|contact||');
     const tabField = Array.from(configure.querySelectorAll('label')).find(label => label.textContent?.includes('Tab name'))?.parentElement;
     expect(tabField?.querySelector('input')?.value).toBe('');
