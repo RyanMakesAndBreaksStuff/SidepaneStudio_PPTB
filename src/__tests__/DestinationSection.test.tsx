@@ -151,6 +151,7 @@ describe('DestinationSection — lookup destination copy', () => {
   const lookups = [
     { LogicalName: 'primarycontactid', Targets: ['contact'], DisplayName: { UserLocalizedLabel: { Label: 'Primary Contact' } } },
     { LogicalName: 'parentcustomerid', Targets: ['account', 'contact'], DisplayName: { UserLocalizedLabel: { Label: 'Parent Customer' } } },
+    { LogicalName: 'orphanid', Targets: [], DisplayName: { UserLocalizedLabel: { Label: 'Orphan' } } },
   ];
   const lookupService = () => Object.assign(makeMetadataService(), { listLookupAttributes: vi.fn().mockResolvedValue(lookups) });
   // The Form combobox renders only once the table has forms; clear calls so each test proves its own request.
@@ -187,6 +188,14 @@ describe('DestinationSection — lookup destination copy', () => {
     await renderSection(related(''), lookupService());
     await chooseOption(host!, 'Lookup column', 'Parent Customer');
     expect(destinationStatus().textContent).toBe('Possible destination tables: account, contact. Determined by the selected row.');
+    expect(host!.textContent).toContain('Choose a table to pick a form.');
+  });
+
+  it('says a lookup with no related tables has no destination, in the field and under the picker', async () => {
+    await renderSection(related(''), lookupService());
+    await chooseOption(host!, 'Lookup column', 'Orphan');
+    expect(destinationStatus().textContent).toBe('No destination table: the orphanid lookup has no related tables.');
+    expect(host!.textContent).toContain('The “orphanid” lookup has no related tables, so there is no record to open.');
     expect(host!.textContent).toContain('Choose a table to pick a form.');
   });
 });

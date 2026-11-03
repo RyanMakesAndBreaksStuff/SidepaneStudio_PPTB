@@ -208,12 +208,14 @@ export function DestinationSection({ config, onChange, metadataService, formXmlS
                       ? `Possible destination tables: ${resolvedTargets.join(', ')}. Determined by the selected row.`
                       : !source.attribute
                         ? "Destination table is determined by the 'Lookup column' selector."
-                        : target.entityName
-                          ? <>
-                              <div>{target.entityName}</div>
-                              <div>Saved table selection “{target.entityName}” is unconfirmed until the lookup is resolved.</div>
-                            </>
-                          : `Destination table: determined by the ${source.attribute} lookup.`
+                        : currentLookup
+                          ? `No destination table: the ${source.attribute} lookup has no related tables.`
+                          : target.entityName
+                            ? <>
+                                <div>{target.entityName}</div>
+                                <div>Saved table selection “{target.entityName}” is unconfirmed until the lookup is resolved.</div>
+                              </>
+                            : `Destination table: determined by the ${source.attribute} lookup.`
                   : source.kind === 'clickedTag'
                     ? 'Destination table: determined by the clicked tag.'
                     : `Destination table: ${destination || '(table)'}`}
