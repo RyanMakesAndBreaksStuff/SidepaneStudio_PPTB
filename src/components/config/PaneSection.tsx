@@ -13,11 +13,13 @@ import type { SectionSharedProps } from './TriggerSection';
 
 export type PaneSectionProps = SectionSharedProps & Pick<ConfigurePanelProps,
   'metadataFilterConfig' | 'defaultMetadataFilterConfig' | 'metadataFilterPersistenceAvailable' |
-  'metadataFilterError' | 'onSaveMetadataFilterConfig' | 'onResetMetadataFilterConfig'>;
+  'metadataFilterError' | 'onSaveMetadataFilterConfig' | 'onResetMetadataFilterConfig' |
+  'metadataFilterDraft' | 'onMetadataFilterDraftChange'>;
 
 export function PaneSection({ config, onChange, readOnly, errors, warnings, metadataFilterConfig,
   defaultMetadataFilterConfig, metadataFilterPersistenceAvailable = false, metadataFilterError,
-  onSaveMetadataFilterConfig, onResetMetadataFilterConfig }: PaneSectionProps): React.ReactElement {
+  onSaveMetadataFilterConfig, onResetMetadataFilterConfig, metadataFilterDraft,
+  onMetadataFilterDraftChange }: PaneSectionProps): React.ReactElement {
   const { isDark } = useTheme();
   const T = theme(isDark);
   const { pane, behavior, trigger } = config;
@@ -42,7 +44,9 @@ export function PaneSection({ config, onChange, readOnly, errors, warnings, meta
           <Input value={pane.imageSrc} disabled={readOnly} placeholder="WebResources/sps_/icons/myicon.svg"
             onChange={value => patchPane('imageSrc', value)} />
         </div>
-        {pane.imageSrc && <Callout type="warn" icon="⚠">Icon will render in the live app once the web resource is published. Showing placeholder in preview.</Callout>}
+        {warnings['pane.imageSrc']
+          ? <Callout type="warn" icon="⚠">{warnings['pane.imageSrc']}</Callout>
+          : pane.imageSrc.trim() !== '' && <Callout type="info" icon="ℹ">Preview loads this image.</Callout>}
       </Field>
       <Field label="Width" error={errors['pane.width']}
         hint={`Min ${MIN_CONFIG_WIDTH}px · Max ${MAX_CONFIG_WIDTH}px · Recommended 400–600px · Current: ${pane.width}px`}>
@@ -87,7 +91,8 @@ export function PaneSection({ config, onChange, readOnly, errors, warnings, meta
         <Field label="Metadata table filters">
           <MetadataFilterConfigEditor config={metadataFilterConfig} defaultConfig={defaultMetadataFilterConfig}
             persistenceAvailable={metadataFilterPersistenceAvailable} error={metadataFilterError}
-            onSave={onSaveMetadataFilterConfig} onReset={onResetMetadataFilterConfig} />
+            onSave={onSaveMetadataFilterConfig} onReset={onResetMetadataFilterConfig}
+            draft={metadataFilterDraft} onDraftChange={onMetadataFilterDraftChange} />
         </Field>
       )}
     </>

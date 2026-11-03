@@ -2,7 +2,7 @@ import { PaneDefinitionConfig, COMMAND_TRIGGERS, MAX_CONFIG_WIDTH, MIN_CONFIG_WI
 import { isValidLogicalName, normalizeGuid } from './odataGuards';
 import { parseFormData } from './formData';
 import { isConfigWidthValid, isJsIdentifier } from './configGuards';
-import { GENERATED_NAMES, resolveTriggerNames } from './CodeGenerationService';
+import { GENERATED_NAMES, normalizeImageSrc, resolveTriggerNames } from './CodeGenerationService';
 import { allowedSources, allowedTargets, isCreating, sendsRecord, TRIGGER_CAPABILITIES } from './triggerCapabilities';
 
 export interface ValidationError { field: string; message: string; }
@@ -16,7 +16,20 @@ function pushJsonObjectError(errors: ValidationError[], data: string, message: s
   try { parseFormData(data); } catch { errors.push({ field: 'target.data', message }); }
 }
 
-export function validate(config: PaneDefinitionConfig, accessibleTables?: Set<string>): ValidationResult {
+/** W20 — selections only exist in the org they were picked from; flag, never block, until the user confirms them here. */
+function pushOrgMismatchWarnings(warnings: ValidationWarning[], target: PaneDefinitionConfig['target']): void {
+  for (const [field, value, noun] of [
+    ['target.entityName', 'entityName' in target ? target.entityName : '', 'table'],
+    ['target.formId', target.pageType === 'entityrecord' ? target.formId : '', 'form'],
+    ['target.viewId', target.pageType === 'entitylist' ? target.viewId : '', 'view'],
+    ['target.pageId', target.pageType === 'generative' ? target.pageId : '', 'page'],
+  ] as const) {
+    if (value.trim()) warnings.push({ field, message: `This ${noun} was picked in a different environment. Confirm it exists here.` });
+  }
+}
+
+/** `orgMismatch` — the config was restored from another environment's save and the user has not confirmed it here. */
+export function validate(config: PaneDefinitionConfig, accessibleTables?: Set<string>, orgMismatch = false): ValidationResult {
   const errors: ValidationError[] = [];
   const warnings: ValidationWarning[] = [];
   const { pane, target, trigger, host, context, behavior } = config;
@@ -29,6 +42,8 @@ export function validate(config: PaneDefinitionConfig, accessibleTables?: Set<st
   // Pane
   if (!pane.paneId?.trim()) errors.push({ field: 'pane.paneId', message: 'Pane ID is required.' });
   if (!isConfigWidthValid(pane.width)) errors.push({ field: 'pane.width', message: `Pane width must be between ${MIN_CONFIG_WIDTH} and ${MAX_CONFIG_WIDTH} pixels.` });
+  // W11 — the generators drop a path they cannot emit safely; say so instead of silently omitting the icon.
+  if (pane.imageSrc.trim() && !normalizeImageSrc(pane.imageSrc)) warnings.push({ field: 'pane.imageSrc', message: 'Not emitted: path must be relative to WebResources.' });
 
   // The capability table is the owner; these only catch hand-edited configs.
   if (!allowedTargets(trigger.kind).includes(target.pageType)) {
@@ -85,8 +100,9 @@ export function validate(config: PaneDefinitionConfig, accessibleTables?: Set<st
     }
   }
   if ((target.pageType === 'entityrecord' || target.pageType === 'entitylist') && target.entityName.trim() && accessibleTables && !accessibleTables.has(target.entityName.trim())) {
-    warnings.push({ field: 'target.entityName', message: `Table "${target.entityName}" is no longer accessible in this app or for the current user.` });
+    warnings.push({ field: 'target.entityName', message: `Table "${target.entityName.trim()}" is not in the current table list for this environment.` });
   }
+  if (orgMismatch) pushOrgMismatchWarnings(warnings, target);
   if (target.pageType === 'generative') {
     if (!normalizeGuid(target.pageId)) errors.push({ field: 'target.pageId', message: 'Page ID must be the GUID of a generative page.' });
     pushJsonObjectError(errors, target.data, 'Page data must be a JSON object.');

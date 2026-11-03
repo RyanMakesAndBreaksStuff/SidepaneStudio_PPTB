@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { PaneDefinitionConfig, DEFAULT_CONFIG, PageType, TargetConfig } from './types/PaneDefinitionConfig';
-import { parseStoredConfig } from './services/configGuards';
+import { parseStoredConfig, parseStoredOrgKey } from './services/configGuards';
 import { coerceConfig } from './services/triggerCapabilities';
 import { WorkbenchShell } from './components/WorkbenchShell';
 import { PptbContextAdapter } from './adapters/PptbContextAdapter';
@@ -11,6 +11,7 @@ import {
   DEFAULT_METADATA_FILTER_CONFIG,
   MetadataFilterConfig,
 } from './types/MetadataFilterConfig';
+import type { MetadataFilterDraft } from './components/config/MetadataFilterConfigEditor';
 
 type ConnectionState =
   | { status: 'loading' }
@@ -43,6 +44,15 @@ const ORG_SCOPED_TARGET_FIELDS: {
   search: [],
 };
 
+/** W20 — the org a config is saved for: the normalized URL host. Null when the URL is unusable: nothing is saved or flagged. */
+function orgKeyOf(conn: ToolBoxAPI.Connection): string | null {
+  try {
+    return new URL(conn.url).host.toLowerCase() || null;
+  } catch {
+    return null;
+  }
+}
+
 /** Table, form, view, dashboard, page, and record selections only exist in the org they were picked from. */
 function clearOrgSelections(config: PaneDefinitionConfig): PaneDefinitionConfig {
   const { target, context: { source } } = config;
@@ -59,6 +69,14 @@ function clearOrgSelections(config: PaneDefinitionConfig): PaneDefinitionConfig 
   });
 }
 
+/** W20 — the values clearOrgSelections clears, as one comparable string; a change to any of them is a re-pick. */
+function orgSelectionsOf(config: PaneDefinitionConfig): string {
+  const { target, host, context: { source } } = config;
+  const targetValues = (ORG_SCOPED_TARGET_FIELDS[target.pageType] as readonly string[])
+    .map(field => (target as Record<string, unknown>)[field]);
+  return JSON.stringify([targetValues, host, source.kind === 'fixed' || source.kind === 'lookup' ? source : null]);
+}
+
 export function SidePaneBuilderWorkbench(): React.ReactElement {
   const [config, setConfig] = useState<PaneDefinitionConfig>(DEFAULT_CONFIG);
   const [previewEpoch, setPreviewEpoch] = useState(0);
@@ -73,6 +91,16 @@ export function SidePaneBuilderWorkbench(): React.ReactElement {
   );
   const [metadataFilterPersistenceAvailable, setMetadataFilterPersistenceAvailable] = useState(false);
   const [metadataFilterError, setMetadataFilterError] = useState<string | null>(null);
+  // Unsaved filter edits live above every remount: Section collapse, panel collapse, connection change.
+  const [metadataFilterDraft, setMetadataFilterDraft] = useState<MetadataFilterDraft | null>(null);
+  // W20 — org of the active connection, and a restored config's org with the selections it was restored with.
+  // Null once confirmed: "Use anyway", a re-pick of any org-scoped selection, a live org switch, or Reset.
+  const [activeOrgKey, setActiveOrgKey] = useState<string | null>(null);
+  const [restoredOrg, setRestoredOrg] = useState<{ orgKey: string; selections: string } | null>(null);
+  // A selection re-picked here belongs to the active org, which confirms the restore; adjusted during render so it sticks.
+  if (restoredOrg && restoredOrg.selections !== orgSelectionsOf(config)) setRestoredOrg(null);
+  const savedOrgKey = restoredOrg?.orgKey ?? null;
+  const orgMismatch = savedOrgKey !== null && activeOrgKey !== null && savedOrgKey !== activeOrgKey;
   const configDirtyRef = useRef(false);
   const restoreAttemptRef = useRef(0);
 
@@ -130,8 +158,10 @@ export function SidePaneBuilderWorkbench(): React.ReactElement {
           if (connectionId !== null && connectionId !== conn.id) {
             configDirtyRef.current = true;
             setConfig(clearOrgSelections);
+            setRestoredOrg(null);
           }
           connectionId = conn.id;
+          setActiveOrgKey(orgKeyOf(conn));
         }
         setConnectionState(conn ? { status: 'ready' } : {
           status: 'error',
@@ -192,8 +222,11 @@ export function SidePaneBuilderWorkbench(): React.ReactElement {
       if (attempt !== restoreAttemptRef.current) return;
       if (!configDirtyRef.current) {
         const stored = parseStoredConfig(raw);
-        if (stored) setConfig(stored);
-        else if (raw) console.warn('SidePaneBuilderWorkbench: unusable stored config, using defaults');
+        if (stored) {
+          setConfig(stored);
+          const orgKey = parseStoredOrgKey(raw);
+          setRestoredOrg(orgKey ? { orgKey, selections: orgSelectionsOf(stored) } : null);
+        } else if (raw) console.warn('SidePaneBuilderWorkbench: unusable stored config, using defaults');
       }
       setSettingsHydrated(true);
     } catch (err) {
@@ -209,16 +242,18 @@ export function SidePaneBuilderWorkbench(): React.ReactElement {
     return () => { ++restoreAttemptRef.current; };
   }, [restoreConfig]);
 
-  // Persist config to PPTB settings, debounced 500ms
+  // Persist config to PPTB settings, debounced 500ms. An unconfirmed restore keeps the org it was saved for;
+  // an unknown active org saves no key, like a legacy payload.
+  const persistOrgKey = activeOrgKey === null ? null : savedOrgKey ?? activeOrgKey;
   useEffect(() => {
     const toolbox = window.toolboxAPI;
     if (!toolbox || !settingsHydrated || !configDirtyRef.current) return;
     const id = setTimeout(() => {
-      toolbox.settings.set('lastConfig', JSON.stringify(config))
+      toolbox.settings.set('lastConfig', JSON.stringify(persistOrgKey ? { ...config, orgKey: persistOrgKey } : config))
         .catch((err: unknown) => reportSettingsFailure('Saving your configuration', err));
     }, 500);
     return () => clearTimeout(id);
-  }, [config, settingsHydrated]);
+  }, [config, settingsHydrated, persistOrgKey]);
 
   const handleChange = useCallback(
     (updater: (prev: PaneDefinitionConfig) => PaneDefinitionConfig) => {
@@ -234,6 +269,7 @@ export function SidePaneBuilderWorkbench(): React.ReactElement {
     setSettingsHydrated(true);
     configDirtyRef.current = false;
     setConfig(DEFAULT_CONFIG);
+    setRestoredOrg(null);
     setPreviewEpoch(value => value + 1);
     const toolbox = window.toolboxAPI;
     try {
@@ -246,6 +282,12 @@ export function SidePaneBuilderWorkbench(): React.ReactElement {
     } catch (err) {
       reportSettingsFailure('Clearing your saved configuration', err);
     }
+  }, []);
+
+  // "Use anyway" adopts the restored selections for the active org and saves that choice.
+  const handleConfirmOrgMismatch = useCallback(() => {
+    configDirtyRef.current = true;
+    setRestoredOrg(null);
   }, []);
 
   const handleSaveMetadataFilterConfig = useCallback(async (nextConfig: MetadataFilterConfig) => {
@@ -338,7 +380,11 @@ export function SidePaneBuilderWorkbench(): React.ReactElement {
       metadataFilterError={metadataFilterError}
       onSaveMetadataFilterConfig={handleSaveMetadataFilterConfig}
       onResetMetadataFilterConfig={handleResetMetadataFilterConfig}
+      metadataFilterDraft={metadataFilterDraft}
+      onMetadataFilterDraftChange={setMetadataFilterDraft}
       previewEpoch={previewEpoch}
+      orgMismatch={orgMismatch}
+      onConfirmOrgMismatch={handleConfirmOrgMismatch}
     />
   );
 }

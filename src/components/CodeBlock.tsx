@@ -10,14 +10,18 @@ import { copyText } from '../services/clipboard';
 export interface CodeBlockProps {
   code: string;
   lang?: 'js' | 'json' | 'text';
+  /** W20 — the code stays readable, but copying waits for a confirmation the caller owns. */
+  copyDisabled?: boolean;
 }
 
 type HlSpan = { start: number; end: number; color: string; italic?: boolean };
 
-function collectSpans(safe: string, patterns: Array<{ re: RegExp; color: string; italic?: boolean }>): HlSpan[] {
+// Patterns run over the raw code; only renderSpans escapes, slice by slice. Tokenizing escaped
+// text split entities such as &#39; across spans and leaked them as visible text (ffaacfa, 5f95b64).
+function collectSpans(code: string, patterns: Array<{ re: RegExp; color: string; italic?: boolean }>): HlSpan[] {
   const spans: HlSpan[] = [];
   for (const { re, color, italic } of patterns) {
-    for (const m of safe.matchAll(re)) {
+    for (const m of code.matchAll(re)) {
       spans.push({ start: m.index!, end: m.index! + m[0].length, color, italic });
     }
   }
@@ -30,39 +34,38 @@ function collectSpans(safe: string, patterns: Array<{ re: RegExp; color: string;
   return accepted;
 }
 
-function renderSpans(safe: string, spans: HlSpan[]): string {
+function renderSpans(code: string, spans: HlSpan[]): string {
   let out = '';
   let pos = 0;
   for (const s of spans) {
-    out += safe.slice(pos, s.start);
+    out += escapeHtml(code.slice(pos, s.start));
     const style = `color:${s.color}${s.italic ? ';font-style:italic' : ''}`;
-    out += `<span style="${style}">${safe.slice(s.start, s.end)}</span>`;
+    out += `<span style="${style}">${escapeHtml(code.slice(s.start, s.end))}</span>`;
     pos = s.end;
   }
-  return out + safe.slice(pos);
+  return out + escapeHtml(code.slice(pos));
 }
 
 function highlight(code: string, lang: string): string {
-  const safe = escapeHtml(code);
-  if (lang === 'text') return safe;
+  if (lang === 'text') return escapeHtml(code);
   if (lang === 'json') {
-    return renderSpans(safe, collectSpans(safe, [
-      { re: /&quot;(?:[^&]|&(?!quot;))*&quot;(?=\s*:)/g, color: '#9CDCFE' },
-      { re: /(?<=:\s*)&quot;(?:[^&]|&(?!quot;))*&quot;/g, color: '#CE9178' },
+    return renderSpans(code, collectSpans(code, [
+      { re: /"(?:[^"\\]|\\.)*"(?=\s*:)/g, color: '#9CDCFE' },
+      { re: /(?<=:\s*)"(?:[^"\\]|\\.)*"/g, color: '#CE9178' },
       { re: /(?<=:\s*)(true|false|null)/g, color: '#569CD6' },
       { re: /(?<=:\s*)-?\d+\.?\d*/g, color: '#B5CEA8' },
     ]));
   }
-  return renderSpans(safe, collectSpans(safe, [
+  return renderSpans(code, collectSpans(code, [
     { re: /\/\/[^\n]*/g, color: '#6A9955', italic: true },
     { re: /\/\*[\s\S]*?\*\//g, color: '#6A9955', italic: true },
-    { re: /&quot;(?:[^&]|\\.)*&quot;/g, color: '#CE9178' },
+    { re: /"(?:[^"\\\n]|\\.)*"/g, color: '#CE9178' },
     { re: /\b(var|let|const|function|async|await|return|if|delete|window|true|false|null)\b/g, color: '#569CD6' },
     { re: /\b\d+\b/g, color: '#B5CEA8' },
   ]));
 }
 
-export function CodeBlock({ code, lang = 'js' }: CodeBlockProps): React.ReactElement {
+export function CodeBlock({ code, lang = 'js', copyDisabled = false }: CodeBlockProps): React.ReactElement {
   const { isDark } = useTheme();
   const T = theme(isDark);
   const [copied, setCopied] = useState(false);
@@ -118,12 +121,14 @@ export function CodeBlock({ code, lang = 'js' }: CodeBlockProps): React.ReactEle
             </button>
             <button
               onClick={copy}
+              disabled={copyDisabled}
               style={{
                 display: 'flex', alignItems: 'center', gap: 4,
                 padding: '3px 9px', background: 'rgba(255,255,255,.08)',
                 border: '1px solid rgba(255,255,255,.12)', borderRadius: T.rS,
                 color: copied ? '#4EC9B0' : 'rgba(255,255,255,.75)',
-                fontSize: 11, fontFamily: T.font, cursor: 'pointer',
+                fontSize: 11, fontFamily: T.font, cursor: copyDisabled ? 'not-allowed' : 'pointer',
+                opacity: copyDisabled ? 0.5 : 1,
               }}
             >
               {copied ? '✓ Copied!' : '📋 Copy'}

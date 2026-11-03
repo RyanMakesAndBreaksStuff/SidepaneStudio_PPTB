@@ -70,6 +70,20 @@ function stringArray(value: unknown): string[] {
 }
 
 /**
+ * W20 — the org a stored config was saved for; the workbench writes it alongside the config fields, which
+ * parseStoredConfig ignores. A legacy payload or an unusable value is an unknown org, never a mismatch.
+ */
+export function parseStoredOrgKey(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return isRecord(parsed) && typeof parsed.orgKey === 'string' && parsed.orgKey ? parsed.orgKey : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Parse a config previously written to toolboxAPI settings. Settings are an untrusted
  * input: they survive tool upgrades, can be hand-edited, and a wrong-shaped object
  * reaching React state crashes the whole tree. Returns null when the value cannot be

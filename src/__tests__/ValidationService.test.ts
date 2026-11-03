@@ -196,13 +196,16 @@ describe('validate — table accessibility', () => {
     expect(warned(cfg({ target: list, context: none }), new Set(['account']))).not.toContain('target.entityName');
   });
 
-  it('warns without blocking when the selected table is no longer accessible', () => {
+  it('warns without blocking when the selected table is not in the current table list', () => {
     const r = validate(
       cfg({ trigger: { kind: 'ManualJS' }, target: record(), context: { source: { kind: 'fixed', entityName: '', id: guid } } }),
       new Set(['contact']),
     );
     expect(r.isValid).toBe(true);
-    expect(r.warnings.map(w => w.field)).toContain('target.entityName');
+    expect(r.warnings).toContainEqual({
+      field: 'target.entityName',
+      message: 'Table "account" is not in the current table list for this environment.',
+    });
   });
 
   it('warns for an inaccessible entity list table too', () => {
@@ -695,5 +698,44 @@ describe('validate — ordered multi-issue groups', () => {
       { field: 'target.data', message: 'Form data must be a JSON object.' },
     ]);
     expect(result.isValid).toBe(false);
+  });
+});
+
+describe('validate — pane.imageSrc the generator drops (W11)', () => {
+  it.each(['https://evil.test/x.svg', '/sps_/icons/x.svg', '../x.svg', 'javascript:alert(1)'])(
+    'warns that %p is not emitted', imageSrc => {
+      const result = validate(cfg({ pane: { imageSrc } }));
+      expect(result.warnings).toContainEqual({ field: 'pane.imageSrc', message: 'Not emitted: path must be relative to WebResources.' });
+      expect(result.errors.map(e => e.field)).not.toContain('pane.imageSrc');
+    });
+
+  it.each(['', '   ', 'sps_/icons/pane.svg', 'WebResources/sps_/icons/pane.svg'])('does not warn for %p', imageSrc => {
+    expect(warned(cfg({ pane: { imageSrc } }))).not.toContain('pane.imageSrc');
+  });
+});
+
+describe('validate — selections restored from another environment (W20)', () => {
+  const formRecord = cfg({ target: record({ formId: guid }) });
+  const view = cfg({ trigger: { kind: 'ManualJS' }, target: { pageType: 'entitylist', entityName: 'account', viewId: guid, viewType: 'savedquery' }, context: none });
+  const page = cfg({ trigger: { kind: 'ManualJS' }, target: { pageType: 'generative', pageId: guid, data: '' }, context: none });
+
+  it.each([
+    ['entityrecord', formRecord, ['target.entityName', 'target.formId']],
+    ['entitylist', view, ['target.entityName', 'target.viewId']],
+    ['generative', page, ['target.pageId']],
+  ] as const)('warns, without blocking, on every set %s selection', (_label, config, expected) => {
+    const result = validate(config, undefined, true);
+    const flagged = result.warnings.filter(w => w.message.includes('different environment')).map(w => w.field);
+    expect(flagged).toEqual(expected);
+    expect(result.errors).toEqual(validate(config).errors);
+  });
+
+  it('flags nothing that is unset', () => {
+    const result = validate(cfg({ target: record({ entityName: '', formId: '' }) }), undefined, true);
+    expect(result.warnings.filter(w => w.message.includes('different environment'))).toEqual([]);
+  });
+
+  it('flags nothing when the config was saved for this environment', () => {
+    expect(validate(formRecord).warnings.filter(w => w.message.includes('different environment'))).toEqual([]);
   });
 });

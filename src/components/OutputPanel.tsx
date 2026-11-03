@@ -19,6 +19,8 @@ export interface OutputPanelProps {
   config: PaneDefinitionConfig;
   xrm: IXrmContext;
   validation: ValidationResult;
+  /** W20 — the config was restored from another environment's save; copying waits until the user confirms it. */
+  copyBlocked?: boolean;
 }
 
 
@@ -35,7 +37,7 @@ const TABS = [
 ];
 const PROMPT_TAB = { id: 'prompt', label: 'Page prompt' };
 
-export const OutputPanel = React.memo(function OutputPanel({ config, xrm, validation }: OutputPanelProps): React.ReactElement {
+export const OutputPanel = React.memo(function OutputPanel({ config, xrm, validation, copyBlocked = false }: OutputPanelProps): React.ReactElement {
   const { isDark } = useTheme();
   const T = theme(isDark);
 
@@ -123,6 +125,9 @@ export const OutputPanel = React.memo(function OutputPanel({ config, xrm, valida
 
       {/* Tab content */}
       <div style={{ flex: 1, overflowY: 'auto', padding: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {copyBlocked && (
+          <Callout type="warn" icon="⚠">Copy is disabled until you confirm the environment warning with <strong>Use anyway</strong>.</Callout>
+        )}
 
         {/* Basic Script */}
         {currentTab === 'basic' && (
@@ -130,7 +135,7 @@ export const OutputPanel = React.memo(function OutputPanel({ config, xrm, valida
             <SummaryCard
               title="📋 What this script does"
               body={describeConfigText(config)}
-              steps={deploySteps(config.trigger)}
+              steps={deploySteps(config.trigger, 'basic')}
             />
             {validation.errors.length > 0 && (
               <Callout type="err" icon="✕">
@@ -142,7 +147,7 @@ export const OutputPanel = React.memo(function OutputPanel({ config, xrm, valida
                 <strong>closeOthers is active:</strong> The generated script closes all other side panes after opening this one.
               </Callout>
             )}
-            {validation.errors.length === 0 && <CodeBlock code={basicCode} lang="js" />}
+            {validation.errors.length === 0 && <CodeBlock code={basicCode} lang="js" copyDisabled={copyBlocked} />}
           </>
         )}
 
@@ -172,14 +177,14 @@ export const OutputPanel = React.memo(function OutputPanel({ config, xrm, valida
             <SummaryCard
               title="📚 Shared library version"
               body={<>Shorter snippet that calls the pre-deployed <strong>SidePaneHelper</strong> runtime.</>}
-              steps={deploySteps(config.trigger)}
+              steps={deploySteps(config.trigger, 'library')}
             />
             {validation.errors.length > 0 && (
               <Callout type="err" icon="✕">
                 Fix {validation.errors.length} validation error{validation.errors.length > 1 ? 's' : ''} before using this code: {validation.errors[0].message}
               </Callout>
             )}
-            {validation.errors.length === 0 && <CodeBlock code={libCode} lang="js" />}
+            {validation.errors.length === 0 && <CodeBlock code={libCode} lang="js" copyDisabled={copyBlocked} />}
           </>
         )}
 
@@ -196,7 +201,7 @@ export const OutputPanel = React.memo(function OutputPanel({ config, xrm, valida
               body="Add this to the page's prompt in the app agent so the page accepts what this script sends. The agent is not deterministic: test the page after it regenerates."
             />
             {pagePrompt
-              ? <CodeBlock code={pagePrompt} lang="text" />
+              ? <CodeBlock code={pagePrompt} lang="text" copyDisabled={copyBlocked} />
               : <Callout type="info" icon="ℹ">This script sends no input parameters, so the page needs no prompt changes for them.</Callout>}
           </>
         )}
@@ -227,7 +232,7 @@ export const OutputPanel = React.memo(function OutputPanel({ config, xrm, valida
               <Callout type="info" icon="ℹ">
                 Resolved <code>PaneDefinitionConfig</code> — for debugging and diagnostics only.
               </Callout>
-              {validation.errors.length === 0 && <CodeBlock code={rawCode} lang="json" />}
+              {validation.errors.length === 0 && <CodeBlock code={rawCode} lang="json" copyDisabled={copyBlocked} />}
             </div>
           )}
         </div>

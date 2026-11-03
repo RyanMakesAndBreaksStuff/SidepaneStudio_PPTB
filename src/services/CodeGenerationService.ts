@@ -2,6 +2,7 @@ import { PaneDefinitionConfig, TriggerKind, COMMAND_TRIGGERS, GRID_TRIGGERS, REC
 import { normalizeGuid } from './odataGuards';
 import { isJsIdentifier, normalizeConfigWidth } from './configGuards';
 import { isSafeRelativeImagePath } from '../components/previewHelpers';
+import { RUNTIME_FILE_NAME } from '../constants';
 
 const GRID_KINDS = GRID_TRIGGERS;
 const GRID_SELECT_KINDS: readonly TriggerKind[] = ['GridRowSelect'];
@@ -9,13 +10,15 @@ const INVALID_ID_EXPR = `(function() { throw new Error('A valid static record ID
 
 /** Guard variable name — namespaced to avoid collisions with other scripts. */
 const PENDING_VAR = 'window.__spstudio_pendingPanes';
+/** codegen-config-model-002 — the row selected while a pane is opening; GridRowSelect opens it once the lock clears. */
+const LATEST_VAR = 'window.__spstudio_latestSelection';
 /** Milliseconds a pending-panes lock is considered valid before expiring. */
 const PENDING_TTL_MS = 2000;
 /** Every identifier the generated scripts declare, receive or call; the record variable and namespace names may not shadow them. */
 export const GENERATED_NAMES: ReadonlySet<string> = new Set([
   'allPanes', 'eventArgs', 'existing', 'formContext', 'pane', 'primaryControl', 'relatedAttribute',
-  'relatedRecord', 'relatedSource', 'selectedEntity', 'selectedPane', 'selectedRecordId',
-  'selectedRows', 'tag', 'executionContext', 'control', 'name', 'e', 'p',
+  'relatedRecord', 'relatedSource', 'selectedControl', 'selectedEntity', 'selectedPane', 'selectedRecordId',
+  'selectedRows', 'latestSelection', 'lockedAt', 'tag', 'executionContext', 'control', 'name', 'e', 'p',
   'Xrm', 'window', 'SidePaneHelper', 'console', 'JSON', 'Error', 'Promise', 'Date',
   'encodeURIComponent', 'setTimeout', 'clearTimeout', 'undefined', 'arguments',
 ]);
@@ -25,8 +28,11 @@ function safeIdentifier(value: string, fallback: string): string {
   return isJsIdentifier(trimmed) && !GENERATED_NAMES.has(trimmed) ? trimmed : fallback;
 }
 
-/** WR-002 / contract C3 — official imageSrc samples use the WebResources/ relative form. WR-013 — a path outside the allow-list emits nothing. */
-function normalizeImageSrc(value: string): string {
+/**
+ * WR-002 / contract C3 — official imageSrc samples use the WebResources/ relative form. WR-013 — a path outside the
+ * allow-list emits nothing; validation uses this same function to warn when a non-empty path is dropped.
+ */
+export function normalizeImageSrc(value: string): string {
   const trimmed = value.trim();
   if (!trimmed || !isSafeRelativeImagePath(trimmed)) return '';
   return trimmed.startsWith('WebResources/') ? trimmed : `WebResources/${trimmed}`;
@@ -342,8 +348,10 @@ function buildGetOrCreateBody(config: PaneDefinitionConfig, indent = '  '): stri
   const navInput = buildNavigateInput(config, declared.rc);
   const stateAssign = buildStateAssignment(config);
   const paneIdJson = JSON.stringify(pane.paneId);
+  // codegen-config-model-003 — isSelected: false keeps a reused pane in the background too.
+  const selectExisting = pane.isSelected === false ? '' : ' existing.select();';
   const reuseCheck = behavior.reuseExistingPane
-    ? `${indent}var existing = Xrm.App.sidePanes.getPane(${paneIdJson});\n${indent}if (existing) { await existing.navigate(${navInput}); existing.select(); } else {\n`
+    ? `${indent}var existing = Xrm.App.sidePanes.getPane(${paneIdJson});\n${indent}if (existing) { await existing.navigate(${navInput});${selectExisting} } else {\n`
     : `${indent}var existing = Xrm.App.sidePanes.getPane(${paneIdJson});\n${indent}if (existing) { existing.close(); await Promise.resolve(); }\n`;
 
   const badgeAssign = pane.badgeValue
@@ -412,8 +420,16 @@ function gridRowPreamble(kind: TriggerKind): string {
     return `  var selectedEntity = executionContext.getEventSource();\n  var selectedRecordId = selectedEntity.getId();\n`;
   }
   if (kind !== 'GridButton') return '';
+  // codegen-config-model-001 — SelectedControl is the grid context for main grids and subgrids; a command that
+  // passes PrimaryControl first (the form, on a subgrid) still finds the grid as the second argument. With no grid at all,
+  // the user is told which parameter to add instead of seeing a TypeError.
+  // https://learn.microsoft.com/power-apps/developer/model-driven-apps/pass-data-page-parameter-ribbon-actions#form-and-grid-context-in-ribbon-actions
+  const noGrid = `!selectedControl || typeof selectedControl.getGrid !== 'function'`;
+  const missingGrid = JSON.stringify('This command needs the grid. In Command Designer, add SelectedControl as the first Action parameter.');
   return (
-    `  var selectedRows = primaryControl.getGrid().getSelectedRows();\n` +
+    `  if (${noGrid}) selectedControl = arguments[1];\n` +
+    `  if (${noGrid}) { Xrm.Navigation.openErrorDialog({ message: ${missingGrid} }); return; }\n` +
+    `  var selectedRows = selectedControl.getGrid().getSelectedRows();\n` +
     `  if (!selectedRows || selectedRows.getLength() === 0) { return; }\n` +
     `  var selectedEntity = selectedRows.get(0).getData().getEntity();\n` +
     `  var selectedRecordId = selectedEntity.getId();\n`
@@ -434,14 +450,32 @@ function lookupTagPreamble(config: PaneDefinitionConfig): string {
 function generateGridButtonScript(config: PaneDefinitionConfig, { segments, ns, fn }: ResolvedTriggerNames): string {
   const body = buildGetOrCreateBody(config, '    ');
   const paneIdJson = JSON.stringify(config.pane.paneId);
-  const arg = GRID_SELECT_KINDS.includes(config.trigger.kind) ? 'executionContext' : 'primaryControl';
+  const onSelect = GRID_SELECT_KINDS.includes(config.trigger.kind);
+  const arg = onSelect ? 'executionContext' : 'selectedControl';
+  // codegen-config-model-002 — row selection is latest-wins: a row selected while a pane opens is opened when it finishes.
+  // Each selection owns its lock by timestamp, so a call that outlives its lock neither releases a newer call's lock
+  // nor replays a selection that newer call superseded. A replay that throws (a stale context) is logged, never left
+  // unhandled. Grid buttons keep dropping a repeat click.
+  const pending = `${PENDING_VAR}[${paneIdJson}]`;
+  const latest = `${LATEST_VAR}[${paneIdJson}]`;
+  const whenLocked = onSelect ? `{ ${latest} = executionContext; return; }` : 'return;';
+  const takeLock = onSelect
+    ? `  var lockedAt = Date.now();\n  ${pending} = lockedAt;\n  delete ${latest};\n`
+    : `  ${pending} = Date.now();\n`;
+  const releaseLock = onSelect
+    ? `      if (${pending} === lockedAt) {\n` +
+      `        delete ${pending};\n` +
+      `        var latestSelection = ${latest};\n` +
+      `        delete ${latest};\n` +
+      `        if (latestSelection) { try { ${ns}.${fn}(latestSelection); } catch(e) { console.error(${JSON.stringify(`${ns}.${fn}`)}, e); } }\n` +
+      `      }`
+    : `      delete ${pending};`;
 
   return `${namespaceDeclaration(segments)}
-${PENDING_VAR} = ${PENDING_VAR} || {};
+${PENDING_VAR} = ${PENDING_VAR} || {};${onSelect ? `\n${LATEST_VAR} = ${LATEST_VAR} || {};` : ''}
 ${ns}.${fn} = function(${arg}) {
-${gridRowPreamble(config.trigger.kind)}  if (${PENDING_VAR}[${paneIdJson}] && (Date.now() - ${PENDING_VAR}[${paneIdJson}]) < ${PENDING_TTL_MS}) return;
-  ${PENDING_VAR}[${paneIdJson}] = Date.now();
-  (async function() {
+${gridRowPreamble(config.trigger.kind)}  if (${pending} && (Date.now() - ${pending}) < ${PENDING_TTL_MS}) ${whenLocked}
+${takeLock}  (async function() {
     try {
 ${body
   .split('\n')
@@ -450,7 +484,7 @@ ${body
     } catch(e) {
       ${buildCatchBody(`${ns}.${fn}`, '      ')}
     } finally {
-      delete ${PENDING_VAR}[${paneIdJson}];
+${releaseLock}
     }
   })();
 };`;
@@ -558,9 +592,18 @@ export function generateLibraryScript(config: PaneDefinitionConfig): string {
       ? 'executionContext'
       : trigger.kind === 'ManualJS'
         ? ''
-        : 'primaryControl';
+        : trigger.kind === 'GridButton'
+          ? 'selectedControl'
+          : 'primaryControl';
 
   const lookupRegistration = trigger.kind === 'LookupTagClick' ? buildLookupRegistrar(ns, fn, config.host.lookupControls) : '';
+  // codegen-config-model-006 — a missing runtime is reported, not thrown; commands tell the user, other triggers log.
+  const missingRuntime = JSON.stringify(`SidePaneHelper library (${RUNTIME_FILE_NAME}) is not loaded.`);
+  const runtimeGuard = `  if (typeof SidePaneHelper === 'undefined') { ${COMMAND_TRIGGERS.includes(trigger.kind)
+    ? `Xrm.Navigation.openErrorDialog({ message: ${missingRuntime} });`
+    : `console.error(${missingRuntime});`} return; }\n`;
+  // codegen-config-model-008 — ManualJS output is pasted into the console, so it runs the function it defines.
+  const manualInvocation = trigger.kind === 'ManualJS' ? `\n${ns}.${fn}();` : '';
 
   const openCall = `  SidePaneHelper.open({\n${fields.map(field => `    ${formatField(field)}`).join(',\n')}\n  });\n`;
   const relatedPreamble = buildRelatedRecordPreamble(config, '      ', formContextExpr);
@@ -572,5 +615,5 @@ export function generateLibraryScript(config: PaneDefinitionConfig): string {
 
   return `${namespaceDeclaration(segments)}
 ${ns}.${fn} = function(${param}) {
-${lookupTagPreamble(config)}${gridRowPreamble(trigger.kind)}${body}};${lookupRegistration}`;
+${runtimeGuard}${lookupTagPreamble(config)}${gridRowPreamble(trigger.kind)}${body}};${lookupRegistration}${manualInvocation}`;
 }
