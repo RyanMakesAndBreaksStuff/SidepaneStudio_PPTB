@@ -26,7 +26,7 @@ async function navigate(c: PaneDefinitionConfig, library: boolean) {
     App: { sidePanes: { getPane: () => undefined, createPane: async () => ({ navigate: navigation }), state: 0 } },
     Navigation: { openErrorDialog: error },
   });
-  const primaryControl = { getGrid: () => ({ getSelectedRows: () => ({
+  const selectedControl = { getGrid: () => ({ getSelectedRows: () => ({
     getLength: () => 1,
     get: () => ({ getData: () => ({ getEntity: () => ({ getId: () => otherId, getEntityName: () => 'account' }) }) }),
   }) }) };
@@ -36,11 +36,14 @@ async function navigate(c: PaneDefinitionConfig, library: boolean) {
     (0, eval)(runtimeSource);
     if (onSelect) {
       new Function('executionContext', `${generateLibraryScript(c)}; return ParameterTest.open(executionContext);`)(executionContext);
+    } else if (c.trigger.kind === 'GridButton') {
+      new Function('selectedControl', `${generateLibraryScript(c)}; return ParameterTest.open(selectedControl);`)(selectedControl);
     } else {
-      new Function('primaryControl', `${generateLibraryScript(c)}; return ParameterTest.open(primaryControl);`)(primaryControl);
+      // ManualJS library output calls itself, as the Basic console snippet does.
+      new Function(generateLibraryScript(c))();
     }
   } else if (c.trigger.kind === 'GridButton') {
-    new Function('primaryControl', `${generateBasicScript(c)}; return ParameterTest.open(primaryControl);`)(primaryControl);
+    new Function('selectedControl', `${generateBasicScript(c)}; return ParameterTest.open(selectedControl);`)(selectedControl);
   } else if (onSelect) {
     new Function('executionContext', `${generateBasicScript(c)}; return ParameterTest.open(executionContext);`)(executionContext);
   } else {
