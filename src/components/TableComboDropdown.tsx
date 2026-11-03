@@ -87,6 +87,8 @@ export function TableComboDropdown({
               id={`${optionIdPrefix}-${idx}`}
               type="button"
               role="option"
+              // Keyboard users move through options from the input (aria-activedescendant), never by Tab.
+              tabIndex={-1}
               data-idx={idx}
               aria-selected={isSelected}
               onMouseEnter={() => onHighlight(idx)}
@@ -94,6 +96,8 @@ export function TableComboDropdown({
                 e.preventDefault();
                 onCommit(entry.table.logicalName);
               }}
+              // A click without a preceding mousedown (assistive tech, synthetic activation) must commit too.
+              onClick={() => onCommit(entry.table.logicalName)}
               style={{
                 width: '100%',
                 display: 'flex',

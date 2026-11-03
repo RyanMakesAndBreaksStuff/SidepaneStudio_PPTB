@@ -3,6 +3,7 @@ import * as React from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 import { theme } from '../theme/tokens';
 import { MIN_CONFIG_WIDTH, MAX_CONFIG_WIDTH } from '../types/PaneDefinitionConfig';
+import { useFieldControl } from './Field';
 
 export interface WidthPickerProps {
   value: number;
@@ -24,6 +25,7 @@ export function WidthPicker({
   const { isDark } = useTheme();
   const T = theme(isDark);
 
+  const control = useFieldControl();
   const [draft, setDraft] = React.useState(String(value));
   React.useEffect(() => setDraft(String(value)), [value]);
 
@@ -47,6 +49,7 @@ export function WidthPicker({
     <>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <input
+          {...control}
           type="range"
           min={min}
           max={max}

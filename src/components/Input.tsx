@@ -3,6 +3,7 @@ import * as React from 'react';
 import { useState } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 import { theme } from '../theme/tokens';
+import { useFieldControl } from './Field';
 
 export interface InputProps {
   value: string | number;
@@ -17,9 +18,12 @@ export function Input({ value, onChange, placeholder, type = 'text', disabled, e
   const { isDark } = useTheme();
   const T = theme(isDark);
   const [focused, setFocused] = useState(false);
+  const control = useFieldControl();
 
   return (
     <input
+      {...control}
+      aria-invalid={error || control['aria-invalid'] || undefined}
       type={type}
       value={value}
       onChange={e => onChange(e.target.value)}

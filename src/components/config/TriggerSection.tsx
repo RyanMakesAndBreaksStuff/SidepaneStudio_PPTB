@@ -32,14 +32,14 @@ export function TriggerSection({ config, onChange, metadataService, readOnly, on
   return (
     <>
       <Field label="Trigger type" required>
-        <ChoiceGroup name="triggerKind"
+        <ChoiceGroup label="Trigger type"
           options={TRIGGER_KINDS.map(kind => ({ value: kind, label: TRIGGER_CAPABILITIES[kind].label, desc: TRIGGER_CAPABILITIES[kind].desc }))}
           value={trigger.kind}
           onChange={value => onChange(prev => ({ ...prev, trigger: { ...prev.trigger, kind: value as TriggerKind } }))} />
       </Field>
       {caps.family === 'grid' && (
         <Field label="Grid surface">
-          <ChoiceGroup name="gridSurface" options={[
+          <ChoiceGroup label="Grid surface" options={[
             { value: 'main', label: 'Main grid' }, { value: 'subgrid', label: 'Subgrid' },
           ]} value={trigger.surface}
             onChange={surface => onChange(prev => TRIGGER_CAPABILITIES[prev.trigger.kind].family !== 'grid' ? prev

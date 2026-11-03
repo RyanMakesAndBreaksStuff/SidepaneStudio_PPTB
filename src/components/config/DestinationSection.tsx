@@ -101,9 +101,10 @@ export function DestinationSection({ config, onChange, metadataService, formXmlS
   return (
     <>
       <Field label="Content type" required>
-        <ChoiceGroup name="pageType" options={PAGE_TYPE_OPTIONS.filter(option => allowedTargets(trigger.kind).includes(option.value as PageType))}
+        <ChoiceGroup label="Content type" options={PAGE_TYPE_OPTIONS.filter(option => allowedTargets(trigger.kind).includes(option.value as PageType))}
           value={target.pageType}
           onChange={value => onChange(prev => {
+            if (prev.target.pageType === value) return prev;
             const next = { ...prev, target: resetTarget(value as PageType) };
             return value === 'entityrecord' && currentLookup ? applyLookup(next, host.entityName, currentLookup) : next;
           })} />
@@ -116,20 +117,20 @@ export function DestinationSection({ config, onChange, metadataService, formXmlS
       )}
       {target.pageType === 'entityrecord' && (
         <Field label="Record">
-          <ChoiceGroup name="entityRecordMode" options={RECORD_MODE_OPTIONS} value={creating ? 'create' : 'open'}
+          <ChoiceGroup label="Record" options={RECORD_MODE_OPTIONS} value={creating ? 'create' : 'open'}
             onChange={value => onChange(prev => patchTarget(prev, 'entityrecord', { createNew: value === 'create' }))} />
         </Field>
       )}
       {recordTarget && (
         <Field label="Record source" error={errors['context.source']}
           hint={allowed.length === 1 ? 'Set by the trigger.' : undefined}>
-          <ChoiceGroup name="recordSource"
+          <ChoiceGroup label="Record source"
             options={allowed.map(kind => kind === 'none' && creating
               ? { ...SOURCE_OPTIONS.none, desc: 'Open a blank form' } : SOURCE_OPTIONS[kind])}
             value={source.kind}
-            onChange={value => onChange(prev => ({
+            onChange={value => onChange(prev => prev.context.source.kind === value ? prev : {
               ...prev, context: { ...prev.context, source: defaultSource(value as RecordSourceKind) },
-            }))} />
+            })} />
         </Field>
       )}
       {source.kind === 'lookup' && recordTarget && (
@@ -192,8 +193,9 @@ export function DestinationSection({ config, onChange, metadataService, formXmlS
             {creating || source.kind === 'fixed' ? (
               <TablePicker ariaLabel="Destination table" value={target.entityName} metadataService={metadataService}
                 disabled={readOnly} error={!!errors['target.entityName']} onAccessibleTablesChange={onAccessibleTablesChange}
-                onChange={entityName => onChange(prev => prev.target.pageType === 'entityrecord' && prev.target.entityName === entityName ? prev
-                  : patchTarget(prev, 'entityrecord', { entityName, formId: '', tabName: '', data: '' }))} />
+                onChange={entityName => onChange(prev => prev.target.pageType !== 'entityrecord' || prev.target.entityName === entityName ? prev
+                  // Form data names columns of the previous table; a first pick keeps data typed before any table was chosen.
+                  : patchTarget(prev, 'entityrecord', { entityName, formId: '', tabName: '', data: prev.target.entityName ? '' : prev.target.data }))} />
             ) : (
               <div role="status" aria-live="polite" style={{ color: T.fg2, fontFamily: T.font, fontSize: 13 }}>
                 {relatedTarget
@@ -210,7 +212,8 @@ export function DestinationSection({ config, onChange, metadataService, formXmlS
               </div>
             )}
           </Field>
-          {formXmlService && (
+          {/* The clicked tag names the table at runtime, so no form or tab of it can be chosen here. */}
+          {formXmlService && source.kind !== 'clickedTag' && (
             <Field label="Form" error={errors['target.formId']}
               hint={!tableConfirmed ? 'Choose a table to pick a form.' : undefined}>
               <FormSelector entityName={destination} onEntityNameChange={() => undefined}
@@ -220,10 +223,12 @@ export function DestinationSection({ config, onChange, metadataService, formXmlS
                   { formId: selection?.formId ?? '', tabName: '' }))} />
             </Field>
           )}
-          <Field label="Tab name" hint={!tableConfirmed ? 'Choose a table to pick a form.' : 'Logical name of the form tab to focus'}>
-            <Input value={target.tabName} disabled={readOnly || !tableConfirmed}
-              onChange={tabName => onChange(prev => patchTarget(prev, 'entityrecord', { tabName }))} />
-          </Field>
+          {source.kind !== 'clickedTag' && (
+            <Field label="Tab name" hint={!tableConfirmed ? 'Choose a table to pick a form.' : 'Logical name of the form tab to focus'}>
+              <Input value={target.tabName} disabled={readOnly || !tableConfirmed}
+                onChange={tabName => onChange(prev => patchTarget(prev, 'entityrecord', { tabName }))} />
+            </Field>
+          )}
           <JsonDataField label="Form data" value={target.data} disabled={readOnly} placeholder={FORM_DATA_EXAMPLE}
             error={errors['target.data']}
             hint="Optional JSON object of extra form parameters. Keys are column logical names (e.g. name) or pre-registered custom params. Lookups need a pair/triple: primarycontactid + primarycontactidname, or parentcustomerid + parentcustomeridname + parentcustomeridtype (account|contact|systemuser|team)."

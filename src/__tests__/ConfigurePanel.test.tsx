@@ -135,31 +135,31 @@ describe('ConfigurePanel — trigger section', () => {
   it('snaps target and source to legal values when the trigger changes', async () => {
     const get = await renderPanel(cfg({ target: { pageType: 'entitylist', entityName: 'account', viewId: '', viewType: '' },
       context: { source: { kind: 'host' } } }));
-    await clickChip('triggerKind', 'Grid button');
+    await clickChip('Trigger type', 'Grid button');
     expect(get().target.pageType).not.toBe('entitylist');
     expect(get().context.source.kind).toBe('selectedRow');
-    await clickChip('triggerKind', 'Console');
+    await clickChip('Trigger type', 'Console');
     expect(get().context.source.kind).toBe('fixed');
-    await clickChip('triggerKind', 'Lookup tag click');
-    await clickChip('pageType', 'Table record');
+    await clickChip('Trigger type', 'Lookup tag click');
+    await clickChip('Content type', 'Table record');
     expect(get().context.source.kind).toBe('clickedTag');
   });
 
   it('offers the seven trigger kinds and shows the right host controls', async () => {
     await renderPanel();
-    expect(Array.from(host!.querySelectorAll('[role="radiogroup"][aria-label="triggerKind"] [role="radio"]'))).toHaveLength(7);
-    await clickChip('triggerKind', 'Grid button');
-    expect(chip('gridSurface', 'Main grid')).toBeTruthy();
-    expect(chip('pageType', 'Table list')).toBeUndefined();
+    expect(Array.from(host!.querySelectorAll('[role="radiogroup"][aria-label="Trigger type"] [role="radio"]'))).toHaveLength(7);
+    await clickChip('Trigger type', 'Grid button');
+    expect(chip('Grid surface', 'Main grid')).toBeTruthy();
+    expect(chip('Content type', 'Table list')).toBeUndefined();
     expect(combo('View')).toBeTruthy();
-    await clickChip('triggerKind', 'Console');
+    await clickChip('Trigger type', 'Console');
     expect(combo('Trigger table')).toBeNull();
     // Console names are validated, so the fields must stay editable.
     expect(input('openRelatedRecordsPane')).toBeTruthy();
     expect(input('Contoso')).toBeTruthy();
-    await clickChip('triggerKind', 'Field change');
+    await clickChip('Trigger type', 'Field change');
     expect(combo('Column')).toBeTruthy();
-    await clickChip('triggerKind', 'Lookup tag click');
+    await clickChip('Trigger type', 'Lookup tag click');
     expect(combo('Add lookup control')).toBeTruthy();
   });
 });
@@ -167,28 +167,28 @@ describe('ConfigurePanel — trigger section', () => {
 describe('ConfigurePanel — record source', () => {
   it('offers only legal record sources after trigger and content choices', async () => {
     await renderPanel();
-    await clickChip('pageType', 'Table record');
-    expect(chip('recordSource', 'The record on this form')).toBeTruthy();
-    expect(chip('recordSource', 'A record in a lookup')).toBeTruthy();
-    expect(chip('recordSource', 'A specific record')).toBeTruthy();
-    expect(chip('recordSource', 'No record')).toBeUndefined();
-    await clickChip('triggerKind', 'Lookup tag click');
-    expect(host?.querySelectorAll('[role="radiogroup"][aria-label="recordSource"] [role="radio"]')).toHaveLength(1);
-    expect(chip('recordSource', 'The clicked tag record')).toBeTruthy();
+    await clickChip('Content type', 'Table record');
+    expect(chip('Record source', 'The record on this form')).toBeTruthy();
+    expect(chip('Record source', 'A record in a lookup')).toBeTruthy();
+    expect(chip('Record source', 'A specific record')).toBeTruthy();
+    expect(chip('Record source', 'No record')).toBeUndefined();
+    await clickChip('Trigger type', 'Lookup tag click');
+    expect(host?.querySelectorAll('[role="radiogroup"][aria-label="Record source"] [role="radio"]')).toHaveLength(1);
+    expect(chip('Record source', 'The clicked tag record')).toBeTruthy();
     expect(host?.textContent).toContain('Set by the trigger.');
-    await clickChip('pageType', 'Dashboard');
-    expect(host?.querySelector('[role="radiogroup"][aria-label="recordSource"]')).toBeNull();
+    await clickChip('Content type', 'Dashboard');
+    expect(host?.querySelector('[role="radiogroup"][aria-label="Record source"]')).toBeNull();
   });
 
   it('shows GUID, record table and variable inputs only when used', async () => {
     await renderPanel();
-    await clickChip('recordSource', 'A specific record');
+    await clickChip('Record source', 'A specific record');
     expect(input('00000000-0000-0000-0000-000000000000')).toBeTruthy();
     expect(combo('Record table')).toBeTruthy();
     expect(input('recordId')).toBeTruthy();
-    await clickChip('recordSource', 'No record');
+    await clickChip('Record source', 'No record');
     expect(input('recordId')).toBeNull();
-    await clickChip('pageType', 'Dashboard');
+    await clickChip('Content type', 'Dashboard');
     expect(input('recordId')).toBeNull();
   });
 });
@@ -200,7 +200,7 @@ describe('ConfigurePanel — destination table', () => {
     expect(Array.from(host?.querySelectorAll('[role="status"]') ?? []).some(status =>
       status.textContent?.includes('Destination table: account'))).toBe(true);
     expect(combo('Destination table')).toBeNull();
-    await clickChip('entityRecordMode', 'Create new record');
+    await clickChip('Record', 'Create new record');
     expect(combo('Destination table')).toBeTruthy();
   });
 
@@ -210,7 +210,7 @@ describe('ConfigurePanel — destination table', () => {
     const get = await renderPanel(cfg({ host: { entityName: 'account' }, context: { source: { kind: 'lookup', attribute: '' } } }),
       makeMetadataService({ listLookupAttributes }), { getFormsForEntityResult } as unknown as FormXmlService);
     await chooseOption('Lookup column', 'primarycontactid');
-    await clickChip('pageType', 'Table record');
+    await clickChip('Content type', 'Table record');
     expect(get().target).toMatchObject({ pageType: 'entityrecord', entityName: 'contact' });
     expect(getFormsForEntityResult).toHaveBeenCalledWith('contact');
   });
@@ -307,15 +307,15 @@ describe('ConfigurePanel — create mode', () => {
   it('limits Create new record sources to the host record or none, and offers a destination table', async () => {
     await renderPanel(cfg({ host: { entityName: 'account' },
       target: { pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '' } }));
-    await clickChip('entityRecordMode', 'Create new record');
-    expect(chip('recordSource', 'The record on this form')).toBeTruthy();
-    expect(chip('recordSource', 'No record')).toBeTruthy();
-    expect(chip('recordSource', 'A specific record')).toBeUndefined();
-    expect(chip('recordSource', 'A record in a lookup')).toBeUndefined();
+    await clickChip('Record', 'Create new record');
+    expect(chip('Record source', 'The record on this form')).toBeTruthy();
+    expect(chip('Record source', 'No record')).toBeTruthy();
+    expect(chip('Record source', 'A specific record')).toBeUndefined();
+    expect(chip('Record source', 'A record in a lookup')).toBeUndefined();
     expect(combo('Destination table')).toBeTruthy();
-    await clickChip('triggerKind', 'Grid button');
-    expect(chip('recordSource', 'The selected row')).toBeTruthy();
-    expect(chip('recordSource', 'The record on this form')).toBeUndefined();
+    await clickChip('Trigger type', 'Grid button');
+    expect(chip('Record source', 'The selected row')).toBeTruthy();
+    expect(chip('Record source', 'The record on this form')).toBeUndefined();
   });
 });
 
@@ -323,11 +323,11 @@ describe('ConfigurePanel — existing controls', () => {
   it('keeps dashboard and search choices, validation and search text changes', async () => {
     const listAccessibleDashboards = vi.fn().mockResolvedValue({ status: 'ok', dashboards: [] });
     const get = await renderPanel(DEFAULT_CONFIG, makeMetadataService({ listAccessibleDashboards }));
-    await clickChip('pageType', 'Dashboard');
+    await clickChip('Content type', 'Dashboard');
     expect(combo('Dashboard')).toBeTruthy();
     expect(host?.textContent).toContain('Dashboard is required');
     expect(listAccessibleDashboards).toHaveBeenCalled();
-    await clickChip('pageType', 'Search');
+    await clickChip('Content type', 'Search');
     expect(host?.textContent).toContain('Pre-fill the global search box');
     await changeInput(input('e.g. Contoso')!, 'Contoso');
     expect(get().target).toEqual({ pageType: 'search', searchText: 'Contoso' });
@@ -387,11 +387,11 @@ describe('ConfigurePanel — existing controls', () => {
   it('maps create mode pre-fill to the record source and limits console to no record', async () => {
     await renderPanel(cfg({ target: { pageType: 'entityrecord', entityName: 'contact', formId: '', tabName: '', data: '', createNew: true },
       context: { source: { kind: 'host' } } }));
-    expect(chip('recordSource', 'The record on this form')).toBeTruthy();
+    expect(chip('Record source', 'The record on this form')).toBeTruthy();
     expect(host?.textContent).toContain('In create mode these values pre-fill columns');
-    await clickChip('triggerKind', 'Console');
-    expect(chip('recordSource', 'No record')).toBeTruthy();
-    expect(host?.querySelectorAll('[role="radiogroup"][aria-label="recordSource"] [role="radio"]')).toHaveLength(1);
+    await clickChip('Trigger type', 'Console');
+    expect(chip('Record source', 'No record')).toBeTruthy();
+    expect(host?.querySelectorAll('[role="radiogroup"][aria-label="Record source"] [role="radio"]')).toHaveLength(1);
   });
 });
 

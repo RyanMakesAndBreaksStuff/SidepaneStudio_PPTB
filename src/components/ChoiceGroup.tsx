@@ -11,7 +11,8 @@ export interface ChoiceGroupOption {
 }
 
 export interface ChoiceGroupProps {
-  name: string;
+  /** Accessible name of the group; pass the visible field label. */
+  label: string;
   options: ChoiceGroupOption[];
   value: string;
   onChange: (value: string) => void;
@@ -21,16 +22,32 @@ export interface ChoiceGroupProps {
  * Pill-style single-select. Wraps to multiple rows, highlights the active
  * choice with the accent color, and surfaces `desc` of the selected option
  * below the pill row so descriptions stay visible without bloating each pill.
- * `disabled` greys the pill + blocks selection.
+ * `disabled` greys the pill + blocks selection. Keyboard follows the ARIA radio
+ * group: one Tab stop, arrow keys move focus and selection.
  */
-export function ChoiceGroup({ name, options, value, onChange }: ChoiceGroupProps): React.ReactElement {
+export function ChoiceGroup({ label, options, value, onChange }: ChoiceGroupProps): React.ReactElement {
   const { isDark } = useTheme();
   const T = theme(isDark);
 
   const selected = options.find(o => o.value === value);
+  const enabled = options.filter(o => !o.disabled);
+  const tabStop = enabled.some(o => o.value === value) ? value : enabled[0]?.value;
+  // Re-choosing the current pill must not reach the caller, whose handler resets dependent fields.
+  const choose = (next: string) => { if (next !== value) onChange(next); };
+
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>, current: string) => {
+    const step = event.key === 'ArrowRight' || event.key === 'ArrowDown' ? 1
+      : event.key === 'ArrowLeft' || event.key === 'ArrowUp' ? -1 : 0;
+    if (!step || enabled.length === 0) return;
+    event.preventDefault();
+    const at = enabled.findIndex(o => o.value === current);
+    const next = enabled[(at + step + enabled.length) % enabled.length];
+    event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="radio"]')[options.indexOf(next)]?.focus();
+    choose(next.value);
+  };
 
   return (
-    <div role="radiogroup" aria-label={name} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+    <div role="radiogroup" aria-label={label} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
         {options.map(opt => {
           const sel = value === opt.value;
@@ -43,8 +60,10 @@ export function ChoiceGroup({ name, options, value, onChange }: ChoiceGroupProps
               aria-checked={sel}
               aria-disabled={dis || undefined}
               disabled={dis}
+              tabIndex={opt.value === tabStop ? 0 : -1}
               title={opt.desc}
-              onClick={() => { if (!dis) onChange(opt.value); }}
+              onClick={() => { if (!dis) choose(opt.value); }}
+              onKeyDown={event => handleKeyDown(event, opt.value)}
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',

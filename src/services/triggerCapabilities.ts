@@ -98,6 +98,11 @@ export function coerceConfig(config: PaneDefinitionConfig): PaneDefinitionConfig
     const data = next.target.entityName ? '' : next.target.data;
     next = { ...next, target: { ...next.target, entityName: derived, formId: '', tabName: '', data } };
   }
+  // The clicked tag names the table at runtime; a stored table, and the form and tab picked for it, would be stale.
+  if (next.target.pageType === 'entityrecord' && next.context.source.kind === 'clickedTag' &&
+      (next.target.entityName || next.target.formId || next.target.tabName)) {
+    next = { ...next, target: { ...next.target, entityName: '', formId: '', tabName: '' } };
+  }
   return next;
 }
 
