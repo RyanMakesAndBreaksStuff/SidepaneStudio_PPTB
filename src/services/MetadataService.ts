@@ -99,7 +99,8 @@ function keepEntity(
   if (!e.EntitySetName) return false;
   if (e.IsIntersect === true) return false;
   if (e.IsPrivate === true) return false;
-  if (e.IsActivity === true) return false;
+  // The allowlist admits activity tables (task, email, ...); exact and prefix denies below still apply.
+  if (e.IsActivity === true && !allowedStandardTables.has(logicalName)) return false;
   if (e.OwnershipType === 'OrganizationOwned' && !schemaName.includes('_')) return false;
   if (denyExact.has(logicalName)) return false;
   if (config.denyPrefixes.some(p => logicalName.startsWith(p))) return false;

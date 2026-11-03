@@ -134,7 +134,7 @@ it('clears the old org table selection when the connection switches orgs', async
   await openTablePicker();
   expect(options()).toContain('new_b');
   expect(options()).not.toContain('new_a');
-  expect(host.textContent).not.toContain('no longer accessible');
+  expect(host.textContent).not.toContain('is not in the current table list');
 });
 
 it('keeps the table selection when the same connection is updated', async () => {

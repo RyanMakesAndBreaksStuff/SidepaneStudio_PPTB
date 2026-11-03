@@ -69,7 +69,7 @@ export function TablePicker({
       />
       {inaccessible && (
         <span role="status" aria-live="polite" style={{ color: T.accentAlt, fontFamily: T.font, fontSize: 11 }}>
-          Saved table “{value}” is no longer accessible.
+          Table "{value}" is not in the current table list for this environment.
         </span>
       )}
       {loadError !== undefined && (
