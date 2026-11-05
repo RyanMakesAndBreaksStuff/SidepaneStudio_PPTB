@@ -90,4 +90,10 @@ describe('ChoiceGroup', () => {
     expect(current).toBe('c');
     expect(document.activeElement).toBe(radio('Charlie'));
   });
+
+  it('draws square chips from the small radius token', async () => {
+    await render(<ChoiceGroup label="Letter" options={OPTIONS} value="a" onChange={vi.fn()} />);
+    expect(radio('Alpha').style.borderRadius).toBe('0px');
+    expect(radio('Charlie').style.borderRadius).toBe('0px');
+  });
 });
