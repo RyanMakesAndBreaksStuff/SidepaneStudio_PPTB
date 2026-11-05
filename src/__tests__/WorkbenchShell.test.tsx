@@ -179,42 +179,38 @@ describe('WorkbenchShell', () => {
     expect(labels.some(l => l.includes('Light') || l.includes('Dark'))).toBe(false);
   });
 
-  it('puts Reset on the right of the open Configure header and omits the studio title bar', async () => {
-    await render(shell());
-
+  it.each(['wide', 'narrow'] as const)('renders the sentence strip above the %s layout with status and Reset on its right', async (mode) => {
+    await render(shell(mode));
+    const strip = host!.querySelector('[role="region"][aria-label="Configuration summary"]') as HTMLElement;
+    expect(strip).toBeTruthy();
+    // strip precedes the panel area and is not inside any panel
+    expect(host!.querySelector('aside, [role="tablist"]')!.compareDocumentPosition(strip) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy();
+    expect(strip.closest('aside, section')).toBeNull();
+    const status = strip.querySelector('[role="status"]') as HTMLElement;
+    const reset = resetButton()!;
+    expect(strip.contains(status)).toBe(true);
+    expect(strip.contains(reset)).toBe(true);
+    expect(strip.style.minHeight).toBe('44px');
+    expect(strip.style.display).toBe('flex');
+    expect(status.compareDocumentPosition(reset) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // no studio title bar (carried over from the replaced Configure-header Reset test)
     expect(host?.querySelector('header')).toBeNull();
     expect(host?.textContent).not.toContain('Side Pane Studio');
+  });
 
-    const panel = host?.querySelector('aside[aria-label="Config panel"]');
-    const reset = resetButton();
-    expect(panel?.contains(reset ?? null)).toBe(true);
-    expect(reset?.parentElement?.style.marginLeft).toBe('auto');
-
+  it('keeps the strip and Reset when the config rail collapses and on every narrow tab', async () => {
+    await render(shell('wide'));
     await act(async () => {
       button('Collapse config panel')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
-    expect(resetButton()).toBeUndefined();
+    expect(resetButton()).toBeTruthy();
+    expect(host!.querySelector('aside[aria-label="Config rail"]')!.contains(resetButton()!)).toBe(false);
 
-    await act(async () => {
-      button('Expand config panel')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
-    expect(host?.querySelector('aside[aria-label="Config panel"]')?.contains(resetButton() ?? null)).toBe(true);
-  });
-
-  it('shows Reset only on the narrow Configure tab', async () => {
     await render(shell('narrow'));
-
-    expect(resetButton()).toBeTruthy();
-
-    await act(async () => {
-      tab('Preview')?.click();
-    });
-    expect(resetButton()).toBeUndefined();
-
-    await act(async () => {
-      tab('Configure')?.click();
-    });
-    expect(resetButton()).toBeTruthy();
+    for (const label of ['Preview', 'Output', 'Configure']) {
+      await act(async () => { tab(label)?.click(); });
+      expect(resetButton()).toBeTruthy();
+    }
   });
 
   it('confirms and resets on Reset click', async () => {

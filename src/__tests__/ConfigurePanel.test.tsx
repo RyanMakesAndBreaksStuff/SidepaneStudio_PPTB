@@ -2,14 +2,13 @@ import * as React from 'react';
 import { useState, act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ConfigurePanel } from '../components/ConfigurePanel';
+import { ConfigurePanel, type ConfigurePanelProps } from '../components/ConfigurePanel';
 import { DestinationSection } from '../components/config/DestinationSection';
 import { ThemeProvider } from '../contexts/ThemeContext';
 import { DEFAULT_CONFIG, type PaneDefinitionConfig } from '../types/PaneDefinitionConfig';
 import { DEFAULT_METADATA_FILTER_CONFIG } from '../types/MetadataFilterConfig';
 import { validate } from '../services/ValidationService';
 import { coerceConfig } from '../services/triggerCapabilities';
-import { describeConfigText } from '../services/describeConfig';
 import type { MetadataService } from '../services/MetadataService';
 import type { FormXmlService } from '../services/FormXmlService';
 import { cfg } from './testHelpers';
@@ -85,19 +84,34 @@ async function changeInput(element: HTMLInputElement, value: string): Promise<vo
   await act(async () => { setValue?.(value); element.dispatchEvent(new Event('input', { bubbles: true })); });
 }
 
+/** Zero args → current config; a props object → re-render the same harness with those props merged in. */
+type PanelHandle = {
+  (): PaneDefinitionConfig;
+  (props: Partial<ConfigurePanelProps>): Promise<void>;
+};
+
 async function renderPanel(initialConfig: PaneDefinitionConfig = DEFAULT_CONFIG,
-  metadataService = makeMetadataService(), formXmlService?: FormXmlService): Promise<() => PaneDefinitionConfig> {
+  metadataService = makeMetadataService(), formXmlService?: FormXmlService): Promise<PanelHandle> {
   let current = initialConfig;
+  let setExtraProps: ((props: Partial<ConfigurePanelProps>) => void) | undefined;
   function Workflow(): React.ReactElement {
     const [config, setConfig] = useState(initialConfig);
+    const [extraProps, setExtra] = useState<Partial<ConfigurePanelProps>>({});
+    setExtraProps = props => setExtra(prev => ({ ...prev, ...props }));
     current = config;
     return <ConfigurePanel config={config} onChange={updater => setConfig(prev => coerceConfig(updater(prev)))}
-      validation={validate(config)} metadataService={metadataService} formXmlService={formXmlService} />;
+      validation={validate(config)} metadataService={metadataService} formXmlService={formXmlService} {...extraProps} />;
   }
   await render(<Workflow />);
   await expandSection('Trigger & source');
   await expandSection('Destination');
-  return () => current;
+  function handle(): PaneDefinitionConfig;
+  function handle(props: Partial<ConfigurePanelProps>): Promise<void>;
+  function handle(props?: Partial<ConfigurePanelProps>): PaneDefinitionConfig | Promise<void> {
+    if (!props) return current;
+    return act(async () => { setExtraProps?.(props); });
+  }
+  return handle;
 }
 
 afterEach(async () => {
@@ -108,26 +122,28 @@ afterEach(async () => {
   host = undefined;
 });
 
-describe('ConfigurePanel — sentence', () => {
-  it('renders one sentence and jumps to Pane & behaviour', async () => {
-    await renderPanel();
-    const summary = host?.querySelector('[role="region"][aria-label="Configuration summary"]');
-    expect(summary?.textContent).toContain(describeConfigText(DEFAULT_CONFIG));
+describe('ConfigurePanel — jump requests', () => {
+  it('expands Pane & behaviour from a pane jump request', async () => {
+    const rerender = await renderPanel(DEFAULT_CONFIG);
     expect(sectionButton('Pane & behaviour')?.getAttribute('aria-expanded')).toBe('false');
-    await act(async () => { summary?.querySelector<HTMLButtonElement>('[data-slot="pane"]')?.click(); });
+    await rerender({ jumpRequest: { slot: 'pane', seq: 1 } });
     expect(sectionButton('Pane & behaviour')?.getAttribute('aria-expanded')).toBe('true');
   });
-});
 
-describe('ConfigurePanel — sentence slots', () => {
-  it('re-expands a collapsed section from its sentence slot', async () => {
-    await renderPanel();
-    for (const [slot, title] of [['trigger', 'Trigger & source'], ['host', 'Trigger & source'], ['target', 'Destination'], ['source', 'Destination']] as const) {
+  it('re-expands a collapsed section for each slot, including a repeated slot', async () => {
+    const rerender = await renderPanel(DEFAULT_CONFIG);
+    let seq = 0;
+    for (const [slot, title] of [['trigger', 'Trigger & source'], ['host', 'Trigger & source'], ['target', 'Destination'], ['source', 'Destination'], ['target', 'Destination']] as const) {
       await act(async () => { sectionButton(title)?.click(); });
       expect(sectionButton(title)?.getAttribute('aria-expanded')).toBe('false');
-      await act(async () => { host?.querySelector<HTMLButtonElement>(`[data-slot="${slot}"]`)?.click(); });
+      await rerender({ jumpRequest: { slot, seq: ++seq } });
       expect(sectionButton(title)?.getAttribute('aria-expanded')).toBe('true');
     }
+  });
+
+  it('does not render the sentence strip itself', async () => {
+    await renderPanel(DEFAULT_CONFIG);
+    expect(host?.querySelector('[role="region"][aria-label="Configuration summary"]')).toBeNull();
   });
 });
 

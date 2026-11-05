@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { PaneDefinitionConfig } from '../types/PaneDefinitionConfig';
 import type { MetadataFilterConfig } from '../types/MetadataFilterConfig';
 import type { MetadataFilterDraft } from './config/MetadataFilterConfigEditor';
@@ -8,10 +8,12 @@ import type { MetadataService } from '../services/MetadataService';
 import type { FormXmlService } from '../services/FormXmlService';
 import type { SummarySlot } from '../services/describeConfig';
 import { Section } from './Section';
-import { SentenceSummary } from './config/SentenceSummary';
 import { TriggerSection } from './config/TriggerSection';
 import { DestinationSection } from './config/DestinationSection';
 import { PaneSection } from './config/PaneSection';
+
+/** A request from the sentence strip to reveal the section that owns `slot`; `seq` makes repeats observable. */
+export interface JumpRequest { slot: SummarySlot; seq: number }
 
 export interface ConfigurePanelProps {
   config: PaneDefinitionConfig;
@@ -29,6 +31,7 @@ export interface ConfigurePanelProps {
   onResetMetadataFilterConfig?: () => Promise<void> | void;
   metadataFilterDraft?: MetadataFilterDraft | null;
   onMetadataFilterDraftChange?: (draft: MetadataFilterDraft | null) => void;
+  jumpRequest?: JumpRequest;
 }
 
 export function ConfigurePanel(props: ConfigurePanelProps): React.ReactElement {
@@ -41,16 +44,18 @@ export function ConfigurePanel(props: ConfigurePanelProps): React.ReactElement {
   const [destinationOpen, setDestinationOpen] = useState(true);
   const errors = useMemo(() => Object.fromEntries(validation.errors.map(error => [error.field, error.message])), [validation.errors]);
   const warnings = useMemo(() => Object.fromEntries(validation.warnings.map(warning => [warning.field, warning.message])), [validation.warnings]);
-  const jump = (slot: SummarySlot) => {
+  const { jumpRequest } = props;
+  useEffect(() => {
+    if (!jumpRequest) return;
+    const { slot } = jumpRequest;
     if (slot === 'pane') setPaneOpen(true);
     else if (slot === 'trigger' || slot === 'host') setTriggerOpen(true);
     else setDestinationOpen(true);
-  };
+  }, [jumpRequest]);
   const sectionProps = { config, onChange, errors, warnings, metadataService, readOnly, onAccessibleTablesChange };
   return (
     <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden',
       opacity: readOnly ? 0.7 : 1, pointerEvents: readOnly ? 'none' : 'auto' }}>
-      <SentenceSummary config={config} validation={validation} onJump={jump} />
       <Section title="Trigger & source" icon="1" open={triggerOpen} onOpenChange={setTriggerOpen}>
         <TriggerSection {...sectionProps} formXmlService={formXmlService} />
       </Section>

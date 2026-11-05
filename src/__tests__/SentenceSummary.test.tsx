@@ -17,7 +17,7 @@ afterEach(async () => {
 });
 
 describe('SentenceSummary', () => {
-  it('renders the sentence, marks errors and warnings, and jumps to a slot', async () => {
+  it('renders the sentence, status, and actions in one row and jumps to a slot', async () => {
     host = document.createElement('div');
     document.body.appendChild(host);
     root = createRoot(host);
@@ -25,13 +25,16 @@ describe('SentenceSummary', () => {
     await act(async () => {
       root?.render(<ThemeProvider><SentenceSummary config={DEFAULT_CONFIG}
         validation={{ isValid: false, errors: [{ field: 'a', message: 'A' }, { field: 'b', message: 'B' }],
-          warnings: [{ field: 'c', message: 'C' }] }} onJump={onJump} /></ThemeProvider>);
+          warnings: [{ field: 'c', message: 'C' }] }} onJump={onJump}
+        actions={<button type="button">↺ Reset</button>} /></ThemeProvider>);
     });
-    const region = host.querySelector('[role="region"][aria-label="Configuration summary"]');
-    expect(region).toBeTruthy();
-    expect(region?.textContent).toContain(describeConfigText(DEFAULT_CONFIG));
-    expect(region?.querySelector('[role="status"]')?.textContent).toBe('2 errors · 1 warning');
-    await act(async () => { region?.querySelector<HTMLButtonElement>('[data-slot="host"]')?.click(); });
+    const region = host.querySelector<HTMLElement>('[role="region"][aria-label="Configuration summary"]')!;
+    expect(region.style.display).toBe('flex');
+    expect(region.style.position).not.toBe('sticky');
+    expect(region.querySelector('p')?.textContent).toContain(describeConfigText(DEFAULT_CONFIG));
+    expect(region.querySelector('[role="status"]')?.textContent).toBe('2 errors · 1 warning');
+    expect(region.lastElementChild?.textContent).toBe('↺ Reset');
+    await act(async () => { region.querySelector<HTMLButtonElement>('[data-slot="host"]')?.click(); });
     expect(onJump).toHaveBeenCalledWith('host');
   });
 });
