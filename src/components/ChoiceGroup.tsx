@@ -19,7 +19,7 @@ export interface ChoiceGroupProps {
 }
 
 /**
- * Pill-style single-select. Wraps to multiple rows, highlights the active
+ * Chip-style single-select. Wraps to multiple rows, highlights the active
  * choice with the accent color, and surfaces `desc` of the selected option
  * below the pill row so descriptions stay visible without bloating each pill.
  * `disabled` greys the pill + blocks selection. Keyboard follows the ARIA radio
@@ -70,7 +70,7 @@ export function ChoiceGroup({ label, options, value, onChange }: ChoiceGroupProp
                 gap: 6,
                 padding: '5px 12px',
                 border: `1px solid ${sel ? T.accent : T.stroke1}`,
-                borderRadius: T.rFull,
+                borderRadius: T.rS,
                 background: sel ? T.accentBg : 'transparent',
                 color: sel ? T.accent : (dis ? T.fg3 : T.fg1),
                 fontFamily: T.font,
