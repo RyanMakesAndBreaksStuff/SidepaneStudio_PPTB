@@ -9,7 +9,9 @@ import { IXrmContext } from '../adapters/PptbContextAdapter';
 import { MetadataService } from '../services/MetadataService';
 import { FormXmlService } from '../services/FormXmlService';
 import { validate } from '../services/ValidationService';
-import { ConfigurePanel } from './ConfigurePanel';
+import { ConfigurePanel, type JumpRequest } from './ConfigurePanel';
+import { SentenceSummary } from './config/SentenceSummary';
+import type { SummarySlot } from '../services/describeConfig';
 import { PreviewPanel } from './PreviewPanel';
 import { OutputPanel } from './OutputPanel';
 import { Callout } from './Callout';
@@ -75,6 +77,11 @@ function WorkbenchShellContent({
   const [accessibleTables, setAccessibleTables] = useState<Set<string> | undefined>(undefined);
   const [configPanelOpen, setConfigPanelOpen] = useState(true);
   const [codePanelOpen, setCodePanelOpen] = useState(true);
+  const [jumpRequest, setJumpRequest] = useState<JumpRequest | undefined>(undefined);
+  const jump = (slot: SummarySlot) => {
+    setNarrowTab('configure');
+    setJumpRequest(prev => ({ slot, seq: (prev?.seq ?? 0) + 1 }));
+  };
 
   const validation = useMemo(() => validate(config, accessibleTables, orgMismatch), [config, accessibleTables, orgMismatch]);
 
@@ -95,6 +102,7 @@ function WorkbenchShellContent({
     onResetMetadataFilterConfig,
     metadataFilterDraft,
     onMetadataFilterDraftChange,
+    jumpRequest,
   };
   const previewPanelProps = { config, onChange, validation, metadataService, xrm };
   const outputPanelProps = { config, xrm, validation, copyBlocked: orgMismatch };
@@ -112,6 +120,8 @@ function WorkbenchShellContent({
           </Callout>
         </div>
       )}
+      <SentenceSummary config={config} validation={validation} onJump={jump}
+        actions={<ResetConfigButton onReset={onReset} />} />
       {layoutMode === 'wide' && (
         <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
           <aside
@@ -127,10 +137,7 @@ function WorkbenchShellContent({
               background: T.pageBg,
             }}
           >
-            <PanelHeader
-              title={configPanelOpen ? 'Configure' : undefined}
-              actions={configPanelOpen ? <ResetConfigButton onReset={onReset} /> : undefined}
-            >
+            <PanelHeader title={configPanelOpen ? 'Configure' : undefined}>
               <RailToggle
                 label={configPanelOpen ? 'Collapse config panel' : 'Expand config panel'}
                 expanded={configPanelOpen}
@@ -212,23 +219,7 @@ function WorkbenchShellContent({
             ))}
           </div>
           <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-            {narrowTab === 'configure' && (
-              <>
-                <div style={{
-                  display: 'flex',
-                  justifyContent: 'flex-end',
-                  alignItems: 'center',
-                  minHeight: COLLAPSED_RAIL_WIDTH,
-                  borderBottom: `1px solid ${T.stroke1}`,
-                  background: T.surface2,
-                  paddingRight: 8,
-                  flexShrink: 0,
-                }}>
-                  <ResetConfigButton onReset={onReset} />
-                </div>
-                <ConfigurePanel {...configurePanelProps} />
-              </>
-            )}
+            {narrowTab === 'configure' && <ConfigurePanel {...configurePanelProps} />}
             {narrowTab === 'preview' && <PreviewPanel {...previewPanelProps} />}
             {narrowTab === 'output'  && <OutputPanel {...outputPanelProps} />}
           </div>
@@ -322,11 +313,9 @@ function ResetConfigButton({ onReset }: { onReset: () => void }): React.ReactEle
 function PanelHeader({
   title,
   children,
-  actions,
 }: {
   title?: string;
   children?: React.ReactNode;
-  actions?: React.ReactNode;
 }): React.ReactElement {
   const { isDark } = useTheme();
   const T = theme(isDark);
@@ -352,11 +341,6 @@ function PanelHeader({
         }}>
           {title}
         </h2>
-      )}
-      {actions && (
-        <div style={{ marginLeft: 'auto', paddingRight: 8, display: 'flex', alignItems: 'center' }}>
-          {actions}
-        </div>
       )}
     </div>
   );
