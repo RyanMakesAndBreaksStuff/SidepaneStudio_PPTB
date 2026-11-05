@@ -87,12 +87,12 @@ export function CodeBlock({ code, lang = 'js', copyDisabled = false }: CodeBlock
 
   return (
     <div>
-      <div style={{ background: '#1E1E1E', borderRadius: T.rM, border: '1px solid #333', overflow: 'hidden' }}>
+      <div style={{ background: T.codeBg, borderRadius: T.rM, border: `1px solid ${T.codeStroke}`, overflow: 'hidden' }}>
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          padding: '6px 12px', background: '#252526', borderBottom: '1px solid #3E3E42',
+          padding: '6px 12px', background: T.codeBg2, borderBottom: `1px solid ${T.codeStroke}`,
         }}>
-          <span style={{ fontFamily: T.mono, fontSize: 10, color: '#9CDCFE', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.6px' }}>
+          <span style={{ fontFamily: T.mono, fontSize: 10, color: T.codeAccent, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.6px' }}>
             {lang === 'json' ? 'JSON' : lang === 'text' ? 'Text' : 'JavaScript'}
           </span>
           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
@@ -104,10 +104,10 @@ export function CodeBlock({ code, lang = 'js', copyDisabled = false }: CodeBlock
               style={{
                 display: 'flex', alignItems: 'center', gap: 4,
                 padding: '3px 9px',
-                background: wrap ? 'rgba(78,201,176,.18)' : 'rgba(255,255,255,.08)',
-                border: `1px solid ${wrap ? 'rgba(78,201,176,.45)' : 'rgba(255,255,255,.12)'}`,
+                background: wrap ? 'rgba(255,255,255,.16)' : 'rgba(255,255,255,.08)',
+                border: `1px solid ${wrap ? T.codeAccent : 'rgba(255,255,255,.16)'}`,
                 borderRadius: T.rS,
-                color: wrap ? '#4EC9B0' : 'rgba(255,255,255,.75)',
+                color: wrap ? T.codeAccent : T.codeFg,
                 fontSize: 11, fontFamily: T.font, cursor: 'pointer',
               }}
             >
@@ -125,8 +125,8 @@ export function CodeBlock({ code, lang = 'js', copyDisabled = false }: CodeBlock
               style={{
                 display: 'flex', alignItems: 'center', gap: 4,
                 padding: '3px 9px', background: 'rgba(255,255,255,.08)',
-                border: '1px solid rgba(255,255,255,.12)', borderRadius: T.rS,
-                color: copied ? '#4EC9B0' : 'rgba(255,255,255,.75)',
+                border: '1px solid rgba(255,255,255,.16)', borderRadius: T.rS,
+                color: copied ? T.codeSuccess : T.codeFg,
                 fontSize: 11, fontFamily: T.font, cursor: copyDisabled ? 'not-allowed' : 'pointer',
                 opacity: copyDisabled ? 0.5 : 1,
               }}
@@ -141,7 +141,7 @@ export function CodeBlock({ code, lang = 'js', copyDisabled = false }: CodeBlock
               fontFamily: T.mono,
               fontSize: 12,
               lineHeight: 1.65,
-              color: '#D4D4D4',
+              color: T.codeFg,
               margin: 0,
               whiteSpace: wrap ? 'pre-wrap' : 'pre',
               wordBreak: wrap ? 'break-word' : 'normal',

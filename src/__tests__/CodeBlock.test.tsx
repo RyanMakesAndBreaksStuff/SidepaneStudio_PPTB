@@ -3,6 +3,7 @@ import { act } from 'react';
 import { createRoot, Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CodeBlock } from '../components/CodeBlock';
+import { theme } from '../theme/tokens';
 
 let root: Root | undefined;
 let host: HTMLDivElement | undefined;
@@ -99,5 +100,19 @@ describe('CodeBlock', () => {
     const pre = host?.querySelector('pre');
     expect(pre?.textContent).toBe(code);
     expect(pre?.querySelector('b')).toBeNull();
+  });
+  it('draws its chrome from the code-well tokens, not hard-coded greys', async () => {
+    const T = theme(true);
+    await render(<CodeBlock code="var n = 1;" lang="js" />);
+    const well = host!.querySelector('pre')!.parentElement!.parentElement as HTMLElement;
+    const header = well.firstElementChild as HTMLElement;
+    const pre = host!.querySelector('pre') as HTMLElement;
+    const rgb = (hex: string) => `rgb(${[1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16)).join(', ')})`;
+    expect(well.style.background).toBe(rgb(T.codeBg));
+    expect(well.style.borderColor).toBe(rgb(T.codeStroke));
+    expect(header.style.background).toBe(rgb(T.codeBg2));
+    expect(pre.style.color).toBe(rgb(T.codeFg));
+    expect((header.querySelector('span') as HTMLElement).style.color).toBe(rgb(T.codeAccent));
+    expect(host!.innerHTML).not.toMatch(/#1E1E1E|#252526|#D4D4D4|#4EC9B0/i);
   });
 });
