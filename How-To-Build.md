@@ -25,10 +25,10 @@ Clone the repository and enter its root folder:
 ```shell
 git clone https://github.com/RyanMakesAndBreaksStuff/SidepaneStudio_PPTB.git
 cd SidepaneStudio_PPTB
-npm install
+npm ci
 ```
 
-If you already have a checkout, run `npm install` from that checkout instead. All commands below run from the folder containing `package.json`.
+If you already have a checkout, run `npm ci` from that checkout instead. `npm ci` installs exactly the versions recorded in `package-lock.json`. All commands below run from the folder containing `package.json`.
 
 **Verify:** dependency installation completes successfully and `npm run` lists the development, build, and verification scripts.
 
@@ -105,7 +105,7 @@ Reload the tool in ToolBox after a rebuild as needed. Passing local checks and s
 | Problem | Action | Verify |
 | --- | --- | --- |
 | `node` or `npm` is unavailable | Install Node.js, check PATH, and reopen the terminal. | Both version commands print a version. |
-| Dependency installation reports an unsupported engine | Use a Node version compatible with the project, Vite, and ESLint requirements above, then rerun `npm install`. | Installation succeeds without an engine mismatch. |
+| Dependency installation reports an unsupported engine | Use a Node version compatible with the project, Vite, and ESLint requirements above, then rerun `npm ci`. | Installation succeeds without an engine mismatch. |
 | The browser reports missing ToolBox or Dataverse APIs | Load the built tool inside ToolBox and select a connection. | The workbench and connected metadata load. |
 | Type checking, lint, or tests fail | Read the named file and diagnostic, fix the issue, and rerun that command before building. | The failed check exits successfully. |
 
@@ -113,7 +113,7 @@ Reload the tool in ToolBox after a rebuild as needed. Passing local checks and s
 
 | Task | Command | Result |
 | --- | --- | --- |
-| Install dependencies | `npm install` | Local dependencies |
+| Install dependencies | `npm ci` | Local dependencies, exactly as locked |
 | Development server | `npm run dev` | Vite development URL |
 | Type checking | `npm run typecheck` | TypeScript diagnostics |
 | Lint | `npm run lint` | ESLint diagnostics |

@@ -9,7 +9,6 @@
 /data
 /coverage
 .superpowers
-/package-lock.json
 docs
 /tasks
 /AGENTS.md

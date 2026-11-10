@@ -94,7 +94,7 @@ See [Change-Log.md](Change-Log.md) for the `v1.4.0` change summary.
 Install dependencies:
 
 ```powershell
-npm install
+npm ci
 ```
 
 Start the Vite dev server:
