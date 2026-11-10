@@ -1,4 +1,5 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+import { generateBasicScript } from '../services/CodeGenerationService';
 import { parseLookupFieldNames, parseStoredConfig, parseStoredOrgKey } from '../services/configGuards';
 import { DEFAULT_CONFIG } from '../types/PaneDefinitionConfig';
 
@@ -175,6 +176,57 @@ describe('v1 migration', () => {
     const c = { ...DEFAULT_CONFIG, host: { ...DEFAULT_CONFIG.host, entityName: 'account', lookupControls: ['x'] }, context: { source: { kind: 'lookup', attribute: 'primarycontactid' }, variableName: 'rec' } };
     expect(parseStoredConfig(JSON.stringify(c))).toEqual(c);
     expect(parseStoredConfig(JSON.stringify({ ...DEFAULT_CONFIG, context: { source: { kind: 'wat' } } }))).toBeNull();
+  });
+
+  // C1 — v1 opened context.entityName || target.entityName with the target's form, tab and data (af22472 CodeGenerationService.ts:82).
+  const FORM = '11111111-2222-3333-4444-555555555555';
+  const contactRecord = { pageType: 'entityrecord', entityName: 'contact', formId: FORM, tabName: 'tab_1', data: '{"a":"b"}' };
+  /** Runs the migrated config's Basic script on a contact form or grid row {A1} and returns the navigateTo input. */
+  async function opens(raw: string) {
+    const config = parseStoredConfig(raw);
+    if (!config) throw new Error('The stored config did not load.');
+    const pane = { navigate: vi.fn().mockResolvedValue(undefined) };
+    const xrm = {
+      App: { sidePanes: { state: 0, getPane: vi.fn(), createPane: vi.fn().mockResolvedValue(pane), getAllPanes: vi.fn().mockReturnValue([]) } },
+      Navigation: { openErrorDialog: vi.fn(), openAlertDialog: vi.fn() },
+    };
+    const form = { data: { entity: { getEntityName: () => 'contact', getId: () => '{A1}' } } };
+    const row = { getId: () => '{A1}', getEntityName: () => 'contact' };
+    const triggerArg = {
+      ...form,
+      getFormContext: () => form,
+      getGrid: () => ({ getSelectedRows: () => ({ getLength: () => 1, get: () => ({ getData: () => ({ getEntity: () => row }) }) }) }),
+    };
+    const open = new Function('window', 'Xrm', `${generateBasicScript(config)}\nreturn Ns.open;`)({}, xrm) as (arg: unknown) => void;
+    open(triggerArg);
+    await vi.waitFor(() => expect(pane.navigate).toHaveBeenCalled());
+    expect(xrm.Navigation.openErrorDialog).not.toHaveBeenCalled();
+    return pane.navigate.mock.calls[0][0];
+  }
+  it.each([
+    ['FormButton', 'CurrentRecord'],
+    ['MainGridButton', 'SelectedRow'],
+    ['FormOnLoad', 'CurrentRecord'],
+  ])('keeps the form, tab and form data of a %s %s Table record target with no context table', async (kind, mode) => {
+    const raw = v1({ kind }, { mode, entityName: '' }, contactRecord);
+    expect(parseStoredConfig(raw)).toMatchObject({
+      host: { entityName: 'contact' },
+      target: { pageType: 'entityrecord', entityName: 'contact', formId: FORM, tabName: 'tab_1', data: '{"a":"b"}', createNew: false },
+    });
+    expect(await opens(raw)).toEqual({ pageType: 'entityrecord', entityName: 'contact', entityId: '{A1}', formId: FORM, tabName: 'tab_1', data: { a: 'b' } });
+  });
+  it('keeps the context table as the host of a RelatedRecord lookup', () => {
+    const raw = v1({ kind: 'FormButton' }, { mode: 'RelatedRecord', entityName: 'account', lookupAttribute: 'primarycontactid' }, contactRecord);
+    expect(parseStoredConfig(raw)).toMatchObject({
+      host: { entityName: 'account' },
+      target: { pageType: 'entityrecord', entityName: 'contact', formId: FORM, tabName: 'tab_1', data: '{"a":"b"}', createNew: false },
+      context: { source: { kind: 'lookup', attribute: 'primarycontactid' } },
+    });
+  });
+  it('keeps a Static or None table as the host only where the trigger requires a host', () => {
+    expect(parseStoredConfig(v1({ kind: 'FormButton' }, { mode: 'None', entityName: 'account' }))?.host.entityName).toBe('');
+    expect(parseStoredConfig(v1({ kind: 'FormOnChange', fieldName: 'name' }, { mode: 'None', entityName: 'account' }))?.host.entityName).toBe('account');
+    expect(parseStoredConfig(v1({ kind: 'LookupTagClick', fieldName: 'parentaccountid' }, { mode: 'Static', entityName: 'account' }))?.host.entityName).toBe('account');
   });
 });
 

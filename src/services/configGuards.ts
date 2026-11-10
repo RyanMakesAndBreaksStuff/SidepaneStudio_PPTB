@@ -191,6 +191,15 @@ export function parseStoredConfig(raw: unknown): PaneDefinitionConfig | null {
     else if (grid) source = { kind: 'selectedRow' };
     else if (kind === 'ManualJS') source = legacyId ? { kind: 'fixed', entityName: legacyEntity, id: legacyId } : { kind: 'none' };
     else source = { kind: 'host' };
+    if (!hostRecord) {
+      // v1 named the record's table, not the trigger's. A Static or None table is not the host's, so it stays only where
+      // the trigger requires a host; a form or grid record with no table named was a record of the target table.
+      const ownRecord = (source.kind === 'host' || source.kind === 'selectedRow') && kind !== 'LookupTagClick';
+      if (mode === 'Static' || mode === 'None') host.entityName = kind === 'FormOnChange' || kind === 'LookupTagClick' ? legacyEntity : '';
+      else if (!legacyEntity && ownRecord && normalizedTarget.pageType === 'entityrecord' && !normalizedTarget.createNew) {
+        host.entityName = normalizedTarget.entityName;
+      }
+    }
   } else source = DEFAULT_CONFIG.context.source;
 
   // Sections added after a config was stored are back-filled from defaults.
