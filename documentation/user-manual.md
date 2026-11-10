@@ -39,6 +39,7 @@ Expected output: the environment name you chose is selected, and opening Side Pa
 
 - The first launch can ask for permission consent. That consent is stored for this tool until a later version asks for more.
 - A loading state reads **Connecting to Dataverse…** while the connection check runs.
+- If the saved configuration was made in a different environment, a warning bar above the panels reads “This configuration was saved for a different environment; table, form, view and page selections are unverified.” **Copy** stays disabled until you click **Use anyway** (see [Error 9](#error-9-configuration-saved-for-a-different-environment)).
 
 **Verification**:
 
@@ -486,6 +487,35 @@ Verify the fix: reopen **Shared Library**. The callout changes to `Shared runtim
 
 A failed check says `Could not verify prerequisite:` plus the Dataverse error. Reconnect the environment and open the tab again. A failed save says `Could not download runtime:` plus the reason. Retry **Download runtime**. Inside ToolBox the button uses the ToolBox save dialog. The button label is **Saving runtime...** while the save is in progress.
 
+### Error 9: Configuration saved for a different environment
+
+Full error message:
+
+```text
+This configuration was saved for a different environment; table, form, view and page selections are unverified.
+```
+
+Related messages:
+
+```text
+Copy is disabled until you confirm the environment warning with Use anyway.
+```
+
+```text
+This table was picked in a different environment. Confirm it exists here.
+```
+
+The last message reads `form`, `view` or `page` in place of `table` for those selections.
+
+Cause: ToolBox restored a configuration that was last saved while a different environment was active, and it holds a table, form, view or page picked there. Those selections may not exist in the active environment. Until you confirm them, the warning bar stays above the panels and **Copy** is disabled on every code block.
+
+Solution:
+
+1. Check that the table, form, view or page exists in the active environment.
+2. Click **Use anyway** in the warning bar. Picking the table, form, view or page again also confirms it, as does **Reset**.
+
+Verify the fix: the warning bar disappears, the `different environment` warnings leave the warning count in the summary strip, and **Copy** works again.
+
 ## Advanced Topics
 
 **Direction 1: Shared library runtime** | Difficulty: Intermediate
@@ -649,6 +679,7 @@ spstudio_/scripts/sidepane.runtime.js
 | Dataverse API + Toolbox API unavailable                             | Opened outside ToolBox             | Launch from Installed Tools                                         |
 | No active Dataverse connection                                      | Nothing selected in Connections    | Add or select a connection                                          |
 | Connection removed. Reconnect in PPTB.                              | Active connection deleted          | Connect again, reopen the studio                                    |
+| This configuration was saved for a different environment; …         | Restored from another environment's save | Check the selections, then click **Use anyway**             |
 | Custom page name is required.                                       | Blank custom page                  | Fill `YOUR_CUSTOM_PAGE`                                             |
 | Pane ID is required.                                                | Blank pane id                      | Set `YOUR_PANE_ID`                                                  |
 | Pane width must be between 300 and 1200 pixels.                     | Width out of range                 | Set 300–1200                                                        |

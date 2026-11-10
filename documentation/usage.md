@@ -15,6 +15,14 @@ If the tool reports that `toolboxAPI` is unavailable, reopen it from inside
 PPTB. If it reports no active Dataverse connection, reconnect the environment
 in PPTB and retry.
 
+If you saved the configuration while another environment was active, a warning
+bar above the panels reads "This configuration was saved for a different
+environment; table, form, view and page selections are unverified." Until you
+select **Use anyway**, the table, form, view or page you picked there is
+flagged ("This table was picked in a different environment. Confirm it exists
+here.") and **Copy** is disabled on every code block. Picking the table, form,
+view or page again also confirms it, as does **Reset**.
+
 ## 2. Choose the trigger and its table
 
 Open **Trigger & source** in the Configure panel. Choose **Trigger type** first;
@@ -118,12 +126,14 @@ trigger runs.
 
 ## 5. Read the summary
 
-The sentence at the top of the Configure panel reads back what the generated
-script does, for example "When a user clicks a form command button on the
-account form, open the account record from the form record in a 480px pane
+The sentence in the summary strip above the three panels reads back what the
+generated script does, for example "When a user clicks a form command button on
+the account form, open the account record from the form record in a 480px pane
 titled “Related Records”." Each highlighted phrase is a button that opens the
-section holding that choice. Below the sentence, the panel counts errors and
-warnings. Check that the sentence says what you intend before you copy code.
+section holding that choice. To the right of the sentence the strip counts
+errors and warnings, for example "2 errors · 0 warnings", and holds the
+**Reset** button. Check that the sentence says what you intend before you copy
+code.
 
 ## 6. Preview the Pane
 
@@ -152,7 +162,9 @@ code in the target model-driven app before shipping.
 
 For quick experiments, use the **Console** trigger and paste the
 generated code into the browser developer console while the model-driven app is
-open.
+open. Console output needs a **Function name** and a **Namespace** like every
+other trigger: it defines `Namespace.functionName` and calls it, so pasting it
+opens the pane.
 
 ## Troubleshooting
 
