@@ -350,8 +350,10 @@ function buildGetOrCreateBody(config: PaneDefinitionConfig, indent = '  '): stri
   const paneIdJson = JSON.stringify(pane.paneId);
   // codegen-config-model-003 — isSelected: false keeps a reused pane in the background too.
   const selectExisting = pane.isSelected === false ? '' : ' existing.select();';
+  // L1 — a reused pane gets the badge too, after select, as SidePaneHelper.open does.
+  const badgeExisting = pane.badgeValue ? ` existing.badge = ${JSON.stringify(pane.badgeValue)};` : '';
   const reuseCheck = behavior.reuseExistingPane
-    ? `${indent}var existing = Xrm.App.sidePanes.getPane(${paneIdJson});\n${indent}if (existing) { await existing.navigate(${navInput});${selectExisting} } else {\n`
+    ? `${indent}var existing = Xrm.App.sidePanes.getPane(${paneIdJson});\n${indent}if (existing) { await existing.navigate(${navInput});${selectExisting}${badgeExisting} } else {\n`
     : `${indent}var existing = Xrm.App.sidePanes.getPane(${paneIdJson});\n${indent}if (existing) { existing.close(); await Promise.resolve(); }\n`;
 
   const badgeAssign = pane.badgeValue

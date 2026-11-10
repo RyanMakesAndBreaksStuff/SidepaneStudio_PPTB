@@ -33,6 +33,8 @@
 - Shared Library output expands the side pane rail only for command-bar
   buttons, as Basic output does; form load, field change, row select, lookup
   tag and console scripts leave a collapsed rail collapsed.
+- Basic output sets the configured badge on a pane it reuses, as the Shared
+  Library already did.
 
 ## v1.3.1
 
