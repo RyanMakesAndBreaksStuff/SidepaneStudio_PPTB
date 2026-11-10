@@ -8,6 +8,12 @@ function Boom(): React.ReactElement {
   throw new Error('render exploded');
 }
 
+let crash = true;
+function Flaky(): React.ReactElement {
+  if (crash) throw new Error('render exploded');
+  return <div>recovered</div>;
+}
+
 let root: Root | undefined;
 let host: HTMLDivElement | undefined;
 let reload: ReturnType<typeof vi.fn>;
@@ -35,6 +41,7 @@ async function click(label: string) {
 }
 
 beforeEach(() => {
+  crash = true;
   reload = vi.fn();
   Object.defineProperty(window, 'location', {
     configurable: true,
@@ -78,26 +85,65 @@ describe('ErrorBoundary', () => {
     expect(button('Copy error details')).toBeTruthy();
   });
 
-  it('reloads once when clearing settings succeeds', async () => {
-    const set = vi.fn().mockResolvedValue(undefined);
-    vi.stubGlobal('toolboxAPI', { settings: { set } });
+  it('offers "Try again" before "Reset configuration"', async () => {
     await render(<ErrorBoundary><Boom /></ErrorBoundary>);
-
-    await click('Reset configuration');
-    await click('Reset configuration');
-
-    expect(reload).toHaveBeenCalledTimes(1);
+    const labels = Array.from(host!.querySelectorAll('button')).map(b => b.textContent ?? '');
+    expect(labels[0]).toContain('Try again');
+    expect(labels[1]).toContain('Reset configuration');
   });
 
-  it('reloads from "Reload anyway" after a failed reset, at most once', async () => {
-    vi.stubGlobal('toolboxAPI', { settings: { set: vi.fn().mockRejectedValue(new Error('nope')) } });
-    await render(<ErrorBoundary><Boom /></ErrorBoundary>);
+  it('"Try again" re-renders the children without clearing settings or reloading', async () => {
+    const set = vi.fn();
+    vi.stubGlobal('toolboxAPI', { settings: { set } });
+    await render(<ErrorBoundary><Flaky /></ErrorBoundary>);
+    crash = false;
+
+    await click('Try again');
+
+    expect(host?.textContent).toContain('recovered');
+    expect(set).not.toHaveBeenCalled();
+    expect(reload).not.toHaveBeenCalled();
+  });
+
+  it('clears the saved configuration and re-renders the children without reloading', async () => {
+    const set = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('toolboxAPI', { settings: { set } });
+    await render(<ErrorBoundary><Flaky /></ErrorBoundary>);
+    crash = false;
+
     await click('Reset configuration');
 
-    await click('Reload anyway');
-    await click('Reload anyway');
+    expect(set).toHaveBeenCalledWith('lastConfig', null);
+    expect(reload).not.toHaveBeenCalled();
+    expect(host?.textContent).toContain('recovered');
+  });
 
-    expect(reload).toHaveBeenCalledTimes(1);
+  it('recovers with "Try again" after a failed reset and offers no reload', async () => {
+    vi.stubGlobal('toolboxAPI', { settings: { set: vi.fn().mockRejectedValue(new Error('nope')) } });
+    await render(<ErrorBoundary><Flaky /></ErrorBoundary>);
+    await click('Reset configuration');
+    expect(host?.textContent).not.toContain('Reload anyway');
+    crash = false;
+
+    await click('Try again');
+
+    expect(host?.textContent).toContain('recovered');
+    expect(reload).not.toHaveBeenCalled();
+  });
+
+  it('renders a custom fallback and retries through it', async () => {
+    await render(
+      <ErrorBoundary fallback={(error, retry) => <button type="button" onClick={retry}>Again: {error.message}</button>}>
+        <Flaky />
+      </ErrorBoundary>
+    );
+    expect(host?.textContent).toContain('Again: render exploded');
+    expect(host?.textContent).not.toContain('Side Pane Studio hit an unexpected error');
+    crash = false;
+
+    await click('Again');
+
+    expect(host?.textContent).toContain('recovered');
   });
 
   it('copies error details via the clipboard', async () => {

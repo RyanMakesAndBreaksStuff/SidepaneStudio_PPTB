@@ -7,6 +7,12 @@ interface ErrorBoundaryState {
   copyStatus: 'idle' | 'copied' | 'failed';
 }
 
+interface ErrorBoundaryProps {
+  children: React.ReactNode;
+  /** Replaces the full-page fallback so a crash can be contained inside one panel. */
+  fallback?: (error: Error, retry: () => void) => React.ReactNode;
+}
+
 const SHELL: React.CSSProperties = {
   display: 'flex', alignItems: 'center', justifyContent: 'center',
   height: '100vh', fontFamily: "'Segoe UI', system-ui, sans-serif",
@@ -16,6 +22,10 @@ const SHELL: React.CSSProperties = {
 const BUTTON: React.CSSProperties = {
   padding: '6px 14px', border: '1px solid #3A3A3A', borderRadius: 4,
   background: 'transparent', color: '#E8E8E8', fontSize: 12, cursor: 'pointer',
+};
+
+const PRIMARY_BUTTON: React.CSSProperties = {
+  ...BUTTON, background: '#E8E8E8', color: '#1A1A1A', border: '1px solid #E8E8E8', fontWeight: 600,
 };
 
 function errorDetails(error: Error, resetError: string | null): string {
@@ -49,15 +59,13 @@ async function copyWithTextareaFallback(text: string): Promise<boolean> {
 }
 
 /**
- * Last-resort recovery. Without this, a bad stored config or a render defect leaves a
- * blank page with no route back to Reset. Resetting clears the persisted config first,
- * so the reload does not reproduce the same crash. A failed clear is surfaced instead of
- * reloading, so a crash unrelated to stored config cannot loop through reload.
+ * Last-resort recovery. "Try again" re-renders the children and touches nothing stored. "Reset configuration"
+ * clears the persisted config, then re-renders the children, which rehydrate defaults when they mount. The page is
+ * never reloaded: the host sends its context only at launch, so a reloaded tool cannot reach any host API until it is
+ * closed and reopened. A failed clear is surfaced and the error stays up.
  */
-export class ErrorBoundary extends React.Component<{ children: React.ReactNode }, ErrorBoundaryState> {
+export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
   state: ErrorBoundaryState = { error: null, resetError: null, copyStatus: 'idle' };
-
-  private reloaded = false;
 
   static getDerivedStateFromError(error: Error): Partial<ErrorBoundaryState> {
     return { error };
@@ -67,14 +75,11 @@ export class ErrorBoundary extends React.Component<{ children: React.ReactNode }
     console.error('Side Pane Studio crashed', error, info.componentStack);
   }
 
-  private reload = (): void => {
-    if (this.reloaded) return;
-    this.reloaded = true;
-    window.location.reload();
+  private retry = (): void => {
+    this.setState({ error: null, resetError: null, copyStatus: 'idle' });
   };
 
   private handleReset = async (): Promise<void> => {
-    if (this.reloaded) return;
     try {
       await window.toolboxAPI?.settings?.set('lastConfig', null);
     } catch (err: unknown) {
@@ -82,7 +87,7 @@ export class ErrorBoundary extends React.Component<{ children: React.ReactNode }
       this.setState({ resetError: err instanceof Error ? err.message : String(err) });
       return;
     }
-    this.reload();
+    this.retry();
   };
 
   private handleCopy = async (): Promise<void> => {
@@ -95,6 +100,7 @@ export class ErrorBoundary extends React.Component<{ children: React.ReactNode }
   render(): React.ReactNode {
     const { error, resetError, copyStatus } = this.state;
     if (!error) return this.props.children;
+    if (this.props.fallback) return this.props.fallback(error, this.retry);
     return (
       <div style={SHELL}>
         <div style={{ fontSize: 32 }}>⚠</div>
@@ -108,18 +114,16 @@ export class ErrorBoundary extends React.Component<{ children: React.ReactNode }
           </div>
         )}
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
+          <button type="button" onClick={this.retry} style={PRIMARY_BUTTON}>
+            Try again
+          </button>
           <button type="button" onClick={this.handleReset} style={BUTTON}>
-            ↺ Reset configuration and reload
+            Reset configuration
           </button>
           {resetError && (
-            <>
-              <button type="button" onClick={this.handleCopy} style={BUTTON}>
-                {copyStatus === 'copied' ? 'Copied' : copyStatus === 'failed' ? 'Copy failed' : 'Copy error details'}
-              </button>
-              <button type="button" onClick={this.reload} style={BUTTON}>
-                Reload anyway
-              </button>
-            </>
+            <button type="button" onClick={this.handleCopy} style={BUTTON}>
+              {copyStatus === 'copied' ? 'Copied' : copyStatus === 'failed' ? 'Copy failed' : 'Copy error details'}
+            </button>
           )}
         </div>
       </div>

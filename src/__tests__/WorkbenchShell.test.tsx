@@ -13,8 +13,13 @@ vi.mock('../components/ConfigurePanel', () => ({
   ConfigurePanel: () => <div>Configure panel</div>,
 }));
 
+const previewState = vi.hoisted(() => ({ throws: false }));
+
 vi.mock('../components/PreviewPanel', () => ({
-  PreviewPanel: () => <div>Preview panel</div>,
+  PreviewPanel: () => {
+    if (previewState.throws) throw new Error('preview exploded');
+    return <div>Preview panel</div>;
+  },
 }));
 
 vi.mock('../components/OutputPanel', () => ({
@@ -34,6 +39,7 @@ async function render(element: React.ReactElement) {
 }
 
 afterEach(async () => {
+  previewState.throws = false;
   if (root) {
     await act(async () => {
       root?.unmount();
@@ -265,5 +271,27 @@ describe('WorkbenchShell', () => {
     });
 
     expect(onReset).not.toHaveBeenCalled();
+  });
+});
+
+describe('WorkbenchShell — preview crash containment', () => {
+  it.each(['wide', 'narrow'] as const)('keeps the workbench running when the preview throws (%s)', async layout => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    previewState.throws = true;
+    await render(shell(layout));
+    if (layout === 'narrow') await act(async () => { tab('Preview')?.click(); });
+
+    expect(host?.textContent).toContain('The preview hit an unexpected error');
+    expect(host?.textContent).toContain('preview exploded');
+    expect(resetButton()).toBeDefined();
+    if (layout === 'wide') {
+      expect(host?.textContent).toContain('Configure panel');
+      expect(host?.textContent).toContain('Output panel');
+    }
+
+    previewState.throws = false;
+    const tryAgain = Array.from(host!.querySelectorAll('button')).find(b => b.textContent === 'Try again');
+    await act(async () => { tryAgain?.click(); });
+    expect(host?.textContent).toContain('Preview panel');
   });
 });

@@ -13,6 +13,7 @@ import { ConfigurePanel, type JumpRequest } from './ConfigurePanel';
 import { SentenceSummary } from './config/SentenceSummary';
 import type { SummarySlot } from '../services/describeConfig';
 import { PreviewPanel } from './PreviewPanel';
+import { ErrorBoundary } from './ErrorBoundary';
 import { OutputPanel } from './OutputPanel';
 import { Callout } from './Callout';
 import { PreviewSessionProvider } from '../contexts/PreviewSessionContext';
@@ -105,6 +106,11 @@ function WorkbenchShellContent({
     jumpRequest,
   };
   const previewPanelProps = { config, onChange, validation, metadataService, xrm };
+  const previewPanel = (
+    <ErrorBoundary fallback={(error, retry) => <PreviewCrash error={error} retry={retry} />}>
+      <PreviewPanel {...previewPanelProps} />
+    </ErrorBoundary>
+  );
   const outputPanelProps = { config, xrm, validation, copyBlocked: orgMismatch };
 
   return (
@@ -153,7 +159,7 @@ function WorkbenchShellContent({
           </aside>
           <section style={{ flex: 1, borderRight: `1px solid ${T.stroke1}`, minWidth: 300, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
             <PanelHeader title="Preview" />
-            <PreviewPanel {...previewPanelProps} />
+            {previewPanel}
           </section>
           <section
             aria-label={codePanelOpen ? 'Code panel' : 'Code rail'}
@@ -220,7 +226,7 @@ function WorkbenchShellContent({
           </div>
           <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
             {narrowTab === 'configure' && <ConfigurePanel {...configurePanelProps} />}
-            {narrowTab === 'preview' && <PreviewPanel {...previewPanelProps} />}
+            {narrowTab === 'preview' && previewPanel}
             {narrowTab === 'output'  && <OutputPanel {...outputPanelProps} />}
           </div>
         </div>
@@ -306,6 +312,26 @@ function ResetConfigButton({ onReset }: { onReset: () => void }): React.ReactEle
     >
       ↺ Reset
     </button>
+  );
+}
+
+/** Fallback for a preview render throw (e.g. server-supplied FormXML): the rest of the workbench keeps running. */
+function PreviewCrash({ error, retry }: { error: Error; retry: () => void }): React.ReactElement {
+  const { isDark } = useTheme();
+  const T = theme(isDark);
+
+  return (
+    <div role="alert" style={{
+      flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+      gap: 8, padding: 24, textAlign: 'center', fontFamily: T.font, fontSize: 13, color: T.fg2,
+    }}>
+      <div style={{ color: T.error, fontWeight: 600 }}>The preview hit an unexpected error</div>
+      <div>{error.message}</div>
+      <button type="button" onClick={retry} style={{
+        padding: '4px 12px', border: `1px solid ${T.stroke1}`, borderRadius: T.rS,
+        background: 'transparent', color: T.fg2, fontFamily: T.font, fontSize: 12, cursor: 'pointer',
+      }}>Try again</button>
+    </div>
   );
 }
 
