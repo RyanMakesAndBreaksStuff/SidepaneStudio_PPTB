@@ -56,17 +56,25 @@ describe('PptbContextAdapter', () => {
     expect(await adapter.checkWebResourceExists(RUNTIME_WEB_RESOURCE_SUFFIX)).toBeNull();
   });
 
-  it('webApiGet strips /api/data/vN.N/ prefix and unwraps value', async () => {
+  it('webApiGet forwards the path verbatim and unwraps value', async () => {
     const api = makeMockDataverseAPI();
     api.queryData.mockResolvedValue({ value: [{ name: 'Acme' }] });
     vi.stubGlobal('dataverseAPI', api);
     const adapter = new PptbContextAdapter();
     const result = await adapter.webApiGet('/api/data/v9.2/accounts?$select=name');
-    expect(api.queryData).toHaveBeenCalledWith('accounts?$select=name');
+    expect(api.queryData).toHaveBeenCalledWith('/api/data/v9.2/accounts?$select=name');
     expect(result).toEqual([{ name: 'Acme' }]);
   });
 
-  it('webApiGet passes path unchanged when no prefix', async () => {
+  it('webApiGetEntity forwards the path verbatim', async () => {
+    const api = makeMockDataverseAPI();
+    api.queryData.mockResolvedValue({ name: 'Acme' });
+    vi.stubGlobal('dataverseAPI', api);
+    await new PptbContextAdapter().webApiGetEntity('/api/data/v9.2/accounts(1)');
+    expect(api.queryData).toHaveBeenCalledWith('/api/data/v9.2/accounts(1)');
+  });
+
+  it('webApiGet passes a relative path unchanged', async () => {
     const api = makeMockDataverseAPI();
     api.queryData.mockResolvedValue({ value: [] });
     vi.stubGlobal('dataverseAPI', api);

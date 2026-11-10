@@ -1,18 +1,15 @@
 // src/adapters/PptbContextAdapter.ts
 import { escapeODataStringLiteral } from '../services/odataGuards';
 
-/**
- * Contract actually consumed through the `IXrmContext` type by production code:
- * `checkWebResourceExists` (src/components/OutputPanel.tsx), and `webApiGet` /
- * `webApiGetEntity` (src/services/FormXmlService.ts, src/services/MetadataService.ts).
- * Verified by grepping all of `src` for each prior member name outside
- * adapters/tests (PR-002, 2026-09-03) — none of the other original 12 members
- * had a production caller reached through this interface.
- */
 export interface FetchXmlResult {
   value: Record<string, unknown>[];
 }
 
+/**
+ * The Dataverse calls the tool makes, over `window.dataverseAPI`. Production readers:
+ * `checkWebResourceExists` (OutputPanel), `webApiGet` (MetadataService, FormXmlService),
+ * `webApiGetEntity` (FormXmlService) and `fetchXml` (GridPreview, PreviewPanel).
+ */
 export interface IXrmContext {
   /** Name of the first web resource whose name ends with `suffix`, or null when none exists. */
   checkWebResourceExists(suffix: string): Promise<string | null>;
@@ -88,10 +85,9 @@ export class PptbContextAdapter implements IXrmContext {
   }
 
   async webApiGet<T = unknown>(odataPath: string): Promise<T> {
-    const cleanPath = odataPath.replace(/^\/api\/data\/v\d+\.\d+\//, '');
-    const result = await this.callApi(() => window.dataverseAPI.queryData(cleanPath));
+    const result = await this.callApi(() => window.dataverseAPI.queryData(odataPath));
     if (!Array.isArray(result?.value)) {
-      throw new Error(`Unexpected response for ${cleanPath}: missing value array`);
+      throw new Error(`Unexpected response for ${odataPath}: missing value array`);
     }
     return result.value as unknown as T;
   }
@@ -102,8 +98,7 @@ export class PptbContextAdapter implements IXrmContext {
    * is unavoidable — it is confined here rather than leaking into services.
    */
   async webApiGetEntity<T = unknown>(odataPath: string): Promise<T> {
-    const cleanPath = odataPath.replace(/^\/api\/data\/v\d+\.\d+\//, '');
-    const result = await this.callApi(() => window.dataverseAPI.queryData(cleanPath));
+    const result = await this.callApi(() => window.dataverseAPI.queryData(odataPath));
     const value = (result as { value?: unknown } | null | undefined)?.value;
     if (Array.isArray(value) && value.length === 1) return value[0] as T;
     return result as unknown as T;
