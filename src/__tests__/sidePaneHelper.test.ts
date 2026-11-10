@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import type { SidePaneHelperOptions } from '../runtime/sidePaneHelper';
 import runtimeSource from '../runtime/sidepane.runtime.js?raw';
+import { deferred } from './testHelpers';
 
 function fakeXrm() {
   const pane = { paneId: 'p', select: vi.fn(), close: vi.fn(), navigate: vi.fn().mockResolvedValue(undefined), badge: 0 };
@@ -125,6 +126,54 @@ describe('SidePaneHelper.open — createPane options (contract C4/C3)', () => {
     await open({ paneId: 'p', pageType: 'custom', name: 'sps_Page', toggleIfOpen: true });
     expect(selected.close).toHaveBeenCalled();
     expect(f.pane.navigate).not.toHaveBeenCalled();
+  });
+});
+
+describe('SidePaneHelper.open — one open per pane at a time (L2)', () => {
+  let f: ReturnType<typeof fakeXrm>;
+  beforeEach(() => { f = fakeXrm(); vi.stubGlobal('Xrm', f.xrm); });
+  const page = (name: string): SidePaneHelperOptions => ({ paneId: 'p', pageType: 'custom', name });
+  const openedPages = () => f.pane.navigate.mock.calls.map(call => (call[0] as { name: string }).name);
+
+  it('opens only the newest call made while the pane is opening', async () => {
+    const first = deferred<void>();
+    f.pane.navigate.mockReturnValueOnce(first.promise);
+    const opened = open(page('A'));
+    open(page('B'));
+    open(page('C'));
+    first.resolve();
+    await opened;
+    expect(openedPages()).toEqual(['A', 'C']);
+  });
+
+  it('opens a repeated identical call once, so a double click opens one pane', async () => {
+    const first = deferred<void>();
+    f.pane.navigate.mockReturnValueOnce(first.promise);
+    const opened = open(page('A'));
+    open(page('A'));
+    first.resolve();
+    await opened;
+    expect(openedPages()).toEqual(['A']);
+  });
+
+  it('lets a call take over a lock held for two seconds; the old open then neither releases nor replays', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      const start = new Date('2026-11-10T12:00:00Z').getTime();
+      vi.setSystemTime(start);
+      const hung = deferred<void>();
+      f.pane.navigate.mockReturnValueOnce(hung.promise);
+      const opened = open(page('A'));
+      vi.setSystemTime(start + 1000);
+      open(page('B')); // A still holds the pane, so B waits as the newest call.
+      vi.setSystemTime(start + 2500);
+      await open(page('C')); // A's lock has expired, so C opens at once.
+      hung.resolve();
+      await opened;
+      expect(openedPages()).toEqual(['A', 'C']);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

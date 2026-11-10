@@ -45,6 +45,10 @@
 - Grid row select scripts remember a row selected while a pane is opening by
   its ID and table, and open it from those values instead of re-reading an
   event that has already ended.
+- The shared runtime (`sidepane.runtime.js`) opens one pane per pane ID at a
+  time: a call made while that pane is opening waits, the newest waiting call
+  opens next, and a repeated identical call (a double click) opens once.
+  Download the runtime again and redeploy the web resource to get this.
 
 ## v1.3.1
 

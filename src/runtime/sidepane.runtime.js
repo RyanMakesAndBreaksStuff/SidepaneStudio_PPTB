@@ -62,7 +62,36 @@
     return nav;
   }
 
+  /** paneId → the open running for that pane: when it started and the newest call that arrived meanwhile. */
+  const opening = {};
+  /** Milliseconds an open holds its pane before another call may take over, as in the Basic scripts. */
+  const OPENING_TTL_MS = 2000;
+
+  /**
+   * One open runs per pane. A call made meanwhile is kept (newest wins) and opened when the running one finishes,
+   * unless it repeats exactly what just opened, so a double click opens once. An open that outlives its lock
+   * neither releases nor replays for the call that took the lock over.
+   */
   async function open(options) {
+    const paneId = options && options.paneId;
+    const running = paneId ? opening[paneId] : undefined;
+    if (running && Date.now() - running.at < OPENING_TTL_MS) {
+      running.latest = options;
+      return;
+    }
+    const mine = { at: Date.now(), latest: undefined };
+    if (paneId) opening[paneId] = mine;
+    try {
+      await openNow(options);
+    } finally {
+      if (paneId && opening[paneId] === mine) {
+        delete opening[paneId];
+        if (mine.latest && JSON.stringify(mine.latest) !== JSON.stringify(options)) await open(mine.latest);
+      }
+    }
+  }
+
+  async function openNow(options) {
     const xrm = globalThis.Xrm;
     try {
       if (!options || !options.paneId) {
