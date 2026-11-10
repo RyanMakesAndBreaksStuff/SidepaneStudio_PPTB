@@ -10,6 +10,8 @@ export default [
   {
     ignores: [
       "**/generated", "**/dist/**", "tasks/**",
+      "coverage/**", "docs/**",
+      ".claude/**", ".worktrees/**", ".superpowers/**",
       "eslint.config.mjs", "vite.config.ts",
       "vitest.config.ts", "src/runtime/sidePaneHelper.d.ts",
     ],
