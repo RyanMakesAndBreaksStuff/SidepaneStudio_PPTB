@@ -9,7 +9,7 @@ import typescriptEslint from "typescript-eslint";
 export default [
   {
     ignores: [
-      "**/generated", "**/dist/**", "tasks/**",
+      "**/dist/**", "tasks/**",
       "coverage/**", "docs/**",
       ".claude/**", ".worktrees/**", ".superpowers/**",
       "eslint.config.mjs", "vite.config.ts",
@@ -30,7 +30,6 @@ export default [
     languageOptions: {
       globals: {
         ...globals.browser,
-        ComponentFramework: true,
       },
       parserOptions: {
         ecmaVersion: 2020,
