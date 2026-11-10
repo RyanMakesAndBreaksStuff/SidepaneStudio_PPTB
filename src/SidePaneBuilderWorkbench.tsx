@@ -3,6 +3,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { PaneDefinitionConfig, DEFAULT_CONFIG, PageType, TargetConfig } from './types/PaneDefinitionConfig';
 import { parseStoredConfig, parseStoredOrgKey } from './services/configGuards';
 import { coerceConfig } from './services/triggerCapabilities';
+import { notify } from './services/notify';
 import { WorkbenchShell } from './components/WorkbenchShell';
 import { PptbContextAdapter } from './adapters/PptbContextAdapter';
 import { subscribeToolboxEvents } from './adapters/toolboxEvents';
@@ -23,13 +24,7 @@ type ConnectionState =
 function reportSettingsFailure(action: string, err: unknown): void {
   const message = err instanceof Error ? err.message : String(err);
   console.error(`SidePaneBuilderWorkbench: ${action} failed`, err);
-  Promise.resolve(
-    window.toolboxAPI?.utils?.showNotification({
-      title: 'Preferences not saved',
-      body: `${action} failed: ${message}`,
-      type: 'error',
-    })
-  ).catch(() => { /* notification is best-effort; never mask the original failure */ });
+  notify('Preferences not saved', `${action} failed: ${message}`, 'error');
 }
 
 /** Target fields that only exist in the org they were picked from; exhaustive so a new page type must decide. */
@@ -151,8 +146,9 @@ export function SidePaneBuilderWorkbench(): React.ReactElement {
 
     let active = true;
     let checkGeneration = 0;
-    // Last connected org; kept through disconnects so A → none → B still counts as a switch.
-    let connectionId: string | null = null;
+    // Last connected org (its org key, or the connection id when the URL is unusable);
+    // kept through disconnects so A → none → B still counts as a switch.
+    let connectedOrg: string | null = null;
 
     // Rechecks in place: the shell stays mounted, and only a switch resets the preview, caches and selections.
     const refreshConnection = async () => {
@@ -161,14 +157,20 @@ export function SidePaneBuilderWorkbench(): React.ReactElement {
         const conn = await toolbox.connections.getActiveConnection();
         if (!active || generation !== checkGeneration) return;
         if (conn) {
-          if (connectionId !== null && connectionId !== conn.id) {
+          const org = orgKeyOf(conn) ?? conn.id;
+          if (connectedOrg !== null && connectedOrg !== org) {
             setPreviewEpoch(value => value + 1);
             metaRef.current?.invalidate();
             configDirtyRef.current = true;
             setConfig(clearOrgSelections);
             setRestoredOrg(null);
+            notify(
+              'Environment changed',
+              'Table, form, view and page selections from the previous environment were cleared.',
+              'warning',
+            );
           }
-          connectionId = conn.id;
+          connectedOrg = org;
           setActiveOrgKey(orgKeyOf(conn));
         }
         setConnectionState(conn ? { status: 'ready' } : {

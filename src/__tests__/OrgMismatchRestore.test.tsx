@@ -52,9 +52,11 @@ let host: HTMLDivElement | undefined;
 let stored: string | null;
 let handler: Handler | undefined;
 let getActiveConnection: ReturnType<typeof vi.fn>;
+let showNotification: ReturnType<typeof vi.fn>;
 
 function stubToolbox(connection: unknown) {
   getActiveConnection = vi.fn(async () => connection);
+  showNotification = vi.fn().mockResolvedValue(undefined);
   vi.stubGlobal('toolboxAPI', {
     connections: { getActiveConnection },
     events: { on: vi.fn((callback: Handler) => { handler = callback; }), off: vi.fn() },
@@ -63,6 +65,16 @@ function stubToolbox(connection: unknown) {
       set: vi.fn(async (key: string, value: string | null) => { if (key === 'lastConfig') stored = value; }),
       getAll: vi.fn().mockResolvedValue({}),
     },
+    utils: { showNotification },
+  });
+}
+
+/** The host makes `connection` active and sends the connect/reuse update it sends for every switch. */
+async function activate(connection: { id: string; name: string; url: string }) {
+  getActiveConnection.mockResolvedValue(connection);
+  await act(async () => {
+    handler?.({ senderId: 'ipc' }, { event: 'connection:updated', data: { id: connection.id, isActive: true }, timestamp: '2026-11-10' });
+    await Promise.resolve();
   });
 }
 
@@ -215,5 +227,25 @@ describe('restoring a configuration saved for another environment (W20)', () => 
     });
     expect(host?.textContent).not.toContain(BANNER);
     expect(button('Use anyway')).toBeUndefined();
+  });
+});
+
+describe('switching the active connection (M19)', () => {
+  it('keeps selections when another connection to the same org becomes active', async () => {
+    stored = JSON.stringify({ ...SAVED, orgKey: 'orga.crm.dynamics.com' });
+    stubToolbox(ORG_A);
+    await mount();
+    await activate({ id: 'conn-a2', name: 'Org A (second profile)', url: 'https://orga.crm.dynamics.com' });
+    expect(host?.querySelector('[data-testid="formId"]')?.textContent).toBe(SAVED_FORM_ID);
+    expect(showNotification).not.toHaveBeenCalled();
+  });
+
+  it('tells the user when a switch to another org clears the selections', async () => {
+    stored = JSON.stringify({ ...SAVED, orgKey: 'orga.crm.dynamics.com' });
+    stubToolbox(ORG_A);
+    await mount();
+    await activate(ORG_B);
+    expect(host?.querySelector('[data-testid="formId"]')?.textContent).toBe('');
+    expect(showNotification).toHaveBeenCalledWith(expect.objectContaining({ title: 'Environment changed', type: 'warning' }));
   });
 });
