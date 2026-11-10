@@ -3,8 +3,10 @@ import { act } from 'react';
 import { createRoot, Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MetadataFilterConfigEditor } from '../components/config/MetadataFilterConfigEditor';
-import { ThemeProvider } from '../contexts/ThemeContext';
+import { ThemeContext, ThemeProvider } from '../contexts/ThemeContext';
+import { theme } from '../theme/tokens';
 import { DEFAULT_METADATA_FILTER_CONFIG } from '../types/MetadataFilterConfig';
+import { rgb } from './testHelpers';
 
 let root: Root | undefined;
 let host: HTMLDivElement | undefined;
@@ -98,6 +100,28 @@ describe('MetadataFilterConfigEditor', () => {
       allowedStandardTables: ['contact', 'account'],
     });
   });
+
+  it.each([['light', false], ['dark', true]] as const)(
+    'draws the Save label in accentFg on the accent fill in the %s theme', async (_, isDark) => {
+      await render(
+        <ThemeContext.Provider value={{ isDark }}>
+          <MetadataFilterConfigEditor
+            config={customConfig}
+            defaultConfig={DEFAULT_METADATA_FILTER_CONFIG}
+            persistenceAvailable={true}
+            onSave={() => {}}
+            onReset={() => {}}
+          />
+        </ThemeContext.Provider>
+      );
+
+      await setTextareaValue(textarea('Allowed standard tables'), '["contact"]');
+
+      const save = button('Save')!;
+      expect(save.style.backgroundColor).toBe(rgb(theme(isDark).accent));
+      expect(save.style.color).toBe(rgb(theme(isDark).accentFg));
+    }
+  );
 
   it('rejects invalid JSON array content', async () => {
     const onSave = vi.fn();
