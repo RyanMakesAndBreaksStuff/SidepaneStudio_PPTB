@@ -15,25 +15,22 @@ export interface MetadataFilterSettingsResult {
   persistenceAvailable: boolean;
 }
 
-const SETTING_KEYS = {
+/** One key holds the whole config, so a save or reset is a single write that cannot half-land. */
+const SETTING_KEY = 'metadataFilters';
+/** Written by versions that stored one key per list; read only while SETTING_KEY has never been written. */
+const LEGACY_SETTING_KEYS = {
   denyPrefixes: 'metadataFilters.denyPrefixes',
   denyExact: 'metadataFilters.denyExact',
   allowedStandardTables: 'metadataFilters.allowedStandardTables',
 } as const;
 
 function pickMetadataFilterSettings(settings: Record<string, unknown>): Record<string, unknown> {
+  const stored = settings[SETTING_KEY];
+  if (typeof stored === 'object' && stored !== null && !Array.isArray(stored)) return stored as Record<string, unknown>;
   return {
-    denyPrefixes: settings[SETTING_KEYS.denyPrefixes],
-    denyExact: settings[SETTING_KEYS.denyExact],
-    allowedStandardTables: settings[SETTING_KEYS.allowedStandardTables],
-  };
-}
-
-function toSettings(config: MetadataFilterConfig): Record<string, unknown> {
-  return {
-    [SETTING_KEYS.denyPrefixes]: config.denyPrefixes,
-    [SETTING_KEYS.denyExact]: config.denyExact,
-    [SETTING_KEYS.allowedStandardTables]: config.allowedStandardTables,
+    denyPrefixes: settings[LEGACY_SETTING_KEYS.denyPrefixes],
+    denyExact: settings[LEGACY_SETTING_KEYS.denyExact],
+    allowedStandardTables: settings[LEGACY_SETTING_KEYS.allowedStandardTables],
   };
 }
 
@@ -62,7 +59,7 @@ export class MetadataFilterSettingsService {
       return { config: normalized, persistenceAvailable: false };
     }
 
-    await this.writeConfig(this.settings, normalized);
+    await this.settings.set(SETTING_KEY, normalized);
     return { config: normalized, persistenceAvailable: true };
   }
 
@@ -71,14 +68,7 @@ export class MetadataFilterSettingsService {
       return { config: DEFAULT_METADATA_FILTER_CONFIG, persistenceAvailable: false };
     }
 
-    await this.writeConfig(this.settings, DEFAULT_METADATA_FILTER_CONFIG);
+    await this.settings.set(SETTING_KEY, DEFAULT_METADATA_FILTER_CONFIG);
     return { config: DEFAULT_METADATA_FILTER_CONFIG, persistenceAvailable: true };
-  }
-
-  // Per-key writes: a getAll/setAll read-modify-write could clobber a concurrent 'lastConfig' write.
-  private async writeConfig(settings: MetadataFilterSettingsAPI, config: MetadataFilterConfig): Promise<void> {
-    for (const [key, value] of Object.entries(toSettings(config))) {
-      await settings.set(key, value);
-    }
   }
 }

@@ -193,9 +193,12 @@ describe('SidePaneBuilderWorkbench', () => {
       });
     });
 
-    expect(settingsSet).toHaveBeenCalledWith('metadataFilters.denyPrefixes', ['abc_']);
-    expect(settingsSet).toHaveBeenCalledWith('metadataFilters.denyExact', ['webresource']);
-    expect(settingsSet).toHaveBeenCalledWith('metadataFilters.allowedStandardTables', ['account']);
+    expect(settingsSet).toHaveBeenCalledTimes(1);
+    expect(settingsSet).toHaveBeenCalledWith('metadataFilters', {
+      denyPrefixes: ['abc_'],
+      denyExact: ['webresource'],
+      allowedStandardTables: ['account'],
+    });
     expect(settingsSet).not.toHaveBeenCalledWith('lastConfig', expect.anything());
     expect(workbenchShellState.props?.metadataFilterConfig).toEqual({
       denyPrefixes: ['abc_'],
@@ -209,6 +212,8 @@ describe('SidePaneBuilderWorkbench', () => {
     });
 
     expect(workbenchShellState.props?.metadataFilterConfig).toEqual(DEFAULT_METADATA_FILTER_CONFIG);
+    expect(settingsSet).toHaveBeenCalledTimes(2);
+    expect(settingsSet).toHaveBeenLastCalledWith('metadataFilters', DEFAULT_METADATA_FILTER_CONFIG);
   });
 
   it('surfaces a failed settings write instead of dropping it', async () => {
@@ -493,7 +498,8 @@ describe('SidePaneBuilderWorkbench', () => {
       });
     });
 
-    expect(settingsSet).toHaveBeenCalledWith('metadataFilters.denyPrefixes', expect.anything());
+    expect(settingsSet).toHaveBeenCalledTimes(1);
+    expect(settingsSet).toHaveBeenCalledWith('metadataFilters', expect.anything());
     expect(workbenchShellState.props?.metadataFilterError).toBe('metadata settings backend offline');
     // The failed write must not have been applied to displayed state.
     expect(workbenchShellState.props?.metadataFilterConfig).toEqual(DEFAULT_METADATA_FILTER_CONFIG);
@@ -527,7 +533,8 @@ describe('SidePaneBuilderWorkbench', () => {
       await reset();
     });
 
-    expect(settingsSet).toHaveBeenCalledWith('metadataFilters.denyPrefixes', expect.anything());
+    expect(settingsSet).toHaveBeenCalledTimes(1);
+    expect(settingsSet).toHaveBeenCalledWith('metadataFilters', expect.anything());
     expect(workbenchShellState.props?.metadataFilterError).toBe('metadata settings backend offline');
     expect(workbenchShellState.props?.metadataFilterConfig).toEqual(DEFAULT_METADATA_FILTER_CONFIG);
   });

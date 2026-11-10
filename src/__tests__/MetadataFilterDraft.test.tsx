@@ -99,7 +99,8 @@ describe('metadata filter draft', () => {
     await typeDraft();
     await act(async () => { button('Save')?.click(); });
     await flush();
-    expect(settingsSet).toHaveBeenCalledWith('metadataFilters.denyPrefixes', ['abc_']);
+    expect(settingsSet).toHaveBeenCalledTimes(1);
+    expect(settingsSet).toHaveBeenCalledWith('metadataFilters', expect.objectContaining({ denyPrefixes: ['abc_'] }));
     expect(JSON.parse(area()!.value)).toEqual(['abc_']);
     expect(button('Save')).toBeUndefined();
   });
