@@ -608,6 +608,37 @@ describe('SidePaneBuilderWorkbench', () => {
       timestamp: new Date().toISOString(),
     })).not.toThrow();
   });
+
+  it.each([
+    ['rejects', () => vi.fn().mockRejectedValueOnce(new Error('host busy')).mockResolvedValue({ id: 'conn-1' }), 'host busy'],
+    ['finds no connection', () => vi.fn().mockResolvedValueOnce(null).mockResolvedValue({ id: 'conn-1' }), 'No active Dataverse connection'],
+  ] as const)('offers Retry when getActiveConnection %s, and recovers on success', async (_label, makeGet, message) => {
+    const getActiveConnection = makeGet();
+    vi.stubGlobal('toolboxAPI', {
+      connections: { getActiveConnection },
+      events: { on: vi.fn(), off: vi.fn() },
+      settings: { get: vi.fn().mockResolvedValue(null), set: vi.fn().mockResolvedValue(undefined) },
+    });
+    await render(<SidePaneBuilderWorkbench />);
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    expect(host?.textContent).toContain(message);
+
+    const retry = Array.from(host?.querySelectorAll('button') ?? []).find(b => b.textContent === 'Retry');
+    expect(retry, 'Retry button').toBeDefined();
+    await act(async () => { retry?.click(); });
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+
+    expect(getActiveConnection).toHaveBeenCalledTimes(2);
+    expect(host?.querySelector('[data-testid="title"]')).not.toBeNull();
+  });
+
+  it('offers no Retry when toolboxAPI itself is missing', async () => {
+    vi.stubGlobal('toolboxAPI', undefined);
+    await render(<SidePaneBuilderWorkbench />);
+    await act(async () => { await Promise.resolve(); });
+    expect(host?.textContent).toContain('toolboxAPI unavailable');
+    expect(Array.from(host?.querySelectorAll('button') ?? []).some(b => b.textContent === 'Retry')).toBe(false);
+  });
 });
 
 describe('SidePaneBuilderWorkbench — pending save flush', () => {

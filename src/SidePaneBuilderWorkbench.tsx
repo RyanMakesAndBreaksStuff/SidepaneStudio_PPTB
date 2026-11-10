@@ -19,7 +19,7 @@ import type { MetadataFilterDraft } from './components/config/MetadataFilterConf
 type ConnectionState =
   | { status: 'loading' }
   | { status: 'ready' }
-  | { status: 'error'; message: string };
+  | { status: 'error'; message: string; retryable?: boolean };
 
 /** Settings failures are silent by default — the user must learn the write did not land. */
 function reportSettingsFailure(action: string, err: unknown): void {
@@ -105,6 +105,7 @@ export function SidePaneBuilderWorkbench(): React.ReactElement {
   const orgMismatch = savedOrgKey !== null && activeOrgKey !== null && savedOrgKey !== activeOrgKey;
   const configDirtyRef = useRef(false);
   const restoreAttemptRef = useRef(0);
+  const refreshConnectionRef = useRef<(() => Promise<void>) | null>(null);
 
   const adapterRef = useRef<PptbContextAdapter | null>(null);
   if (!adapterRef.current) adapterRef.current = new PptbContextAdapter();
@@ -177,11 +178,12 @@ export function SidePaneBuilderWorkbench(): React.ReactElement {
         setConnectionState(conn ? { status: 'ready' } : {
           status: 'error',
           message: 'No active Dataverse connection. Connect an environment in PPTB and retry.',
+          retryable: true,
         });
       } catch (err: unknown) {
         if (!active || generation !== checkGeneration) return;
         const message = err instanceof Error ? err.message : 'Failed to check connection.';
-        setConnectionState({ status: 'error', message });
+        setConnectionState({ status: 'error', message, retryable: true });
       }
     };
 
@@ -203,11 +205,13 @@ export function SidePaneBuilderWorkbench(): React.ReactElement {
       }
     };
 
+    refreshConnectionRef.current = refreshConnection;
     const unsubscribe = subscribeToolboxEvents(toolbox.events, handler);
     void refreshConnection();
     return () => {
       active = false;
       ++checkGeneration;
+      refreshConnectionRef.current = null;
       unsubscribe();
     };
   }, []);
@@ -317,6 +321,11 @@ export function SidePaneBuilderWorkbench(): React.ReactElement {
     setRestoredOrg(null);
   }, []);
 
+  const handleRetryConnection = useCallback(() => {
+    setConnectionState({ status: 'loading' });
+    void refreshConnectionRef.current?.();
+  }, []);
+
   const handleSaveMetadataFilterConfig = useCallback(async (nextConfig: MetadataFilterConfig) => {
     try {
       const result = await metadataFilterSettingsRef.current?.save(nextConfig);
@@ -350,7 +359,10 @@ export function SidePaneBuilderWorkbench(): React.ReactElement {
   }
 
   if (connectionState.status === 'error') {
-    return <StatusScreen icon="⚠" title="Connection unavailable" message={connectionState.message} />;
+    return (
+      <StatusScreen icon="⚠" title="Connection unavailable" message={connectionState.message}
+        action={connectionState.retryable ? { label: 'Retry', onClick: handleRetryConnection } : undefined} />
+    );
   }
 
   if (settingsRestoreError) {
