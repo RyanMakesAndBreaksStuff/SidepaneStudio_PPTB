@@ -1557,7 +1557,7 @@ describe('form-event record and pre-fill expressions', () => {
     expect(isValidJS(code)).toBe(true);
     expect(occurrences(code, BASIC_RECORD)).toBe(1);
     expect(occurrences(code, 'entityId: recordId')).toBe(2);
-    expect(occurrences(code, 'executionContext.getFormContext()')).toBe(2);
+    expect(occurrences(code, 'executionContext.getFormContext()')).toBe(1);
     expect(code).toContain('var formContext = executionContext.getFormContext();');
     expect(code).not.toContain('executionContext.getFormContext().data');
     expect(code).not.toContain('primaryControl');
@@ -1588,7 +1588,7 @@ describe('form-event record and pre-fill expressions', () => {
     expect(occurrences(code, BASIC_PREFILL)).toBe(2);
     expect(occurrences(code, 'formContext.data.entity.getEntityName()')).toBe(2);
     expect(occurrences(code, 'formContext.data.entity.getId()')).toBe(2);
-    expect(occurrences(code, 'executionContext.getFormContext()')).toBe(2);
+    expect(occurrences(code, 'executionContext.getFormContext()')).toBe(1);
     expect(code).not.toContain('entityId');
     expect(code).not.toContain('executionContext.getFormContext().data');
     if (kind === 'FormOnChange') expect(code).toContain(', 150);');
@@ -1607,11 +1607,11 @@ describe('form-event record and pre-fill expressions', () => {
     expect(code).not.toContain('selectedRecordId');
   });
 
-  it('Basic FormOnLoad evaluates the captured form once, then checks staleness after navigate', async () => {
+  it('Basic FormOnLoad evaluates the captured form once and does nothing after navigate', async () => {
     const { events, executionContext } = formProbe();
     const { open, pane } = loadBasic(recordConfig('FormOnLoad'), events);
     await open(executionContext);
-    expect(events).toEqual(['getFormContext', 'getId', 'getPane', 'createPane', 'navigate', 'getFormContext']);
+    expect(events).toEqual(['getFormContext', 'getId', 'getPane', 'createPane', 'navigate']);
     expect(pane.navigate).toHaveBeenCalledWith(RECORD_NAV);
   });
 
@@ -1626,7 +1626,7 @@ describe('form-event record and pre-fill expressions', () => {
       await vi.advanceTimersByTimeAsync(149);
       expect(events).toEqual(duringEvents);
       await vi.advanceTimersByTimeAsync(1);
-      expect(events).toEqual([...duringEvents, 'getPane', 'createPane', 'navigate', 'getFormContext']);
+      expect(events).toEqual([...duringEvents, 'getPane', 'createPane', 'navigate']);
       expect(pane.navigate).toHaveBeenCalledOnce();
       expect(pane.navigate).toHaveBeenCalledWith(RECORD_NAV);
     });
@@ -1655,7 +1655,7 @@ describe('form-event record and pre-fill expressions', () => {
     const { events, executionContext } = formProbe();
     const { open, pane } = loadBasic(prefillConfig('FormOnLoad'), events);
     await open(executionContext);
-    expect(events).toEqual(['getFormContext', 'getPane', 'createPane', 'getEntityName', 'getId', 'navigate', 'getFormContext']);
+    expect(events).toEqual(['getFormContext', 'getPane', 'createPane', 'getEntityName', 'getId', 'navigate']);
     expect(pane.navigate).toHaveBeenCalledWith(PREFILL_NAV);
   });
 
@@ -1666,7 +1666,7 @@ describe('form-event record and pre-fill expressions', () => {
       open(executionContext);
       open(executionContext);
       await vi.advanceTimersByTimeAsync(150);
-      expect(events).toEqual(['getFormContext', 'getFormContext', 'getPane', 'createPane', 'getEntityName', 'getId', 'navigate', 'getFormContext']);
+      expect(events).toEqual(['getFormContext', 'getFormContext', 'getPane', 'createPane', 'getEntityName', 'getId', 'navigate']);
       expect(pane.navigate).toHaveBeenCalledOnce();
       expect(pane.navigate).toHaveBeenCalledWith(PREFILL_NAV);
     });

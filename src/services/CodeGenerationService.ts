@@ -413,8 +413,6 @@ ${body
   .split('\n')
   .map(l => '  ' + l)
   .join('\n')}
-    // Staleness guard after await
-    if (executionContext.getFormContext() !== formContext) return;
   } catch(e) {
     ${buildCatchBody(`${ns}.${fn}`, '    ')}
   }
@@ -565,8 +563,6 @@ ${open
     .split('\n')
     .map(l => '  ' + l)
     .join('\n')}
-      // Staleness guard after await
-      if (executionContext.getFormContext() !== formContext) return;
     } catch(e) {
       ${buildCatchBody(`${ns}.${fn}`, '      ')}
     }
