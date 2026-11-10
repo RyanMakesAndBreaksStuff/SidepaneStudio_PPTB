@@ -5,6 +5,7 @@ import { parseStoredConfig, parseStoredOrgKey } from './services/configGuards';
 import { coerceConfig } from './services/triggerCapabilities';
 import { notify } from './services/notify';
 import { WorkbenchShell } from './components/WorkbenchShell';
+import { StatusScreen } from './components/StatusScreen';
 import { PptbContextAdapter } from './adapters/PptbContextAdapter';
 import { subscribeToolboxEvents } from './adapters/toolboxEvents';
 import { MetadataService } from './services/MetadataService';
@@ -327,50 +328,28 @@ export function SidePaneBuilderWorkbench(): React.ReactElement {
   }, []);
 
   if (connectionState.status === 'loading') {
-    return (
-      <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        height: '100vh', fontFamily: "'Segoe UI', system-ui, sans-serif",
-        background: '#1A1A1A', color: '#808080', fontSize: 13,
-      }}>
-        Connecting to Dataverse…
-      </div>
-    );
+    return <StatusScreen message="Connecting to Dataverse…" />;
   }
 
   if (connectionState.status === 'error') {
-    return (
-      <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        height: '100vh', fontFamily: "'Segoe UI', system-ui, sans-serif",
-        background: '#1A1A1A', color: '#E8E8E8',
-        flexDirection: 'column', gap: 12,
-      }}>
-        <div style={{ fontSize: 32 }}>⚠</div>
-        <div style={{ fontWeight: 600, fontSize: 16 }}>Connection unavailable</div>
-        <div style={{ fontSize: 13, color: '#808080', maxWidth: 360, textAlign: 'center' }}>
-          {connectionState.message}
-        </div>
-      </div>
-    );
+    return <StatusScreen icon="⚠" title="Connection unavailable" message={connectionState.message} />;
   }
 
   if (settingsRestoreError) {
     return (
-      <div role="alert" style={{
-        display: 'flex', flexDirection: 'column', alignItems: 'center',
-        justifyContent: 'center', height: '100vh', gap: 12,
-        fontFamily: "'Segoe UI', system-ui, sans-serif",
-        background: '#1A1A1A', color: '#E8E8E8',
-      }}>
-        <div style={{ maxWidth: 360, textAlign: 'center' }}>{settingsRestoreError}</div>
-        <button type="button" onClick={() => { void restoreConfig(); }}>Retry restore</button>
-        <button type="button" onClick={() => {
-          configDirtyRef.current = true;
-          setSettingsRestoreError(null);
-          setSettingsHydrated(true);
-        }}>Continue with defaults</button>
-      </div>
+      <StatusScreen
+        role="alert"
+        message={settingsRestoreError}
+        action={{ label: 'Retry restore', onClick: () => { void restoreConfig(); } }}
+        secondaryAction={{
+          label: 'Continue with defaults',
+          onClick: () => {
+            configDirtyRef.current = true;
+            setSettingsRestoreError(null);
+            setSettingsHydrated(true);
+          },
+        }}
+      />
     );
   }
 

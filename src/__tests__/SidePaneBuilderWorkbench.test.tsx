@@ -31,7 +31,9 @@ vi.mock('../components/WorkbenchShell', () => ({
 }));
 
 import { SidePaneBuilderWorkbench } from '../SidePaneBuilderWorkbench';
-import { deferred } from './testHelpers';
+import { ThemeContext } from '../contexts/ThemeContext';
+import { theme } from '../theme/tokens';
+import { deferred, rgb } from './testHelpers';
 
 let root: Root | undefined;
 let host: HTMLDivElement | undefined;
@@ -351,6 +353,21 @@ describe('SidePaneBuilderWorkbench', () => {
     await act(async () => { vi.advanceTimersByTime(600); await Promise.resolve(); });
     expect(settingsSet).toHaveBeenCalledWith('lastConfig', expect.stringContaining('"title":"Edited Title"'));
   });
+
+  it.each([['light', false], ['dark', true]] as const)(
+    'draws the restore-failure screen from the %s theme tokens', async (_, isDark) => {
+      vi.stubGlobal('toolboxAPI', {
+        connections: { getActiveConnection: vi.fn().mockResolvedValue({ id: 'conn-1' }) },
+        events: { on: vi.fn(), off: vi.fn() },
+        settings: { get: vi.fn().mockRejectedValue(new Error('offline')), set: vi.fn().mockResolvedValue(undefined) },
+      });
+      await render(<ThemeContext.Provider value={{ isDark }}><SidePaneBuilderWorkbench /></ThemeContext.Provider>);
+      await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+      const screen = host?.querySelector<HTMLElement>('[role="alert"]');
+      expect(screen?.style.backgroundColor).toBe(rgb(theme(isDark).pageBg));
+      expect(screen?.style.color).toBe(rgb(theme(isDark).fg1));
+    }
+  );
 
   it('retries a rejected restore without replacing saved config', async () => {
     const restored = { ...DEFAULT_CONFIG, pane: { ...DEFAULT_CONFIG.pane, title: 'Restored Title' } };
