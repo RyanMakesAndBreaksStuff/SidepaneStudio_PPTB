@@ -114,8 +114,29 @@ function keepEntity(
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
+/** One shared request per key until it expires; a rejected request is dropped so the next call retries. */
+class RequestCache<T> {
+  private readonly entries = new Map<string, { promise: Promise<T>; expiresAt: number }>();
+
+  get(key: string, load: () => Promise<T>): Promise<T> {
+    const hit = this.entries.get(key);
+    if (hit && Date.now() < hit.expiresAt) return hit.promise;
+    const entry = { promise: load(), expiresAt: Date.now() + CACHE_TTL_MS };
+    this.entries.set(key, entry);
+    entry.promise.catch(() => { if (this.entries.get(key) === entry) this.entries.delete(key); });
+    return entry.promise;
+  }
+
+  clear(): void {
+    this.entries.clear();
+  }
+}
+
 export class MetadataService {
-  private _tableCache?: { tables: TableInfo[]; expiresAt: number };
+  private readonly _tables = new RequestCache<TableInfo[]>();
+  private readonly _views = new RequestCache<ViewInfo[]>();
+  private readonly _attributeLabels = new RequestCache<AttributeLabel[]>();
+  private readonly _lookupAttributes = new RequestCache<LookupAttributeInfo[]>();
   private _dashboardCache?: { dashboards: DashboardInfo[]; expiresAt: number };
   private _connectionGeneration = 0;
   private _filterConfig: MetadataFilterConfig;
@@ -136,7 +157,7 @@ export class MetadataService {
     this._filterConfig = normalizeMetadataFilterConfig(filterConfig);
     this._denyExact = new Set(this._filterConfig.denyExact);
     this._allowedStandardTables = new Set(this._filterConfig.allowedStandardTables);
-    this._tableCache = undefined;
+    this._tables.clear();
     this._tableListeners.forEach(listener => listener());
   }
 
@@ -147,26 +168,23 @@ export class MetadataService {
   }
 
   async listAccessibleTables(): Promise<AccessibleTablesResult> {
+    const generation = this._connectionGeneration;
     try {
-      const cached = this._tableCache;
-      if (cached && Date.now() < cached.expiresAt) {
-        return { status: 'ok', tables: cached.tables };
-      }
-      const generation = this._connectionGeneration;
-      const response = await this.xrm.webApiGet<RawEntityMetadata[]>(
-        buildEntityDefinitionsPath()
-      );
+      const tables = await this._tables.get('all', async () => {
+        const response = await this.xrm.webApiGet<RawEntityMetadata[]>(
+          buildEntityDefinitionsPath()
+        );
+        return response
+          .filter(e => keepEntity(e, this._filterConfig, this._denyExact, this._allowedStandardTables))
+          .map(e => ({
+            logicalName: e.LogicalName,
+            displayName: displayLabel(e),
+            objectTypeCode: e.ObjectTypeCode ?? 0,
+            isCustomEntity: e.IsCustomEntity === true,
+          }))
+          .sort((a, b) => a.displayName.localeCompare(b.displayName));
+      });
       if (generation !== this._connectionGeneration) return this.listAccessibleTables();
-      const tables: TableInfo[] = response
-        .filter(e => keepEntity(e, this._filterConfig, this._denyExact, this._allowedStandardTables))
-        .map(e => ({
-          logicalName: e.LogicalName,
-          displayName: displayLabel(e),
-          objectTypeCode: e.ObjectTypeCode ?? 0,
-          isCustomEntity: e.IsCustomEntity === true,
-        }))
-        .sort((a, b) => a.displayName.localeCompare(b.displayName));
-      this._tableCache = { tables, expiresAt: Date.now() + CACHE_TTL_MS };
       return { status: 'ok', tables };
     } catch (err) {
       const reason = err instanceof Error ? err.message : 'Unknown error loading table list.';
@@ -209,15 +227,17 @@ export class MetadataService {
     const personalPath = buildViewsForEntityPath(entityLogicalName, 'userquery');
     if (!systemPath || !personalPath) return { status: 'error', reason: 'Invalid table logical name.' };
     try {
-      const [system, personal] = await Promise.all([
-        this.xrm.webApiGet<{ savedqueryid: string; name: string; fetchxml: string | null; layoutxml: string | null }[]>(systemPath),
-        this.xrm.webApiGet<{ userqueryid: string; name: string; fetchxml: string | null; layoutxml: string | null }[]>(personalPath),
-      ]);
-      const views: ViewInfo[] = [
-        ...system.map(v => ({ id: v.savedqueryid, name: v.name, viewType: 'savedquery' as const, fetchXml: v.fetchxml ?? '', layoutXml: v.layoutxml ?? '' })),
-        ...personal.map(v => ({ id: v.userqueryid, name: v.name, viewType: 'userquery' as const, fetchXml: v.fetchxml ?? '', layoutXml: v.layoutxml ?? '' })),
-      ];
-      views.sort((a, b) => a.name.localeCompare(b.name));
+      const views = await this._views.get(entityLogicalName, async () => {
+        const [system, personal] = await Promise.all([
+          this.xrm.webApiGet<{ savedqueryid: string; name: string; fetchxml: string | null; layoutxml: string | null }[]>(systemPath),
+          this.xrm.webApiGet<{ userqueryid: string; name: string; fetchxml: string | null; layoutxml: string | null }[]>(personalPath),
+        ]);
+        const merged: ViewInfo[] = [
+          ...system.map(v => ({ id: v.savedqueryid, name: v.name, viewType: 'savedquery' as const, fetchXml: v.fetchxml ?? '', layoutXml: v.layoutxml ?? '' })),
+          ...personal.map(v => ({ id: v.userqueryid, name: v.name, viewType: 'userquery' as const, fetchXml: v.fetchxml ?? '', layoutXml: v.layoutxml ?? '' })),
+        ];
+        return merged.sort((a, b) => a.name.localeCompare(b.name));
+      });
       return { status: 'ok', views };
     } catch (error) {
       return { status: 'error', reason: error instanceof Error ? error.message : String(error) };
@@ -229,7 +249,7 @@ export class MetadataService {
   ): Promise<AttributeLabel[]> {
     const path = buildAttributeLabelsPath(entityLogicalName);
     if (!path) throw new Error('Invalid table logical name.');
-    return this.xrm.webApiGet<AttributeLabel[]>(path);
+    return this._attributeLabels.get(entityLogicalName, () => this.xrm.webApiGet<AttributeLabel[]>(path));
   }
 
   /** Lookup, customer, and owner columns — the columns whose value names a related record. */
@@ -238,18 +258,23 @@ export class MetadataService {
   ): Promise<LookupAttributeInfo[]> {
     const path = buildLookupAttributesPath(entityLogicalName);
     if (!path) throw new Error('Invalid table logical name.');
-    const lookups = await this.xrm.webApiGet<LookupAttributeInfo[]>(path);
-    return lookups.map(lookup => ({
-      ...lookup,
-      ...(Array.isArray(lookup.Targets)
-        ? { Targets: lookup.Targets.filter(isValidLogicalName) }
-        : {}),
-    }));
+    return this._lookupAttributes.get(entityLogicalName, async () => {
+      const lookups = await this.xrm.webApiGet<LookupAttributeInfo[]>(path);
+      return lookups.map(lookup => ({
+        ...lookup,
+        ...(Array.isArray(lookup.Targets)
+          ? { Targets: lookup.Targets.filter(isValidLogicalName) }
+          : {}),
+      }));
+    });
   }
 
   invalidate(): void {
     this._connectionGeneration += 1;
-    this._tableCache = undefined;
+    this._tables.clear();
     this._dashboardCache = undefined;
+    this._views.clear();
+    this._attributeLabels.clear();
+    this._lookupAttributes.clear();
   }
 }

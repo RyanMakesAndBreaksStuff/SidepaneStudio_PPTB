@@ -241,6 +241,27 @@ describe('MetadataService', () => {
       expect(xrm.webApiGet).toHaveBeenCalledTimes(1);
     });
 
+    it('shares one EntityDefinitions request between concurrent callers', async () => {
+      const xrm = makeXrm([ENTITY_ACCOUNT]);
+      const svc = new MetadataService(xrm);
+      const [first, second] = await Promise.all([svc.listAccessibleTables(), svc.listAccessibleTables()]);
+      expect(xrm.webApiGet).toHaveBeenCalledTimes(1);
+      expect(second).toEqual(first);
+    });
+
+    it('drops a failed table request so the next call fetches again', async () => {
+      const webApiGet = vi.fn()
+        .mockRejectedValueOnce(new Error('Network error'))
+        .mockResolvedValueOnce([ENTITY_ACCOUNT]);
+      const svc = new MetadataService({ webApiGet });
+      const [first, second] = await Promise.all([svc.listAccessibleTables(), svc.listAccessibleTables()]);
+      expect(first).toEqual({ status: 'error', reason: 'Network error' });
+      expect(second).toEqual({ status: 'error', reason: 'Network error' });
+      const retried = await svc.listAccessibleTables();
+      expect(retried.status).toBe('ok');
+      expect(webApiGet).toHaveBeenCalledTimes(2);
+    });
+
     it('invalidate clears cache — next call re-fetches', async () => {
       const xrm = makeXrm([ENTITY_ACCOUNT]);
       const svc = new MetadataService(xrm);
@@ -671,6 +692,31 @@ describe('view metadata', () => {
       expect(await service.listViewsForEntity(entity)).toEqual({ status: 'error', reason: 'Invalid table logical name.' });
     }
     expect(webApiGet).not.toHaveBeenCalled();
+  });
+
+  it('caches views, attribute labels and lookup columns per table until invalidate', async () => {
+    const webApiGet = vi.fn().mockResolvedValue([]);
+    const service = new MetadataService({ webApiGet });
+    await Promise.all([service.listViewsForEntity('account'), service.listViewsForEntity('account')]);
+    await service.listViewsForEntity('account');
+    await Promise.all([service.listAttributeLabels('account'), service.listAttributeLabels('account')]);
+    await Promise.all([service.listLookupAttributes('account'), service.listLookupAttributes('account')]);
+    // savedqueries + userqueries, Attributes, LookupAttributeMetadata: one request each for 'account'.
+    expect(webApiGet).toHaveBeenCalledTimes(4);
+    await service.listViewsForEntity('contact');
+    expect(webApiGet).toHaveBeenCalledTimes(6);
+    service.invalidate();
+    await service.listViewsForEntity('account');
+    await service.listAttributeLabels('account');
+    await service.listLookupAttributes('account');
+    expect(webApiGet).toHaveBeenCalledTimes(10);
+  });
+
+  it('does not cache a failed view request', async () => {
+    const webApiGet = vi.fn().mockRejectedValueOnce(new Error('Access denied')).mockResolvedValue([]);
+    const service = new MetadataService({ webApiGet });
+    expect(await service.listViewsForEntity('account')).toEqual({ status: 'error', reason: 'Access denied' });
+    expect(await service.listViewsForEntity('account')).toEqual({ status: 'ok', views: [] });
   });
 
   it('distinguishes an empty result from a failed query', async () => {
