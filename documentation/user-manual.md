@@ -82,7 +82,7 @@ Two required fields start empty, so on a fresh default **Basic Script** shows a 
 - **Custom page** opens a canvas page that already lives in the solution. The name is the page logical name, not the display name.
 - The mock host is a fixed Account sample. It shows the pane title, width, and header so you can judge the layout. It does not load your custom page.
 
-![Side Pane Studio workbench with content type, mock preview, and Basic Script](images/workbench-overview.png)
+![Side Pane Studio workbench — summary sentence, Configure sections, mock preview, and Basic Script](images/workbench-overview.png)
 
 **Verification**:
 
