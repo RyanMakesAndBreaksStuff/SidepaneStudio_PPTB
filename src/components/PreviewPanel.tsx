@@ -3,7 +3,7 @@ import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 import { theme } from '../theme/tokens';
 import { PaneDefinitionConfig } from '../types/PaneDefinitionConfig';
-import { IXrmContext } from '../adapters/PptbContextAdapter';
+import { DataverseError, type IXrmContext } from '../adapters/PptbContextAdapter';
 import { ValidationResult } from '../services/ValidationService';
 import { FormXmlService, FormModel, type FormServiceError } from '../services/FormXmlService';
 import { MetadataService } from '../services/MetadataService';
@@ -44,13 +44,14 @@ type SampleState =
   | { status: 'error'; reason: string }
   | { status: 'loaded'; record: PreviewRecord | null };
 
-/** Only a transport failure (no HTTP status, or status 0) points at the connection. */
+/** A transport failure carries no message from the host; anything the host did say is shown as written. */
 function formLoadFailureReason(error: FormServiceError): string {
   if (error.code === 'invalid-formxml' || error.code === 'missing-formxml') return 'Form layout could not be read.';
   if (error.code !== 'query-failed') return error.message;
   const status = (error.cause as { status?: unknown } | null | undefined)?.status;
   if (status === 404) return 'Form not found in this environment.';
   if (typeof status === 'number' && status !== 0) return `Could not load form layout (HTTP ${status}).`;
+  if (error.cause instanceof DataverseError && status === undefined) return `Could not load form layout: ${error.cause.message}`;
   return 'Could not load form layout. Check your connection.';
 }
 

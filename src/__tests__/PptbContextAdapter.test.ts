@@ -146,5 +146,25 @@ describe('PptbContextAdapter', () => {
       const err = await call(new PptbContextAdapter()).catch((e: unknown) => e);
       expect(err).toBe(original);
     });
+
+    it.each(calls)('%s strips the host transport prefix and parses the HTTP status', async (_n, call) => {
+      const api = makeMockDataverseAPI();
+      api.queryData.mockRejectedValue(
+        new Error("Error invoking remote method 'dataverse.queryData': Error: queryData failed: HTTP 404 Not Found"));
+      vi.stubGlobal('dataverseAPI', api);
+      const err = await call(new PptbContextAdapter()).catch((e: unknown) => e) as DataverseError;
+      expect(err.message).toBe('queryData failed: HTTP 404 Not Found');
+      expect(err.status).toBe(404);
+    });
+
+    it.each(calls)('%s keeps the host message and leaves status unset when no HTTP code is present', async (_n, call) => {
+      const api = makeMockDataverseAPI();
+      api.queryData.mockRejectedValue(new Error(
+        "Error invoking remote method 'dataverse.queryData': Error: queryData failed: 0x80040220: Principal user is missing privilege"));
+      vi.stubGlobal('dataverseAPI', api);
+      const err = await call(new PptbContextAdapter()).catch((e: unknown) => e) as DataverseError;
+      expect(err.message).toBe('queryData failed: 0x80040220: Principal user is missing privilege');
+      expect(err.status).toBeUndefined();
+    });
   });
 });

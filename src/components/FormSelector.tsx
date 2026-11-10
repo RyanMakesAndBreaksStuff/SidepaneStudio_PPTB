@@ -111,6 +111,7 @@ export function FormSelector({
       if (requestIdRef.current !== requestId) return;
 
       if (!result.ok) {
+        console.error('FormSelector: could not load forms', result.error.cause ?? result.error);
         setForms([]);
         setLoading(false);
         setError('Could not load main forms.');
@@ -123,11 +124,6 @@ export function FormSelector({
         setSelectedFormId(result.forms[0].id);
         onFormSelectedRef.current({ entityLogicalName: formEntity, formId: result.forms[0].id });
       }
-    }).catch(() => {
-      if (requestIdRef.current !== requestId) return;
-      setForms([]);
-      setLoading(false);
-      setError('Could not load main forms.');
     });
     return () => { requestIdRef.current += 1; };
   }, [formEntity, formXmlService, retryCount]);

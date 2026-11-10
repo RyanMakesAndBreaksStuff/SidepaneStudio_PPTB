@@ -34,8 +34,20 @@ export class DataverseError extends Error {
   }
 }
 
+/** Electron prefixes every rejected IPC call: `Error invoking remote method '<channel>': Error: <message>`. */
+const HOST_ERROR_PREFIX = /^Error invoking remote method '[^']*':\s*(?:Error:\s*)?/;
+const HTTP_STATUS = /\bHTTP (\d{3})\b/;
+
+/** The host rejects with a plain Error and never sets `.status`; recover it from the message. */
+function fromHostError(error: Error): Error {
+  const message = error.message.replace(HOST_ERROR_PREFIX, '');
+  const match = HTTP_STATUS.exec(message);
+  if (message === error.message && !match) return error;
+  return new DataverseError(message, match ? Number(match[1]) : undefined);
+}
+
 function toError(reason: unknown): Error {
-  if (reason instanceof Error) return reason;
+  if (reason instanceof Error) return fromHostError(reason);
   if (typeof reason === 'object' && reason !== null) {
     const { message, status, statusText } = reason as { message?: unknown; status?: unknown; statusText?: unknown };
     let text: string;

@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { PreviewPanel } from '../components/PreviewPanel';
 import { DEFAULT_CONFIG } from '../types/PaneDefinitionConfig';
 import { MetadataService } from '../services/MetadataService';
-import { DataverseError, type IXrmContext } from '../adapters/PptbContextAdapter';
+import { DataverseError, PptbContextAdapter, type IXrmContext } from '../adapters/PptbContextAdapter';
 import { cfg, chooseOption, xrmStub } from './testHelpers';
 
 let root: Root | undefined;
@@ -301,10 +301,20 @@ describe('PreviewPanel — form layout load failures', () => {
     ['a 403 response', () => Promise.reject(new DataverseError('Forbidden', 403, 'Forbidden')), 'Could not load form layout (HTTP 403).'],
     ['a network failure', () => Promise.reject(new TypeError('Failed to fetch')), 'Could not load form layout. Check your connection.'],
     ['a status 0 response', () => Promise.reject(new DataverseError('Network Error', 0)), 'Could not load form layout. Check your connection.'],
+    ['a host rejection without an HTTP status', () => Promise.reject(new DataverseError('queryData failed: 0x80040220: Principal user is missing privilege')), 'Could not load form layout: queryData failed: 0x80040220: Principal user is missing privilege'],
   ])('explains %s with its own message', async (_label, respond, message) => {
     await loadForm(vi.fn(respond) as IXrmContext['webApiGetEntity']);
     const error = Array.from(host!.querySelectorAll('div')).find(el => el.textContent === message);
     expect(error, message).toBeTruthy();
+  });
+
+  it('shows the HTTP status of a real host rejection that went through the adapter', async () => {
+    vi.stubGlobal('dataverseAPI', { queryData: vi.fn().mockRejectedValue(new Error(
+      "Error invoking remote method 'dataverse.queryData': Error: queryData failed: HTTP 403 Forbidden")) });
+    const adapter = new PptbContextAdapter();
+    await loadForm(adapter.webApiGetEntity.bind(adapter));
+    const message = 'Could not load form layout (HTTP 403).';
+    expect(Array.from(host!.querySelectorAll('div')).find(el => el.textContent === message), message).toBeTruthy();
   });
 });
 

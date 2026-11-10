@@ -178,6 +178,28 @@ describe('FormSelector', () => {
     expect(getFormsForEntityResult).toHaveBeenCalledWith('account');
   });
 
+  it('logs the cause of a failed form load', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      const cause = new Error('queryData failed: HTTP 403 Forbidden');
+      const formXmlService = {
+        getFormsForEntityResult: vi.fn().mockResolvedValue({
+          ok: false, error: { code: 'query-failed', message: 'Failed to load forms for entity.', cause },
+        }),
+      } as unknown as FormXmlService;
+      await render(
+        <FormSelector entityName="account" onEntityNameChange={vi.fn()} formXmlService={formXmlService}
+          metadataService={mockMetadataService} onFormSelected={vi.fn()} />
+      );
+      await act(async () => { await Promise.resolve(); });
+
+      expect(host?.textContent).toContain('Could not load main forms');
+      expect(consoleError).toHaveBeenCalledWith('FormSelector: could not load forms', cause);
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
   it('keeps a controlled default form until the user selects and follows external resets', async () => {
     const getFormsForEntityResult = vi.fn().mockResolvedValue({ ok: true, forms: [{ id: 'form-1', name: 'Main Form' }] });
     const formXmlService = { getFormsForEntityResult } as unknown as FormXmlService;
