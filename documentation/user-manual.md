@@ -42,7 +42,7 @@ Expected output: the environment name you chose is selected, and opening Side Pa
 
 **Verification**:
 
-The Configure header shows **Reset** on the right. The ToolBox tab carries the tool name.
+The summary strip above the three panels shows **Reset** on its right, after the status text. On a fresh default the status reads “2 errors · 0 warnings”. The ToolBox tab carries the tool name.
 
 Expected output: the workbench is interactive. The center preview is on the **Mock** tab.
 
@@ -50,27 +50,30 @@ Expected output: the workbench is interactive. The center preview is on the **Mo
 
 Work in the ToolBox window with Side Pane Studio open. On a wide window you get three columns: **Configure** (left), **Preview** (center), and **Output** (right). Below 900 pixels, use the **Configure**, **Preview**, and **Output** tabs instead. The steps use the same fields either way.
 
-The studio writes the current configuration to ToolBox settings and restores it the next time you open the tool. **Reset** on the right of the Configure header asks you to confirm `Reset all configuration? This cannot be undone.` and then restores the defaults below. Below 900 pixels, **Reset** is on the Configure tab.
+The studio writes the current configuration to ToolBox settings and restores it the next time you open the tool. **Reset**, at the right end of the summary strip above all three panels (in the wide and the tabbed layout alike), asks you to confirm `Reset all configuration? This cannot be undone.` and then restores the defaults below.
 
 | Setting             | Default                                |
 | ------------------- | -------------------------------------- |
 | Content type        | Custom page                            |
-| Custom page name    | `sps_SidePaneBuilderPage`              |
+| Custom page name    | empty (the field shows the placeholder `sps_SidePaneBuilderPage`) |
 | Pane title          | Related Records                        |
 | Pane ID             | `relatedRecordsPane`                   |
 | Width               | 480 (allowed range 300–1200)           |
 | Trigger             | Form button                            |
-| Function            | `YourNamespace.openRelatedRecordsPane` |
+| Function name       | `openRelatedRecordsPane`               |
+| Namespace           | empty (the field shows the placeholder `Contoso`) |
 | Record source       | The record on this form                |
 | Reuse open pane     | On                                     |
 | Expand pane on open | On                                     |
+
+Two required fields start empty, so on a fresh default **Basic Script** shows a red callout instead of the script until you fill them in during Steps 4 and 5.
 
 **Objective**: you can see the default custom-page pane in the preview before you change anything.
 
 **Actions**:
 
 1. In **Configure**, open **Destination**.
-2. Confirm **Custom page** is selected and **Custom page name** is `sps_SidePaneBuilderPage`.
+2. Confirm **Custom page** is selected and **Custom page name** is empty. The field shows the placeholder `sps_SidePaneBuilderPage`; that is a hint, not a value.
 3. Look at the center **Mock** preview.
 
 **Explanation**:
@@ -80,13 +83,11 @@ The studio writes the current configuration to ToolBox settings and restores it 
 
 ![Side Pane Studio workbench with content type, mock preview, and Basic Script](images/workbench-overview.png)
 
-Recapture `documentation/images/workbench-overview.png`: no studio title bar, and **Reset** on the right of the Configure header.
-
 **Verification**:
 
-The mock pane title is **Related Records**. The Output panel **Basic Script** tab shows a summary that starts with “Opens a side pane showing **Related Records**” and a **Copy** control on the script.
+The mock pane title is **Related Records**. The Output panel **Basic Script** tab shows **What this script does** with a summary that starts with “When a user clicks a form command button on the (table) form, open custom page (name)”. A red callout reads “Fix 2 validation errors before using this code: Custom page name is required.” and the script block is withheld.
 
-Expected output: no red validation callout on **Basic Script**. The script block is visible.
+Expected output: the summary strip reads “2 errors · 0 warnings”, and **Basic Script** shows the red callout instead of the script block. Steps 4 and 5 clear both errors.
 
 ## Step 4: Choose the trigger and its table
 
@@ -120,9 +121,9 @@ Expected output: no red validation callout on **Basic Script**. The script block
 
 **Verification**:
 
-The function hint reads `YOUR_NAMESPACE.YOUR_FUNCTION_NAME`. The sentence at the top of Configure begins “When a user clicks a form command button on the account form”.
+The **Function name** hint reads `Full call: YOUR_NAMESPACE.YOUR_FUNCTION_NAME`. The summary strip at the top of the workbench begins “When a user clicks a form command button on the account form”.
 
-Expected output: **Basic Script** is still visible, and there is no red validation callout.
+Expected output: the summary strip reads “1 error · 0 warnings”, and the **Basic Script** callout reads “Fix 1 validation error before using this code: Custom page name is required.” The namespace error is gone.
 
 ## Step 5: Choose what opens and which record
 
@@ -160,7 +161,7 @@ Expected output: **Basic Script** is still visible, and there is no red validati
 
 **Custom page name** shows `YOUR_CUSTOM_PAGE`. The sentence now reads “…open custom page YOUR_CUSTOM_PAGE from the form record…”.
 
-Expected output: **Basic Script** still shows the code block, and there is no callout that says `Custom page name is required.`
+Expected output: the summary strip reads “0 errors · 0 warnings”, **Basic Script** now shows the code block for the first time, and there is no callout that says `Custom page name is required.`
 
 ## Step 6: Set the pane title, icon, and width
 
@@ -236,7 +237,7 @@ Expected output: zero validation errors on the Output panel. Warnings, if you tu
 
 The mock pane title and width match Configure. **Basic Script** shows the code block.
 
-Expected output: the Configure sentence and the preview agree, and the Output panel reports zero validation errors.
+Expected output: the summary strip sentence and the preview agree, and the Output panel reports zero validation errors.
 
 ## Step 9: Copy the Basic Script and read the deploy steps
 
@@ -596,7 +597,7 @@ Recommended resources:
 | Action           | Where                                                  | Description                      |
 | ---------------- | ------------------------------------------------------ | -------------------------------- |
 | Open the studio  | ToolBox → Installed Tools → Side Pane Studio           | Needs an active connection       |
-| Restore defaults | Configure → **Reset** → confirm                        | Clears `lastConfig`              |
+| Restore defaults | Summary strip → **Reset** → confirm                    | Clears `lastConfig`              |
 | Copy the script  | Output → **Basic Script** → **Copy**                   | Self-contained handler           |
 | Deploy steps     | Output → **Command Steps**                             | Function name plus wiring        |
 | Download helper  | Output → **Shared Library** → **Download runtime**     | Only for the shared-library path |
