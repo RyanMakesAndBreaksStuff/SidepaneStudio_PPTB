@@ -14,6 +14,8 @@ const PENDING_VAR = 'window.__spstudio_pendingPanes';
 const LATEST_VAR = 'window.__spstudio_latestSelection';
 /** Milliseconds a pending-panes lock is considered valid before expiring. */
 const PENDING_TTL_MS = 2000;
+/** L4 — shown (commands) or logged (events) when the triggering form record has no ID yet. */
+const UNSAVED_RECORD_MESSAGE = 'Save the record before opening this pane.';
 /** Every identifier the generated scripts declare, receive or call; the record variable and namespace names may not shadow them. */
 export const GENERATED_NAMES: ReadonlySet<string> = new Set([
   'allPanes', 'eventArgs', 'existing', 'formContext', 'pane', 'primaryControl', 'relatedAttribute',
@@ -207,7 +209,12 @@ function declareRecordVariable(config: PaneDefinitionConfig, rc: RecordContext, 
   const creating = config.target.pageType === 'entityrecord' && config.target.createNew === true;
   if (!rc.idExpr || creating) return { line: '', rc };
   const name = safeIdentifier(config.context.variableName, 'recordId');
-  return { line: `${indent}var ${name} = ${rc.idExpr};\n`, rc: { ...rc, idExpr: name } };
+  const { kind } = config.context.source;
+  // L4 — a form record that has never been saved has an empty ID; stop before any pane opens.
+  const unsaved = kind === 'host'
+    ? `${indent}if (!${name}) { ${buildNotice(config, UNSAVED_RECORD_MESSAGE)} return; }\n`
+    : '';
+  return { line: `${indent}var ${name} = ${rc.idExpr};\n${unsaved}`, rc: { ...rc, idExpr: name } };
 }
 
 /** Item 3 — createFromEntity copies mapped columns from the triggering record. Null when no record triggers the script. */
@@ -320,13 +327,17 @@ function buildStateAssignment(config: PaneDefinitionConfig): string {
   return '';
 }
 
-/** Side panes are unavailable in on-premises deployments and native players. Load and change handlers log instead of raising a dialog on every form load. */
+/** Commands tell the user in a dialog; load and change handlers log instead of raising a dialog on every form load. */
+function buildNotice(config: PaneDefinitionConfig, message: string): string {
+  const text = JSON.stringify(message);
+  return COMMAND_TRIGGERS.includes(config.trigger.kind)
+    ? `Xrm.Navigation.openAlertDialog({ text: ${text} });`
+    : `console.warn(${text});`;
+}
+
+/** Side panes are unavailable in on-premises deployments and native players. */
 function buildAvailabilityGuard(config: PaneDefinitionConfig, indent: string): string {
-  const message = JSON.stringify('Side panes are not available in this client.');
-  const notify = COMMAND_TRIGGERS.includes(config.trigger.kind)
-    ? `Xrm.Navigation.openAlertDialog({ text: ${message} });`
-    : `console.warn(${message});`;
-  return `${indent}if (!Xrm.App || !Xrm.App.sidePanes) { ${notify} return; }
+  return `${indent}if (!Xrm.App || !Xrm.App.sidePanes) { ${buildNotice(config, 'Side panes are not available in this client.')} return; }
 `;
 }
 

@@ -37,6 +37,9 @@
   Library already did.
 - Shared Library output with **Close if already open** and a lookup record
   source closes the open pane even when the lookup is empty.
+- A form trigger on a record that has not been saved yet stops with "Save the
+  record before opening this pane." (a dialog for command buttons, a console
+  warning for form events) instead of opening the pane with an empty record ID.
 
 ## v1.3.1
 

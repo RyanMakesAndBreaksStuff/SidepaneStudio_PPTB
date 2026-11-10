@@ -37,6 +37,13 @@ describe('record variable', () => {
     expect(generateBasicScript(cfg({ context: { source: { kind: 'none' } } }))).not.toContain('var recordId');
     expect(generateBasicScript(cfg({ host: { entityName: 'account' }, target: { pageType: 'entityrecord', entityName: 'contact', formId: '', tabName: '', data: '', createNew: true }, context: { source: { kind: 'host' } } }))).not.toContain('var recordId');
   });
+  it.each([
+    ['FormButton', 'Xrm.Navigation.openAlertDialog({ text: "Save the record before opening this pane." }); return; }'],
+    ['FormOnLoad', 'console.warn("Save the record before opening this pane."); return; }'],
+  ] as const)('%s stops on an unsaved form record in both outputs (L4)', (kind, notice) => {
+    const config = cfg({ trigger: { kind }, host: { entityName: 'account' }, context: { source: { kind: 'host' } } });
+    for (const code of [generateBasicScript(config), generateLibraryScript(config)]) expect(code).toContain(`if (!recordId) { ${notice}`);
+  });
 });
 
 describe('record variable name collisions', () => {
@@ -868,17 +875,7 @@ describe('Basic and Shared Library behave the same for every legal configuration
     }
   }
 
-  /** The finding that makes a case diverge today. Each fix task in Wave 6 deletes its line, which turns those cases into plain tests. */
-  function knownDivergence({ scenario }: Case): string | undefined {
-    if (scenario === 'unsaved') return 'L4';
-    return undefined;
-  }
-
-  for (const testCase of cases) {
-    const finding = knownDivergence(testCase);
-    if (finding) it.fails(`${testCase.name} (diverges until ${finding} is fixed)`, () => expectSameBehaviour(testCase));
-    else it(testCase.name, () => expectSameBehaviour(testCase));
-  }
+  for (const testCase of cases) it(testCase.name, () => expectSameBehaviour(testCase));
 });
 
 describe('buildNavigateInput — record context (CR-001)', () => {
