@@ -29,7 +29,7 @@ describe.each([['light', false], ['dark', true]] as const)('Newsprint %s tokens'
     ['fg2', 'pageBg'], ['fg2', 'surface1'], ['fg2', 'surface2'],
     ['fg3', 'pageBg'], ['fg3', 'surface1'], ['fg3', 'surface2'], ['fg3', 'surface3'],
     ['accent', 'pageBg'], ['accent', 'surface1'], ['accent', 'surface2'], ['accentFg', 'accent'],
-    ['accentAlt', 'pageBg'], ['accentAlt', 'surface1'], ['fg1', 'accentBg'],
+    ['accentAlt', 'pageBg'], ['accentAlt', 'surface1'], ['accentAlt', 'surface2'], ['fg1', 'accentBg'],
     ['error', 'pageBg'], ['error', 'surface1'], ['error', 'errBg'],
     ['warning', 'pageBg'], ['warning', 'surface1'], ['warning', 'warnBg'],
     ['success', 'pageBg'], ['success', 'surface1'], ['success', 'okBg'],

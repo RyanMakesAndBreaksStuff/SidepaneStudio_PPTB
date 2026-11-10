@@ -428,7 +428,7 @@ export function NativeMdaFrame({ pane, paneTarget, validation, variant, children
             fontWeight: 700,
             letterSpacing: '.8px',
             textTransform: 'uppercase',
-            color: 'rgba(230,100,0,.88)',
+            color: T.accentAlt,
             flexShrink: 0,
           }}
         >

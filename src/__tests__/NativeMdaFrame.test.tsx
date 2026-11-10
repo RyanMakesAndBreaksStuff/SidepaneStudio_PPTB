@@ -5,7 +5,10 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { NativeMdaFrame } from '../components/NativeMdaFrame';
 import type { PreviewRecord } from '../services/GridViewModel';
 import { PreviewSizeProvider } from '../components/previewSize';
+import { ThemeContext } from '../contexts/ThemeContext';
+import { theme } from '../theme/tokens';
 import { DEFAULT_CONFIG } from '../types/PaneDefinitionConfig';
+import { rgb } from './testHelpers';
 
 let root: Root | undefined;
 let host: HTMLDivElement | undefined;
@@ -164,6 +167,14 @@ describe('NativeMdaFrame rendered output', () => {
       expect(host?.innerHTML).toMatchSnapshot();
     });
   }
+
+  it.each([['light', false], ['dark', true]] as const)(
+    'draws the Preview Simulation label in accentAlt in the %s theme', async (_, isDark) => {
+      await render(<ThemeContext.Provider value={{ isDark }}>{mockFrame()}</ThemeContext.Provider>);
+      const label = Array.from(host!.querySelectorAll<HTMLElement>('span')).find(span => span.textContent === 'Preview Simulation')!;
+      expect(label.style.color).toBe(rgb(theme(isDark).accentAlt));
+    }
+  );
 
   it('stacks the selected pane beneath the host content at compact width', async () => {
     await render(atWidth(400, mockFrame()));
