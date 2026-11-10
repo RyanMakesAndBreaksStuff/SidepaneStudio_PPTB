@@ -11,6 +11,22 @@ function relatedConfig() {
 }
 
 describe('related record configuration transitions', () => {
+  it('drops form data on a host change even before a destination table was resolved', () => {
+    const unresolved = cfg({ ...relatedConfig(), target: { pageType: 'entityrecord', entityName: '', formId: '', tabName: '', data: '{"name":"keep"}' } });
+    expect(changeHostTable(unresolved, 'contact').target).toMatchObject({ entityName: '', formId: '', tabName: '', data: '' });
+  });
+
+  it('clears the form and tab but keeps the table and form data when only the lookup column changes', () => {
+    const picked = cfg({ ...relatedConfig(), target: { pageType: 'entityrecord', entityName: 'contact', formId: 'form-id', tabName: 'details', data: '{"name":"keep"}' } });
+    const changed = applyLookup(picked, 'account', { LogicalName: 'ownerid', Targets: ['contact'] });
+    expect(changed.target).toMatchObject({ entityName: 'contact', formId: '', tabName: '', data: '{"name":"keep"}' });
+  });
+
+  it('keeps the picked form and tab when the same lookup resolves to the same destination', () => {
+    const picked = cfg({ ...relatedConfig(), target: { pageType: 'entityrecord', entityName: 'contact', formId: 'form-id', tabName: 'details', data: '{"name":"keep"}' } });
+    const again = applyLookup(picked, 'account', { LogicalName: 'primarycontactid', Targets: ['contact'] });
+    expect(again.target).toMatchObject({ entityName: 'contact', formId: 'form-id', tabName: 'details', data: '{"name":"keep"}' });
+  });
   it('returns the original config when the source is not a lookup', () => {
     const config = cfg({ host: { entityName: 'account' }, context: { source: { kind: 'host' } } });
     expect(applyLookup(config, 'account', { LogicalName: 'primarycontactid', Targets: ['contact'] })).toBe(config);

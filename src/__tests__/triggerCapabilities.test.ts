@@ -1,10 +1,29 @@
 import { describe, expect, it } from 'vitest';
-import { allowedSources, allowedTargets, coerceConfig, destinationTable, TRIGGER_CAPABILITIES, TRIGGER_KINDS } from '../services/triggerCapabilities';
+import { allowedSources, allowedTargets, coerceConfig, destinationTable, retargetRecord, TRIGGER_CAPABILITIES, TRIGGER_KINDS } from '../services/triggerCapabilities';
 import { DEFAULT_CONFIG, PaneDefinitionConfig } from '../types/PaneDefinitionConfig';
 import { validate } from '../services/ValidationService';
 import { cfg } from './testHelpers';
 
 const record = { pageType: 'entityrecord', entityName: 'contact', formId: '', tabName: '', data: '' } as const;
+
+describe('retargetRecord', () => {
+  const picked = { pageType: 'entityrecord', entityName: 'account', formId: 'form-1', tabName: 'tab-1', data: '{"name":"A"}', createNew: false } as const;
+  it('moves to the new table and clears its form, tab and form data', () => {
+    expect(retargetRecord(picked, 'contact')).toEqual({ ...picked, entityName: 'contact', formId: '', tabName: '', data: '' });
+  });
+  it('keeps form data written before any table was chosen', () => {
+    expect(retargetRecord({ ...picked, entityName: '' }, 'contact')).toEqual({ ...picked, entityName: 'contact', formId: '', tabName: '' });
+  });
+  it('keeps form data when the table is unchanged, but still clears the form and tab', () => {
+    expect(retargetRecord(picked, 'account')).toEqual({ ...picked, formId: '', tabName: '' });
+  });
+  it('returns a new object and leaves its input untouched', () => {
+    const before = { ...picked };
+    const next = retargetRecord(picked, 'contact');
+    expect(next).not.toBe(picked);
+    expect(picked).toEqual(before);
+  });
+});
 
 describe('capability table', () => {
   it('lists exactly the seven v2 trigger kinds', () => {

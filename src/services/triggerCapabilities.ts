@@ -4,6 +4,8 @@ import {
 
 export type HostPicker = 'form' | 'view' | 'lookup' | 'column' | null;
 
+type RecordTarget = Extract<TargetConfig, { pageType: 'entityrecord' }>;
+
 export interface TriggerCapabilities {
   label: string;
   desc: string;
@@ -79,6 +81,12 @@ export function destinationTable(config: PaneDefinitionConfig): string {
   return config.target.entityName;
 }
 
+/** Clears table-specific form and tab selections, and data when replacing a previously chosen table. */
+export function retargetRecord(target: RecordTarget, entityName: string): RecordTarget {
+  const data = entityName !== target.entityName && target.entityName ? '' : target.data;
+  return { ...target, entityName, formId: '', tabName: '', data };
+}
+
 /** Snaps target, source and derived destination to legal values. Returns the input object when nothing changes. */
 export function coerceConfig(config: PaneDefinitionConfig): PaneDefinitionConfig {
   let next = config;
@@ -94,9 +102,7 @@ export function coerceConfig(config: PaneDefinitionConfig): PaneDefinitionConfig
   if (next.target.pageType === 'entityrecord' && !next.target.createNew &&
       (next.context.source.kind === 'host' || next.context.source.kind === 'selectedRow') &&
       next.target.entityName !== derived) {
-    // Form data names columns of the previous table; a first derivation keeps data written before the table was known.
-    const data = next.target.entityName ? '' : next.target.data;
-    next = { ...next, target: { ...next.target, entityName: derived, formId: '', tabName: '', data } };
+    next = { ...next, target: retargetRecord(next.target, derived) };
   }
   // The clicked tag names the table at runtime; a stored table, and the form and tab picked for it, would be stale.
   if (next.target.pageType === 'entityrecord' && next.context.source.kind === 'clickedTag' &&

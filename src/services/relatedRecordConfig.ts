@@ -1,14 +1,15 @@
 import type { LookupAttributeInfo } from './MetadataService';
 import type { PaneDefinitionConfig } from '../types/PaneDefinitionConfig';
 import { isValidLogicalName } from './odataGuards';
-import { coerceConfig } from './triggerCapabilities';
+import { coerceConfig, retargetRecord } from './triggerCapabilities';
 
 /** Switches the host table and invalidates every choice that depended on it. */
 export function changeHostTable(config: PaneDefinitionConfig, entityName: string): PaneDefinitionConfig {
   if (config.host.entityName === entityName) return config;
   const source = config.context.source.kind === 'lookup' ? { kind: 'lookup' as const, attribute: '' } : config.context.source;
+  // Unlike a table pick, a host change also drops data entered before the destination was resolved.
   const target = config.target.pageType === 'entityrecord' && !config.target.createNew && config.context.source.kind === 'lookup'
-    ? { ...config.target, entityName: '', formId: '', tabName: '', data: '' }
+    ? { ...retargetRecord(config.target, ''), data: '' }
     : config.target;
   return coerceConfig({
     ...config,
@@ -40,11 +41,7 @@ export function applyLookup(config: PaneDefinitionConfig, hostEntity: string, lo
   return {
     ...config,
     context: { ...config.context, source: { kind: 'lookup', attribute } },
-    target: {
-      ...config.target, entityName: destination,
-      ...(shouldClearForm ? { formId: '', tabName: '' } : {}),
-      // Form data names columns of the previous table; a first resolution keeps it.
-      ...(destinationChanged && config.target.entityName ? { data: '' } : {}),
-    },
+    // Re-resolving the same lookup and destination keeps the picked form and tab.
+    target: shouldClearForm ? retargetRecord(config.target, destination) : config.target,
   };
 }

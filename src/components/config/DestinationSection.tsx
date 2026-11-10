@@ -5,7 +5,7 @@ import { theme } from '../../theme/tokens';
 import type { LookupAttributeInfo } from '../../services/MetadataService';
 import type { PaneDefinitionConfig, PageType, RecordSource, RecordSourceKind, TargetConfig } from '../../types/PaneDefinitionConfig';
 import { RECORD_TARGETS } from '../../types/PaneDefinitionConfig';
-import { allowedSources, allowedTargets, defaultSource, destinationTable, isCreating, resetTarget, sendsRecord } from '../../services/triggerCapabilities';
+import { allowedSources, allowedTargets, defaultSource, destinationTable, isCreating, resetTarget, retargetRecord, sendsRecord } from '../../services/triggerCapabilities';
 import { applyLookup } from '../../services/relatedRecordConfig';
 import { normalizeGuid } from '../../services/odataGuards';
 import { copyText } from '../../services/clipboard';
@@ -215,8 +215,7 @@ export function DestinationSection({ config, onChange, metadataService, formXmlS
               <TablePicker ariaLabel="Destination table" value={target.entityName} metadataService={metadataService}
                 error={!!errors['target.entityName']} onAccessibleTablesChange={onAccessibleTablesChange}
                 onChange={entityName => onChange(prev => prev.target.pageType !== 'entityrecord' || prev.target.entityName === entityName ? prev
-                  // Form data names columns of the previous table; a first pick keeps data typed before any table was chosen.
-                  : patchTarget(prev, 'entityrecord', { entityName, formId: '', tabName: '', data: prev.target.entityName ? '' : prev.target.data }))} />
+                  : { ...prev, target: retargetRecord(prev.target, entityName) })} />
             ) : (
               <div role="status" aria-live="polite" style={{ color: T.fg2, fontFamily: T.font, fontSize: 13 }}>
                 {relatedTarget
