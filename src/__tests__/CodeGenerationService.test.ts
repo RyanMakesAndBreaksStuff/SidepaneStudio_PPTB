@@ -1,9 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
 import { GENERATED_NAMES, generateBasicScript, generateLibraryScript, namespaceDeclaration, resolveTriggerNames } from '../services/CodeGenerationService';
 import { cfg, deferred } from './testHelpers';
-import { TRIGGER_KINDS } from '../services/triggerCapabilities';
+import { allowedSources, allowedTargets, sendsRecord, TRIGGER_KINDS } from '../services/triggerCapabilities';
 import { parseStoredConfig } from '../services/configGuards';
-import type { PaneDefinitionConfig, RecordSource, TargetConfig, TriggerKind } from '../types/PaneDefinitionConfig';
+import { COMMAND_TRIGGERS, type PaneDefinitionConfig, type RecordSource, type RecordSourceKind, type TargetConfig, type TriggerKind } from '../types/PaneDefinitionConfig';
+import runtimeSource from '../runtime/sidepane.runtime.js?raw';
 
 function isValidJS(code: string): boolean {
   try {
@@ -723,12 +724,9 @@ describe('generateLibraryScript', () => {
   });
 });
 
-describe('Basic and Shared Library emit the same keys (WR-007)', () => {
+describe('Basic and Shared Library behave the same for every legal configuration (M16)', () => {
   const GUID = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
-  /** createPane options; Basic passes them to createPane, the Shared Library to SidePaneHelper.open. */
-  const PANE_KEYS = ['paneId', 'title', 'width', 'canClose', 'isSelected', 'hideHeader', 'alwaysRender', 'keepBadgeOnSelect', 'imageSrc'];
-  /** SidePaneHelper.open options that Basic implements as statements instead. */
-  const BEHAVIOR_KEYS = ['badge', 'reuseExistingPane', 'expandOnOpen', 'closeOthers', 'toggleIfOpen'];
+  /** One target per page type, plus create mode, whose legal sources differ. */
   const TARGETS: TargetConfig[] = [
     { pageType: 'custom', name: 'sps_Page' },
     { pageType: 'entityrecord', entityName: 'account', formId: `{${GUID}}`, tabName: 'details', data: '{"a":1}' },
@@ -739,78 +737,151 @@ describe('Basic and Shared Library emit the same keys (WR-007)', () => {
     { pageType: 'search', searchText: 'Contoso' },
     { pageType: 'generative', pageId: `{${GUID}}`, data: '{"a":1}' },
   ];
-  /** Every record source, each with a trigger that offers it. */
-  const SOURCES: Array<[RecordSource, TriggerKind]> = [
-    [{ kind: 'none' }, 'FormButton'],
-    [{ kind: 'host' }, 'FormButton'],
-    [{ kind: 'selectedRow' }, 'GridButton'],
-    [{ kind: 'clickedTag' }, 'LookupTagClick'],
-    [{ kind: 'fixed', entityName: 'account', id: GUID }, 'ManualJS'],
-    [{ kind: 'lookup', attribute: 'primarycontactid' }, 'FormOnLoad'],
-  ];
-  const cases = TARGETS.flatMap(target => SOURCES
-    // An existing-record form needs a record; Basic throws before navigating without one.
-    .filter(([source]) => !(target.pageType === 'entityrecord' && !target.createNew && source.kind === 'none'))
-    .map(([source, kind]) => [
-      target.pageType === 'entityrecord' && target.createNew ? 'entityrecord (create)' : target.pageType,
-      `${source.kind} source via ${kind}`,
-      cfg({
-        pane: { paneId: 'p', imageSrc: 'sps_/icons/pane.svg' },
-        trigger: { kind, namespace: 'TestNs', functionName: 'open' },
-        host: { entityName: 'account', lookupControls: ['parentcustomerid'] },
-        target,
-        context: { source },
-      }),
-    ] as const));
-
-  const form = {
-    data: { entity: { getEntityName: () => 'account', getId: () => '{A1}' } },
-    getAttribute: () => ({ getValue: () => [{ id: '{C1}', entityType: 'account' }] }),
+  const SOURCES: Record<RecordSourceKind, RecordSource> = {
+    none: { kind: 'none' },
+    host: { kind: 'host' },
+    selectedRow: { kind: 'selectedRow' },
+    clickedTag: { kind: 'clickedTag' },
+    fixed: { kind: 'fixed', entityName: 'account', id: GUID },
+    lookup: { kind: 'lookup', attribute: 'primarycontactid' },
   };
-  const row = { getId: () => '{B1}', getEntityName: () => 'account' };
-  /** Serves as selectedControl, primaryControl or executionContext for every trigger. */
-  const triggerArg = {
-    ...form,
-    getFormContext: () => form,
-    getEventSource: () => row,
-    getGrid: () => ({ getSelectedRows: () => ({ getLength: () => 1, get: () => ({ getData: () => ({ getEntity: () => row }) }) }) }),
-    getEventArgs: () => ({ preventDefault: vi.fn(), getTagValue: () => ({ id: '{D1}', entityType: 'account' }) }),
-  };
-  const pick = (options: Record<string, unknown>, keep: (key: string) => boolean) =>
-    Object.fromEntries(Object.entries(options).filter(([key]) => keep(key)));
+  /**
+   * open: no pane yet, rail collapsed. unsaved: the form record has no id yet. reuseBadge: the pane is already open
+   * and the config sets a badge. toggle: the pane is selected and expanded, the lookup is empty, close-if-open is on.
+   */
+  type Scenario = 'open' | 'unsaved' | 'reuseBadge' | 'toggle';
+  interface Case { name: string; scenario: Scenario; config: PaneDefinitionConfig }
 
-  async function runBasic(config: PaneDefinitionConfig) {
-    const pane = { navigate: vi.fn().mockResolvedValue(undefined) };
-    const xrm = {
-      App: { sidePanes: { state: 0, getPane: vi.fn(), createPane: vi.fn().mockResolvedValue(pane), getAllPanes: vi.fn().mockReturnValue([]) } },
-      Navigation: { openErrorDialog: vi.fn(), openAlertDialog: vi.fn() },
-    };
-    // ManualJS Basic output runs on evaluation and defines no namespace.
-    const handler = new Function('window', 'Xrm',
-      `${generateBasicScript(config)}\nreturn typeof TestNs === 'undefined' ? undefined : TestNs.open;`)({}, xrm) as ((arg: unknown) => void) | undefined;
-    handler?.(triggerArg);
-    await vi.waitFor(() => expect(pane.navigate).toHaveBeenCalled());
-    expect(xrm.Navigation.openErrorDialog).not.toHaveBeenCalled();
-    return { paneOptions: xrm.App.sidePanes.createPane.mock.calls[0][0], navigateInput: pane.navigate.mock.calls[0][0] };
-  }
-
-  async function runLibrary(config: PaneDefinitionConfig): Promise<Record<string, unknown>> {
-    const open = vi.fn();
-    const handler = new Function('Xrm', 'SidePaneHelper', `${generateLibraryScript(config)}\nreturn TestNs.open;`)(
-      { App: { sidePanes: {} }, Navigation: { openErrorDialog: vi.fn() } }, { open }) as (arg: unknown) => void;
-    handler(triggerArg);
-    await vi.waitFor(() => expect(open).toHaveBeenCalled());
-    return open.mock.calls[0][0];
-  }
-
-  it.each(cases)('%s target, %s', async (_pageType, _source, config) => {
-    const basic = await runBasic(config);
-    const options = await runLibrary(config);
-    const navigation = pick(options, key => !PANE_KEYS.includes(key) && !BEHAVIOR_KEYS.includes(key));
-    expect(Object.keys(navigation).sort()).toEqual(Object.keys(basic.navigateInput).sort());
-    expect(navigation).toEqual(basic.navigateInput);
-    expect(pick(options, key => PANE_KEYS.includes(key))).toEqual(basic.paneOptions);
+  const configFor = (kind: TriggerKind, target: TargetConfig, source: RecordSource, scenario: Scenario) => cfg({
+    pane: { paneId: 'p', imageSrc: 'sps_/icons/pane.svg', badgeValue: scenario === 'reuseBadge' ? 5 : 0 },
+    trigger: { kind, namespace: 'TestNs', functionName: 'open' },
+    host: { entityName: 'account', attribute: 'new_field', lookupControls: ['parentcustomerid'] },
+    target,
+    context: { source },
+    behavior: { toggleIfOpen: scenario === 'toggle' },
   });
+  const label = (target: TargetConfig) => target.pageType === 'entityrecord' && target.createNew ? 'entityrecord (create)' : target.pageType;
+  /** Every legal trigger × target × source, as TRIGGER_CAPABILITIES defines them. */
+  const legal = TRIGGER_KINDS.flatMap(kind => TARGETS
+    .filter(target => allowedTargets(kind).includes(target.pageType))
+    .flatMap(target => allowedSources(configFor(kind, target, SOURCES.none, 'open'))
+      .map(sourceKind => ({ kind, target, source: SOURCES[sourceKind] }))));
+  const cases: Case[] = [
+    ...legal.map(({ kind, target, source }) => ({ scenario: 'open' as const, kind, target, source })),
+    ...legal.filter(({ kind, target, source }) => source.kind === 'host' && sendsRecord(configFor(kind, target, source, 'unsaved')))
+      .map(({ kind, target, source }) => ({ scenario: 'unsaved' as const, kind, target, source })),
+    ...TRIGGER_KINDS.map(kind => {
+      const target = TARGETS[0];
+      return { scenario: 'reuseBadge' as const, kind, target, source: SOURCES[allowedSources(configFor(kind, target, SOURCES.none, 'reuseBadge'))[0]] };
+    }),
+    ...legal.filter(({ kind }) => COMMAND_TRIGGERS.includes(kind))
+      .map(({ kind, target, source }) => ({ scenario: 'toggle' as const, kind, target, source })),
+  ].map(({ scenario, kind, target, source }) => ({
+    name: `${scenario}: ${kind} → ${label(target)}, ${source.kind} source`,
+    scenario,
+    config: configFor(kind, target, source, scenario),
+  }));
+
+  /** Serves as primaryControl, selectedControl or executionContext for every trigger. */
+  function triggerArg(scenario: Scenario) {
+    const lookup = scenario === 'toggle' ? [] : [{ id: '{C1}', entityType: 'contact' }];
+    const form = {
+      data: { entity: { getEntityName: () => 'account', getId: () => scenario === 'unsaved' ? '' : '{A1}' } },
+      getAttribute: () => ({ getValue: () => lookup }),
+    };
+    const row = { getId: () => '{B1}', getEntityName: () => 'account' };
+    return {
+      ...form,
+      getFormContext: () => form,
+      getEventSource: () => row,
+      getGrid: () => ({ getSelectedRows: () => ({ getLength: () => 1, get: () => ({ getData: () => ({ getEntity: () => row }) }) }) }),
+      getEventArgs: () => ({ preventDefault: vi.fn(), getTagValue: () => ({ id: '{D1}', entityType: 'account' }) }),
+    };
+  }
+
+  /** Runs one output against a fake Xrm (Library through the shipped runtime) and records everything the user could see. */
+  async function observe(output: 'basic' | 'library', scenario: Scenario, config: PaneDefinitionConfig) {
+    const navigate = vi.fn().mockResolvedValue(undefined);
+    const created: { paneId: string; navigate: typeof navigate; badge?: unknown } = { paneId: 'p', navigate };
+    const existing = scenario === 'reuseBadge' || scenario === 'toggle'
+      ? { paneId: 'p', navigate, select: vi.fn(), close: vi.fn(), badge: undefined as unknown }
+      : undefined;
+    const sidePanes = {
+      state: scenario === 'toggle' ? 1 : 0,
+      getPane: vi.fn(() => existing),
+      getSelectedPane: vi.fn(() => existing),
+      getAllPanes: vi.fn(() => (existing ? [existing] : [])),
+      createPane: vi.fn().mockResolvedValue(created),
+    };
+    const lookupRow = scenario === 'toggle' ? {} : {
+      _primarycontactid_value: 'c1',
+      '_primarycontactid_value@Microsoft.Dynamics.CRM.lookuplogicalname': 'contact',
+    };
+    const xrm = {
+      App: { sidePanes },
+      Navigation: { openAlertDialog: vi.fn(), openErrorDialog: vi.fn() },
+      WebApi: { retrieveRecord: vi.fn().mockResolvedValue(lookupRow) },
+    };
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.useFakeTimers();
+    try {
+      const handler = output === 'basic'
+        ? new Function('window', 'Xrm', `${generateBasicScript(config)}\nreturn typeof TestNs === 'undefined' ? undefined : TestNs.open;`)({}, xrm)
+        : new Function('Xrm', 'SidePaneHelper', `${generateLibraryScript(config)}\nreturn TestNs.open;`)(
+          xrm, new Function('globalThis', `${runtimeSource}\nreturn globalThis.SidePaneHelper;`)({ Xrm: xrm }));
+      // Both console outputs run themselves when evaluated.
+      if (config.trigger.kind !== 'ManualJS') (handler as (arg: unknown) => unknown)(triggerArg(scenario));
+      await vi.runAllTimersAsync();
+      return {
+        paneOptions: sidePanes.createPane.mock.calls.map(call => call[0]),
+        navigateInputs: navigate.mock.calls.map(call => call[0]),
+        railState: sidePanes.state,
+        badges: [created.badge, existing?.badge],
+        selects: existing?.select.mock.calls.length ?? 0,
+        closes: existing?.close.mock.calls.length ?? 0,
+        alerts: xrm.Navigation.openAlertDialog.mock.calls.map(call => call[0]),
+        errorDialogs: xrm.Navigation.openErrorDialog.mock.calls.map(call => call[0]),
+        warnings: warn.mock.calls.map(call => call[0]),
+      };
+    } finally {
+      vi.useRealTimers();
+      warn.mockRestore();
+      error.mockRestore();
+    }
+  }
+
+  /** Both outputs leave the same observable result, and that result is the one the scenario calls for. */
+  async function expectSameBehaviour({ scenario, config }: Case) {
+    const basic = await observe('basic', scenario, config);
+    expect(await observe('library', scenario, config)).toEqual(basic);
+    expect(basic.errorDialogs).toEqual([]);
+    if (scenario === 'open' || scenario === 'reuseBadge') expect(basic.navigateInputs).toHaveLength(1);
+    if (scenario === 'unsaved') {
+      expect(basic.paneOptions).toEqual([]);
+      expect(basic.navigateInputs).toEqual([]);
+      expect(basic.alerts.length + basic.warnings.length).toBe(1);
+    }
+    if (scenario === 'toggle') {
+      expect(basic.closes).toBe(1);
+      expect(basic.navigateInputs).toEqual([]);
+    }
+  }
+
+  /** The finding that makes a case diverge today. Each fix task in Wave 6 deletes its line, which turns those cases into plain tests. */
+  function knownDivergence({ scenario, config }: Case): string | undefined {
+    if (scenario === 'open' && !COMMAND_TRIGGERS.includes(config.trigger.kind)) return 'M1';
+    if (scenario === 'reuseBadge') return 'L1';
+    if (scenario === 'toggle' && config.context.source.kind === 'lookup') return 'L3';
+    if (scenario === 'unsaved') return 'L4';
+    return undefined;
+  }
+
+  for (const testCase of cases) {
+    const finding = knownDivergence(testCase);
+    if (finding) it.fails(`${testCase.name} (diverges until ${finding} is fixed)`, () => expectSameBehaviour(testCase));
+    else it(testCase.name, () => expectSameBehaviour(testCase));
+  }
 });
 
 describe('buildNavigateInput — record context (CR-001)', () => {
