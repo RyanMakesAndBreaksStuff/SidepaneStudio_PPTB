@@ -519,17 +519,19 @@ ${releaseLock}
 };`;
 }
 
-function generateManualJS(config: PaneDefinitionConfig, { fn }: ResolvedTriggerNames): string {
+/** Console output defines the same namespaced function as other triggers and calls it once. */
+function generateManualJS(config: PaneDefinitionConfig, { segments, ns, fn }: ResolvedTriggerNames): string {
   const body = buildGetOrCreateBody(config, '  ');
 
-  return `async function ${fn}() {
+  return `${namespaceDeclaration(segments)}
+${ns}.${fn} = async function() {
   try {
 ${indentLines(body, '  ')}
   } catch(e) {
-    ${buildCatchBody(fn, '    ')}
+    ${buildCatchBody(`${ns}.${fn}`, '    ')}
   }
-}
-${fn}().catch(console.error);`;
+};
+${ns}.${fn}().catch(console.error);`;
 }
 
 function generateFormOnChange(config: PaneDefinitionConfig, { segments, ns, fn }: ResolvedTriggerNames): string {

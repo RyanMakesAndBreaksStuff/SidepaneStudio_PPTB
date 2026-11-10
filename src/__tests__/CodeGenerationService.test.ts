@@ -152,10 +152,11 @@ describe('generateBasicScript — pending cache', () => {
     expect(code).not.toContain('_pendingPanes');
   });
 
-  it('ManualJS is a named async IIFE', () => {
-    const code = generateBasicScript(cfg({ trigger: { kind: 'ManualJS', functionName: 'myFunc' } }));
-    expect(code).toContain('async function myFunc');
-    expect(code).toContain('.catch(');
+  it('ManualJS defines and calls the namespaced function, as the Library output does', () => {
+    const code = generateBasicScript(cfg({ trigger: { kind: 'ManualJS', namespace: 'Foo', functionName: 'myFunc' } }));
+    expect(code.startsWith('var Foo = Foo || {};\nFoo.myFunc = async function() {')).toBe(true);
+    expect(code.trimEnd().endsWith('\nFoo.myFunc().catch(console.error);')).toBe(true);
+    expect(code).not.toContain('async function myFunc');
   });
 });
 
@@ -186,9 +187,7 @@ describe('trigger names — CR-001', () => {
     const [basic, library] = outputs(config);
     const definesName = (code: string) => new Function('window', 'Xrm', `${code}\nreturn Contoso.Panes.openPane;`)({}, {});
     expect(typeof definesName(library)).toBe('function');
-    // ManualJS basic output is a console snippet: a top-level function, not a namespace member.
-    if (kind === 'ManualJS') expect(basic).toContain('async function openPane()');
-    else expect(typeof definesName(basic)).toBe('function');
+    expect(typeof definesName(basic)).toBe('function');
   });
 
   it('keeps a single-segment namespace output unchanged', () => {
@@ -866,7 +865,7 @@ describe('Basic and Shared Library behave the same for every legal configuration
     vi.useFakeTimers();
     try {
       const handler = output === 'basic'
-        ? new Function('window', 'Xrm', `${generateBasicScript(config)}\nreturn typeof TestNs === 'undefined' ? undefined : TestNs.open;`)({}, xrm)
+        ? new Function('window', 'Xrm', `${generateBasicScript(config)}\nreturn TestNs.open;`)({}, xrm)
         : new Function('Xrm', 'SidePaneHelper', `${generateLibraryScript(config)}\nreturn TestNs.open;`)(
           xrm, new Function('globalThis', `${runtimeSource}\nreturn globalThis.SidePaneHelper;`)({ Xrm: xrm }));
       // Both console outputs run themselves when evaluated.
@@ -1892,5 +1891,29 @@ describe('ManualJS Shared Library output runs itself (codegen-config-model-008)'
 
   it.each(TRIGGER_KINDS.filter(kind => kind !== 'ManualJS'))('%s only defines its handler', kind => {
     expect(library(kind)).not.toContain('TestNs.open();');
+  });
+});
+
+describe('ManualJS Basic output defines and runs its namespaced function (M7)', () => {
+  const manual = (namespace: string) => cfg({
+    trigger: { kind: 'ManualJS', namespace, functionName: 'open' },
+    context: { source: { kind: 'none' } },
+  });
+
+  it('defines Foo.open and opens the pane once when pasted', async () => {
+    const pane = { navigate: vi.fn().mockResolvedValue(undefined) };
+    const xrm = {
+      App: { sidePanes: { state: 0, getPane: vi.fn(), createPane: vi.fn().mockResolvedValue(pane), getAllPanes: vi.fn().mockReturnValue([]) } },
+      Navigation: { openErrorDialog: vi.fn(), openAlertDialog: vi.fn() },
+    };
+    const defined = new Function('window', 'Xrm', `${generateBasicScript(manual('Foo'))}\nreturn Foo.open;`)({}, xrm);
+    expect(typeof defined).toBe('function');
+    await vi.waitFor(() => expect(pane.navigate).toHaveBeenCalledTimes(1));
+    expect(xrm.App.sidePanes.createPane).toHaveBeenCalledTimes(1);
+    expect(xrm.Navigation.openErrorDialog).not.toHaveBeenCalled();
+  });
+
+  it('still withholds the script until a namespace is set', () => {
+    expect(generateBasicScript(manual(''))).toBe('// Fix the trigger namespace and function name errors to generate this script.');
   });
 });

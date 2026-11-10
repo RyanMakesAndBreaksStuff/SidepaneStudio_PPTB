@@ -89,19 +89,15 @@ export function TriggerSection({ config, onChange, metadataService,
               : { ...prev, host: { ...prev.host, lookupControls } })} />
         </Field>
       )}
-      {(
-        <>
-          <Field label="Function name" error={errors['trigger.functionName']}
-            hint={names.ok ? `Full call: ${names.ns}.${names.fn}` : undefined}>
-            <Input value={trigger.functionName} placeholder="openRelatedRecordsPane"
-              onChange={functionName => onChange(prev => ({ ...prev, trigger: { ...prev.trigger, functionName } }))} />
-          </Field>
-          <Field label="Namespace" error={errors['trigger.namespace']} hint="JavaScript namespace prefix, such as Contoso or Contoso.Panes">
-            <Input value={trigger.namespace} placeholder="Contoso"
-              onChange={namespace => onChange(prev => ({ ...prev, trigger: { ...prev.trigger, namespace } }))} />
-          </Field>
-        </>
-      )}
+      <Field label="Function name" error={errors['trigger.functionName']}
+        hint={names.ok ? `Full call: ${names.ns}.${names.fn}` : undefined}>
+        <Input value={trigger.functionName} placeholder="openRelatedRecordsPane"
+          onChange={functionName => onChange(prev => ({ ...prev, trigger: { ...prev.trigger, functionName } }))} />
+      </Field>
+      <Field label="Namespace" error={errors['trigger.namespace']} hint="JavaScript namespace prefix, such as Contoso or Contoso.Panes">
+        <Input value={trigger.namespace} placeholder="Contoso"
+          onChange={namespace => onChange(prev => ({ ...prev, trigger: { ...prev.trigger, namespace } }))} />
+      </Field>
     </>
   );
 }
