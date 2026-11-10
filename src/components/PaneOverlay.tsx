@@ -2,7 +2,8 @@ import * as React from 'react';
 import { PageType, PaneConfig, TargetConfig } from '../types/PaneDefinitionConfig';
 import { ValidationResult } from '../services/ValidationService';
 import type { PreviewRecord } from '../services/GridViewModel';
-import { getPreviewPaneWidth, getSafePreviewImageSrc } from './previewHelpers';
+import { getPreviewPaneWidth } from './previewHelpers';
+import { getSafePreviewImageSrc } from '../services/imagePath';
 import { FL } from './flTokens';
 
 interface PaneOverlayProps {

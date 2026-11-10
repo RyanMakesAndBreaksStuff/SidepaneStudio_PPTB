@@ -3,7 +3,8 @@ import { act } from 'react';
 import { createRoot, Root } from 'react-dom/client';
 import { afterEach, describe, expect, it } from 'vitest';
 import { PaneOverlay } from '../components/PaneOverlay';
-import { getPreviewPaneWidth, getSafePreviewImageSrc } from '../components/previewHelpers';
+import { getPreviewPaneWidth } from '../components/previewHelpers';
+import { getSafePreviewImageSrc } from '../services/imagePath';
 import type { PreviewRecord } from '../services/GridViewModel';
 import { DEFAULT_CONFIG } from '../types/PaneDefinitionConfig';
 

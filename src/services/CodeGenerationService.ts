@@ -1,7 +1,7 @@
 import { PaneDefinitionConfig, TriggerKind, COMMAND_TRIGGERS, GRID_TRIGGERS, RECORD_TARGETS } from '../types/PaneDefinitionConfig';
 import { normalizeGuid } from './odataGuards';
 import { isJsIdentifier, normalizeConfigWidth } from './configGuards';
-import { isSafeRelativeImagePath } from '../components/previewHelpers';
+import { isSafeRelativeImagePath } from './imagePath';
 import { isCreating } from './triggerCapabilities';
 import { RUNTIME_FILE_NAME } from '../constants';
 
