@@ -9,7 +9,7 @@ import { StatusScreen } from './components/StatusScreen';
 import { PptbContextAdapter } from './adapters/PptbContextAdapter';
 import { subscribeToolboxEvents } from './adapters/toolboxEvents';
 import { MetadataService } from './services/MetadataService';
-import { MetadataFilterSettingsService } from './services/MetadataFilterSettingsService';
+import { MetadataFilterSettingsService, type MetadataFilterSettingsResult } from './services/MetadataFilterSettingsService';
 import {
   DEFAULT_METADATA_FILTER_CONFIG,
   MetadataFilterConfig,
@@ -118,15 +118,20 @@ export function SidePaneBuilderWorkbench(): React.ReactElement {
     metadataFilterSettingsRef.current = new MetadataFilterSettingsService(window.toolboxAPI?.settings);
   }
 
+  // A load, save or reset outcome reaches the service, the shell's copy and the persistence flag together, and ends any error.
+  const applyFilterResult = useCallback((result: MetadataFilterSettingsResult) => {
+    metaRef.current?.setFilterConfig(result.config);
+    setMetadataFilterConfig(result.config);
+    setMetadataFilterPersistenceAvailable(result.persistenceAvailable);
+    setMetadataFilterError(null);
+  }, []);
+
   // Hydrate metadata table filters independently from pane definition config.
   useEffect(() => {
     let active = true;
     metadataFilterSettingsRef.current?.load().then(result => {
       if (!active) return;
-      metaRef.current?.setFilterConfig(result.config);
-      setMetadataFilterConfig(result.config);
-      setMetadataFilterPersistenceAvailable(result.persistenceAvailable);
-      setMetadataFilterError(null);
+      applyFilterResult(result);
     }).catch((err: unknown) => {
       if (!active) return;
       const message = err instanceof Error ? err.message : 'Failed to load metadata filter settings.';
@@ -136,7 +141,7 @@ export function SidePaneBuilderWorkbench(): React.ReactElement {
       setMetadataFilterPersistenceAvailable(false);
     });
     return () => { active = false; };
-  }, []);
+  }, [applyFilterResult]);
 
   // Subscribe before the initial check; only the latest check can enable the UI.
   useEffect(() => {
@@ -330,29 +335,23 @@ export function SidePaneBuilderWorkbench(): React.ReactElement {
     try {
       const result = await metadataFilterSettingsRef.current?.save(nextConfig);
       if (!result) return;
-      metaRef.current?.setFilterConfig(result.config);
-      setMetadataFilterConfig(result.config);
-      setMetadataFilterPersistenceAvailable(result.persistenceAvailable);
-      setMetadataFilterError(null);
+      applyFilterResult(result);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to save metadata filter settings.';
       setMetadataFilterError(message);
     }
-  }, []);
+  }, [applyFilterResult]);
 
   const handleResetMetadataFilterConfig = useCallback(async () => {
     try {
       const result = await metadataFilterSettingsRef.current?.reset();
       if (!result) return;
-      metaRef.current?.setFilterConfig(result.config);
-      setMetadataFilterConfig(result.config);
-      setMetadataFilterPersistenceAvailable(result.persistenceAvailable);
-      setMetadataFilterError(null);
+      applyFilterResult(result);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to reset metadata filter settings.';
       setMetadataFilterError(message);
     }
-  }, []);
+  }, [applyFilterResult]);
 
   if (connectionState.status === 'loading') {
     return <StatusScreen message="Connecting to Dataverse…" />;

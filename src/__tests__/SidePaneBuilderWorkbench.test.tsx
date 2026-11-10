@@ -3,7 +3,8 @@ import { act } from 'react';
 import { createRoot, Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_CONFIG, PaneDefinitionConfig } from '../types/PaneDefinitionConfig';
-import { DEFAULT_METADATA_FILTER_CONFIG } from '../types/MetadataFilterConfig';
+import { DEFAULT_METADATA_FILTER_CONFIG, type MetadataFilterConfig } from '../types/MetadataFilterConfig';
+import type { MetadataService } from '../services/MetadataService';
 
 const workbenchShellState = vi.hoisted(() => ({
   props: undefined as Record<string, unknown> | undefined,
@@ -214,6 +215,44 @@ describe('SidePaneBuilderWorkbench', () => {
     expect(workbenchShellState.props?.metadataFilterConfig).toEqual(DEFAULT_METADATA_FILTER_CONFIG);
     expect(settingsSet).toHaveBeenCalledTimes(2);
     expect(settingsSet).toHaveBeenLastCalledWith('metadataFilters', DEFAULT_METADATA_FILTER_CONFIG);
+  });
+
+  it('applies each metadata filter save and reset result to the service, the shell and the error state', async () => {
+    const settingsSet = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('toolboxAPI', {
+      connections: { getActiveConnection: vi.fn().mockResolvedValue({ id: 'conn-1' }) },
+      events: { on: vi.fn(), off: vi.fn() },
+      settings: { get: vi.fn().mockResolvedValue(null), set: settingsSet, getAll: vi.fn().mockResolvedValue({}) },
+    });
+    await render(<SidePaneBuilderWorkbench />);
+    await act(async () => { await Promise.resolve(); });
+    await act(async () => { await Promise.resolve(); });
+
+    const setFilterConfig = vi.spyOn(workbenchShellState.props?.metadataService as MetadataService, 'setFilterConfig');
+    const save = workbenchShellState.props?.onSaveMetadataFilterConfig as (config: MetadataFilterConfig) => Promise<void>;
+    const reset = workbenchShellState.props?.onResetMetadataFilterConfig as () => Promise<void>;
+    const custom: MetadataFilterConfig = { denyPrefixes: ['abc_'], denyExact: [], allowedStandardTables: ['account'] };
+
+    settingsSet.mockRejectedValueOnce(new Error('settings backend offline'));
+    await act(async () => { await save(custom); });
+    expect(workbenchShellState.props?.metadataFilterError).toBe('settings backend offline');
+    expect(setFilterConfig).not.toHaveBeenCalled();
+
+    await act(async () => { await save(custom); });
+    expect(setFilterConfig).toHaveBeenLastCalledWith(custom);
+    expect(workbenchShellState.props?.metadataFilterConfig).toEqual(custom);
+    expect(workbenchShellState.props?.metadataFilterPersistenceAvailable).toBe(true);
+    expect(workbenchShellState.props?.metadataFilterError).toBeNull();
+
+    settingsSet.mockRejectedValueOnce(new Error('settings backend offline'));
+    await act(async () => { await reset(); });
+    expect(workbenchShellState.props?.metadataFilterError).toBe('settings backend offline');
+    expect(workbenchShellState.props?.metadataFilterConfig).toEqual(custom);
+
+    await act(async () => { await reset(); });
+    expect(setFilterConfig).toHaveBeenLastCalledWith(DEFAULT_METADATA_FILTER_CONFIG);
+    expect(workbenchShellState.props?.metadataFilterConfig).toEqual(DEFAULT_METADATA_FILTER_CONFIG);
+    expect(workbenchShellState.props?.metadataFilterError).toBeNull();
   });
 
   it('surfaces a failed settings write instead of dropping it', async () => {
