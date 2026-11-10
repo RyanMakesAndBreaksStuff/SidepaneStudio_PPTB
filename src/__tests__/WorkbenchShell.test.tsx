@@ -6,7 +6,8 @@ import { WorkbenchShell } from '../components/WorkbenchShell';
 import { MetadataService } from '../services/MetadataService';
 import { DEFAULT_CONFIG } from '../types/PaneDefinitionConfig';
 import { DEFAULT_METADATA_FILTER_CONFIG } from '../types/MetadataFilterConfig';
-import { xrmStub } from './testHelpers';
+import { theme } from '../theme/tokens';
+import { rgb, xrmStub } from './testHelpers';
 
 vi.mock('../components/ConfigurePanel', () => ({
   ConfigurePanel: () => <div>Configure panel</div>,
@@ -95,6 +96,16 @@ describe('WorkbenchShell', () => {
     expect(sections?.[0].style.minWidth).toBe(PREVIEW_COL_MIN_W);
     expect(sections?.[1].style.width).toBe(GENERATOR_COL_WIDTH);
     expect(sections?.[1].style.minWidth).toBe(GENERATOR_COL_MIN_W);
+  });
+
+  it('sets the inherited text colour, font and size on the shell root from theme tokens', async () => {
+    await render(shell());
+
+    const shellRoot = host!.firstElementChild as HTMLElement;
+    const T = theme(true);
+    expect(shellRoot.style.color).toBe(rgb(T.fg1));
+    expect(shellRoot.style.fontFamily).toContain('Segoe UI Variable Display');
+    expect(shellRoot.style.fontSize).toBe('13px');
   });
 
   it('collapses and expands the config rail independently', async () => {

@@ -6,6 +6,7 @@ import { TableComboBox } from '../components/TableComboBox';
 import { ThemeContext } from '../contexts/ThemeContext';
 import { TableInfo } from '../services/MetadataService';
 import { theme } from '../theme/tokens';
+import { rgb } from './testHelpers';
 
 let root: Root | undefined;
 let host: HTMLDivElement | undefined;
@@ -49,11 +50,6 @@ async function key(input: HTMLInputElement, keyName: string) {
 
 function combo(index = 0): HTMLInputElement {
   return host!.querySelectorAll<HTMLInputElement>('[role="combobox"]')[index];
-}
-
-function rgb(hex: string): string {
-  const channels = hex.slice(1).match(/.{2}/g)!.map(channel => parseInt(channel, 16));
-  return `rgb(${channels.join(', ')})`;
 }
 
 function PickerHarness({ value = '', onChange = vi.fn() }: { value?: string; onChange?: (next: string) => void }) {

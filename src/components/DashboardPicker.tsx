@@ -1,9 +1,8 @@
 import * as React from 'react';
-import { useTheme } from '../contexts/ThemeContext';
-import { theme } from '../theme/tokens';
 import type { MetadataService } from '../services/MetadataService';
 import { TableComboBox } from './TableComboBox';
 import { Callout } from './Callout';
+import { RetryButton } from './RetryButton';
 import { useMetadataRequest } from './useMetadataRequest';
 
 export interface DashboardPickerProps {
@@ -21,8 +20,6 @@ export function DashboardPicker({
   error,
   disabled,
 }: DashboardPickerProps): React.ReactElement {
-  const { isDark } = useTheme();
-  const T = theme(isDark);
   const request = useMetadataRequest(async () => {
     const result = await metadataService.listAccessibleDashboards();
     if (result.status === 'error') throw new Error(result.reason);
@@ -63,24 +60,7 @@ export function DashboardPicker({
         <Callout type="err" icon="x">
           <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
             <span>Could not load dashboards. {request.error}</span>
-            <button
-              type="button"
-              onClick={retry}
-              style={{
-                flexShrink: 0,
-                border: `1px solid ${T.error}`,
-                background: T.pageBg,
-                color: T.error,
-                borderRadius: T.rS,
-                fontFamily: T.font,
-                fontSize: 12,
-                fontWeight: 600,
-                padding: '2px 8px',
-                cursor: 'pointer',
-              }}
-            >
-              Retry
-            </button>
+            <RetryButton onClick={retry} />
           </span>
         </Callout>
       )}

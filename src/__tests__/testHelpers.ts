@@ -9,6 +9,12 @@ export function deferred<T>() {
   return { promise, resolve };
 }
 
+/** `#rrggbb` as the `rgb(r, g, b)` string jsdom reports for a colour style. */
+export function rgb(hex: string): string {
+  const channels = hex.slice(1).match(/.{2}/g)!.map(channel => parseInt(channel, 16));
+  return `rgb(${channels.join(', ')})`;
+}
+
 /** Select an authored combobox option by its visible label. */
 export async function chooseOption(host: HTMLElement, ariaLabel: string, text: string): Promise<void> {
   const input = host.querySelector<HTMLInputElement>(`[role="combobox"][aria-label="${ariaLabel}"]`);

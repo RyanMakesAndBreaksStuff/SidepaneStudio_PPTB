@@ -1,4 +1,7 @@
 import * as React from 'react';
+import { useTheme } from '../contexts/ThemeContext';
+import { theme } from '../theme/tokens';
+import { RetryButton } from './RetryButton';
 import type { MetadataRequest } from './useMetadataRequest';
 
 export interface MetadataStatusMessageProps {
@@ -14,6 +17,8 @@ export interface MetadataStatusMessageProps {
 
 /** The idle, loading, and failure-with-Retry lines shared by the metadata pickers. */
 export function MetadataStatusMessage({ request, disabled, idleText, loadingText, errorDetail }: MetadataStatusMessageProps): React.ReactElement | null {
+  const { isDark } = useTheme();
+  const T = theme(isDark);
   switch (request.status) {
     case 'idle':
       return idleText ? <div role="status">{idleText}</div> : null;
@@ -21,8 +26,8 @@ export function MetadataStatusMessage({ request, disabled, idleText, loadingText
       return loadingText ? <div role="status">{loadingText}</div> : null;
     case 'error':
       return (
-        <div role="alert">
-          {request.error}{errorDetail && ` ${errorDetail}`} <button type="button" disabled={disabled} onClick={request.retry}>Retry</button>
+        <div role="alert" style={{ color: T.error }}>
+          {request.error}{errorDetail && ` ${errorDetail}`} <RetryButton disabled={disabled} onClick={request.retry} />
         </div>
       );
     case 'loaded':

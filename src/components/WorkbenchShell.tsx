@@ -108,7 +108,7 @@ function WorkbenchShellContent({
   const outputPanelProps = { config, xrm, validation, copyBlocked: orgMismatch };
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden', background: T.pageBg }}>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden', background: T.pageBg, color: T.fg1, fontFamily: T.font, fontSize: 13 }}>
       {orgMismatch && (
         <div role="alert" style={{ padding: '8px 12px', borderBottom: `1px solid ${T.stroke1}`, flexShrink: 0 }}>
           <Callout type="warn" icon="⚠">
