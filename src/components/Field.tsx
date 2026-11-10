@@ -2,6 +2,7 @@ import * as React from 'react';
 import { createContext, useContext, useId, useMemo } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 import { theme } from '../theme/tokens';
+import { Callout } from './Callout';
 
 /** Props that tie a form control to its Field's label, hint/error text and validity. */
 export interface FieldControlProps {
@@ -22,11 +23,13 @@ export interface FieldProps {
   required?: boolean;
   hint?: string;
   error?: string;
+  /** Advisory messages, each shown as an amber callout below the control; unlike `error` they never mark it invalid. */
+  warning?: readonly string[];
   /** A render function receives the control props directly, for a raw element in the caller's own render. */
   children: React.ReactNode | ((control: FieldControlProps) => React.ReactNode);
 }
 
-export function Field({ label, required, hint, error, children }: FieldProps): React.ReactElement {
+export function Field({ label, required, hint, error, warning, children }: FieldProps): React.ReactElement {
   const { isDark } = useTheme();
   const T = theme(isDark);
   const id = useId();
@@ -50,6 +53,7 @@ export function Field({ label, required, hint, error, children }: FieldProps): R
       </FieldControlContext.Provider>
       {error && <span id={errorId} style={{ fontSize: 11, color: T.error }}>{error}</span>}
       {!error && hint && <span id={hintId} style={{ fontSize: 11, color: T.accentAlt }}>{hint}</span>}
+      {warning?.map(message => <Callout key={message} type="warn" icon="⚠">{message}</Callout>)}
     </div>
   );
 }

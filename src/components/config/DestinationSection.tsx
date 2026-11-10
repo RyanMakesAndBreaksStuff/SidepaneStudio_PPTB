@@ -191,7 +191,7 @@ export function DestinationSection({ config, onChange, metadataService, formXmlS
       {target.pageType === 'entityrecord' && (
         <>
           <Field label="Destination table" required={creating || source.kind === 'fixed'}
-            error={errors['target.entityName']}
+            error={errors['target.entityName']} warning={warnings['target.entityName']}
             hint={relatedTarget ? 'Derived from the selected lookup' : undefined}>
             {creating || source.kind === 'fixed' ? (
               <TablePicker ariaLabel="Destination table" value={target.entityName} metadataService={metadataService}
@@ -266,7 +266,7 @@ export function DestinationSection({ config, onChange, metadataService, formXmlS
       )}
       {target.pageType === 'entitylist' && (
         <>
-          <Field label="Destination table" required error={errors['target.entityName']}>
+          <Field label="Destination table" required error={errors['target.entityName']} warning={warnings['target.entityName']}>
             <TablePicker ariaLabel="Destination table" value={target.entityName} metadataService={metadataService}
               disabled={readOnly} error={!!errors['target.entityName']} onAccessibleTablesChange={onAccessibleTablesChange}
               onChange={entityName => onChange(prev => patchTarget(prev, 'entitylist', { entityName, viewId: '', viewType: '' }))} />
@@ -289,7 +289,7 @@ export function DestinationSection({ config, onChange, metadataService, formXmlS
             value={target.data} disabled={readOnly} error={errors['target.data']}
             onChange={data => onChange(prev => patchTarget(prev, 'generative', { data }))} />
           {warnings['target.pageType'] && <Callout type="warn" icon="⚠">
-            {warnings['target.pageType']}{' '}
+            {warnings['target.pageType'].join(' ')}{' '}
             <a href={GENERATIVE_INPUTS_DOC} target="_blank" rel="noreferrer" onClick={openDocsLink}
               style={{ color: T.accent }}>Set up a page to accept input parameters</a>
           </Callout>}
@@ -317,11 +317,11 @@ export function DestinationSection({ config, onChange, metadataService, formXmlS
             <Input value={target.searchText} disabled={readOnly} placeholder="e.g. Contoso"
               onChange={searchText => onChange(prev => patchTarget(prev, 'search', { searchText }))} />
           </Field>
-          {warnings['target.pageType'] && <Callout type="warn" icon="⚠">{warnings['target.pageType']}</Callout>}
+          {warnings['target.pageType'] && <Callout type="warn" icon="⚠">{warnings['target.pageType'].join(' ')}</Callout>}
         </>
       )}
-      {warnings['target.createNew'] && <Callout type="warn" icon="⚠">{warnings['target.createNew']}</Callout>}
-      {warnings['context.source'] && <Callout type="warn" icon="⚠">{warnings['context.source']}</Callout>}
+      {warnings['target.createNew'] && <Callout type="warn" icon="⚠">{warnings['target.createNew'].join(' ')}</Callout>}
+      {warnings['context.source'] && <Callout type="warn" icon="⚠">{warnings['context.source'].join(' ')}</Callout>}
       {errors['context.source'] && <Callout type="err" icon="✕">{errors['context.source']}</Callout>}
     </>
   );

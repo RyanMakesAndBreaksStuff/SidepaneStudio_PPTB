@@ -29,11 +29,12 @@ export function PaneSection({ config, onChange, readOnly, errors, warnings, meta
     onChange(prev => ({ ...prev, behavior: { ...prev.behavior, [key]: value } }));
   return (
     <>
-      <Field label="Unique pane ID" required hint="Stable key — used to reuse or find this pane" error={errors['pane.paneId']}>
+      <Field label="Unique pane ID" required hint="Stable key — used to reuse or find this pane" error={errors['pane.paneId']}
+        warning={warnings['pane.paneId']}>
         <Input value={pane.paneId} disabled={readOnly} placeholder="relatedRecordsPane"
           error={!!errors['pane.paneId']} onChange={value => patchPane('paneId', value)} />
       </Field>
-      <Field label="Pane title">
+      <Field label="Pane title" warning={warnings['pane.title']}>
         <Input value={pane.title} disabled={readOnly} placeholder="My Side Pane" onChange={value => patchPane('title', value)} />
       </Field>
       <Field label="Tab icon" hint="Web resource path — must be published and prefixed with WebResources/ to render">
@@ -45,7 +46,7 @@ export function PaneSection({ config, onChange, readOnly, errors, warnings, meta
             onChange={value => patchPane('imageSrc', value)} />
         </div>
         {warnings['pane.imageSrc']
-          ? <Callout type="warn" icon="⚠">{warnings['pane.imageSrc']}</Callout>
+          ? <Callout type="warn" icon="⚠">{warnings['pane.imageSrc'].join(' ')}</Callout>
           : pane.imageSrc.trim() !== '' && <Callout type="info" icon="ℹ">Preview loads this image.</Callout>}
       </Field>
       <Field label="Width" error={errors['pane.width']}
@@ -56,7 +57,7 @@ export function PaneSection({ config, onChange, readOnly, errors, warnings, meta
         checked={pane.canClose} onChange={value => patchPane('canClose', value)} />
       <Toggle label="Hide header bar" desc="Removes title and close button area"
         checked={pane.hideHeader} onChange={value => patchPane('hideHeader', value)} />
-      {warnings['pane.hideHeader'] && <Callout type="warn" icon="⚠">{warnings['pane.hideHeader']}</Callout>}
+      {warnings['pane.hideHeader'] && <Callout type="warn" icon="⚠">{warnings['pane.hideHeader'].join(' ')}</Callout>}
       <div style={{ borderTop: `1px solid ${T.stroke1}`, paddingTop: 10,
         color: T.fg2, fontFamily: T.font, fontSize: 12, fontWeight: 600 }}>Advanced</div>
       <Toggle label="Open in foreground (isSelected)" desc="Pane expands automatically when opened"
@@ -78,7 +79,7 @@ export function PaneSection({ config, onChange, readOnly, errors, warnings, meta
       <Toggle label="Close if already open" desc="Command bar buttons close this pane when it is open and showing"
         checked={behavior.toggleIfOpen} onChange={value => patchBehavior('toggleIfOpen', value)} />
       {errors['behavior.toggleIfOpen'] && <Callout type="err" icon="✕">{errors['behavior.toggleIfOpen']}</Callout>}
-      {warnings['behavior.toggleIfOpen'] && <Callout type="warn" icon="⚠">{warnings['behavior.toggleIfOpen']}</Callout>}
+      {warnings['behavior.toggleIfOpen'] && <Callout type="warn" icon="⚠">{warnings['behavior.toggleIfOpen'].join(' ')}</Callout>}
       <Toggle label="Reuse open pane" desc={behavior.reuseExistingPane
         ? 'Navigate the existing pane to the new page, then select it'
         : 'Close and recreate the pane when it is already open'}

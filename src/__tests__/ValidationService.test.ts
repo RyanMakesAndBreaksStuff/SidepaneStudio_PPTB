@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { RESERVED_VARIABLES, validate } from '../services/ValidationService';
+import { RESERVED_VARIABLES, validate, warningsByField } from '../services/ValidationService';
 import { cfg } from './testHelpers';
 import { DEFAULT_CONFIG } from '../types/PaneDefinitionConfig';
 import type { PaneDefinitionConfig } from '../types/PaneDefinitionConfig';
@@ -711,6 +711,24 @@ describe('validate — pane.imageSrc the generator drops (W11)', () => {
 
   it.each(['', '   ', 'sps_/icons/pane.svg', 'WebResources/sps_/icons/pane.svg'])('does not warn for %p', imageSrc => {
     expect(warned(cfg({ pane: { imageSrc } }))).not.toContain('pane.imageSrc');
+  });
+});
+
+describe('warningsByField', () => {
+  it('keeps every message for a field, in validation order', () => {
+    expect(warningsByField([
+      { field: 'target.entityName', message: 'first' },
+      { field: 'pane.title', message: 'other' },
+      { field: 'target.entityName', message: 'second' },
+    ])).toEqual({ 'target.entityName': ['first', 'second'], 'pane.title': ['other'] });
+  });
+
+  it('leaves out the org-mismatch messages the workbench banner already shows, and keeps a field own warning', () => {
+    const result = validate(cfg({ trigger: { kind: 'ManualJS' }, target: { pageType: 'entitylist', entityName: 'account', viewId: guid, viewType: 'savedquery' }, context: { source: { kind: 'none' } } }),
+      new Set(['contact']), true);
+    expect(result.warnings.filter(w => w.field === 'target.entityName')).toHaveLength(2);
+    expect(warningsByField(result.warnings)['target.entityName']).toEqual(['Table "account" is not in the current table list for this environment.']);
+    expect(warningsByField(result.warnings)['target.viewId']).toBeUndefined();
   });
 });
 

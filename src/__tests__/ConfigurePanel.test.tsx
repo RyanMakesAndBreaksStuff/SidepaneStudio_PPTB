@@ -147,6 +147,33 @@ describe('ConfigurePanel — jump requests', () => {
   });
 });
 
+describe('ConfigurePanel — field warnings', () => {
+  const config = cfg({
+    pane: { paneId: "pane'1", title: 'Say "hi"', alwaysRender: true },
+    trigger: { kind: 'ManualJS' },
+    context: { source: { kind: 'none' } },
+    target: { pageType: 'entitylist', entityName: 'account', viewId: '', viewType: '' },
+  });
+
+  it('shows the warnings that had no visible text beside their field', async () => {
+    const rerender = await renderPanel(config);
+    await expandSection('Pane & behaviour');
+    await rerender({ validation: validate(config, new Set(['contact'])) });
+    expect(host?.textContent).toContain('Pane ID contains special characters');
+    expect(host?.textContent).toContain('Title contains special characters');
+    expect(host?.textContent).toContain('Table "account" is not in the current table list for this environment.');
+  });
+
+  it('does not repeat a warning another callout or the org-mismatch banner already shows', async () => {
+    const rerender = await renderPanel(config);
+    await expandSection('Pane & behaviour');
+    await rerender({ validation: validate(config, undefined, true) });
+    expect(host?.textContent).toContain('This keeps the pane loaded in memory');
+    expect(host?.textContent).not.toContain('alwaysRender keeps the pane loaded');
+    expect(host?.textContent).not.toContain('picked in a different environment');
+  });
+});
+
 describe('ConfigurePanel — trigger section', () => {
   it('snaps target and source to legal values when the trigger changes', async () => {
     const get = await renderPanel(cfg({ target: { pageType: 'entitylist', entityName: 'account', viewId: '', viewType: '' },

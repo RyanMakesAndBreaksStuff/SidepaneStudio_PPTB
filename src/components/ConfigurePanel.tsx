@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { PaneDefinitionConfig } from '../types/PaneDefinitionConfig';
 import type { MetadataFilterConfig } from '../types/MetadataFilterConfig';
 import type { MetadataFilterDraft } from './config/MetadataFilterConfigEditor';
-import type { ValidationResult } from '../services/ValidationService';
+import { warningsByField, type ValidationResult } from '../services/ValidationService';
 import type { MetadataService } from '../services/MetadataService';
 import type { FormXmlService } from '../services/FormXmlService';
 import type { SummarySlot } from '../services/describeConfig';
@@ -43,7 +43,7 @@ export function ConfigurePanel(props: ConfigurePanelProps): React.ReactElement {
   const [triggerOpen, setTriggerOpen] = useState(true);
   const [destinationOpen, setDestinationOpen] = useState(true);
   const errors = useMemo(() => Object.fromEntries(validation.errors.map(error => [error.field, error.message])), [validation.errors]);
-  const warnings = useMemo(() => Object.fromEntries(validation.warnings.map(warning => [warning.field, warning.message])), [validation.warnings]);
+  const warnings = useMemo(() => warningsByField(validation.warnings), [validation.warnings]);
   const { jumpRequest } = props;
   useEffect(() => {
     if (!jumpRequest) return;

@@ -3,7 +3,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it } from 'vitest';
 import { PaneSection } from '../components/config/PaneSection';
 import { ThemeProvider } from '../contexts/ThemeContext';
-import { validate } from '../services/ValidationService';
+import { validate, warningsByField } from '../services/ValidationService';
 import type { MetadataService } from '../services/MetadataService';
 import { cfg } from './testHelpers';
 
@@ -21,7 +21,7 @@ async function renderPane(imageSrc: string): Promise<void> {
     root?.render(<ThemeProvider>
       <PaneSection config={config} onChange={() => {}} metadataService={{} as MetadataService}
         errors={Object.fromEntries(errors.map(e => [e.field, e.message]))}
-        warnings={Object.fromEntries(warnings.map(w => [w.field, w.message]))} />
+        warnings={warningsByField(warnings)} />
     </ThemeProvider>);
   });
 }

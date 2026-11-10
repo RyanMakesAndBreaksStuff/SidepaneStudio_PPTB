@@ -112,6 +112,26 @@ describe('Field — label, description and validity wiring', () => {
   });
 });
 
+describe('Field — warning slot', () => {
+  it('shows every warning as its own amber callout below the control without marking it invalid', async () => {
+    await render(<Field label="Pane title" hint="Shown in the pane header" warning={['First warning', 'Second warning']}>
+      <Input value="" onChange={vi.fn()} />
+    </Field>);
+    const control = getByLabelText('Pane title');
+    expect(control.getAttribute('aria-invalid')).toBeNull();
+    expect(host!.textContent).toContain('Shown in the pane header');
+    const messageNodes = (text: string) => Array.from(host!.querySelectorAll('span')).filter(node => node.textContent === text);
+    expect(messageNodes('First warning')).toHaveLength(1);
+    expect(messageNodes('Second warning')).toHaveLength(1);
+    expect(host!.querySelector('[role="alert"]')).toBeNull();
+  });
+
+  it('renders nothing extra when there is no warning', async () => {
+    await render(<Field label="Pane title"><Input value="" onChange={vi.fn()} /></Field>);
+    expect(host!.textContent).toBe('Pane title');
+  });
+});
+
 describe('Field — configure panel controls resolve by label', () => {
   it('resolves Tab name and Initial badge value', async () => {
     await renderPanel(cfg({ host: { entityName: 'account' },

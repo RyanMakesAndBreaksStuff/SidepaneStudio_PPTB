@@ -17,6 +17,7 @@ function pushJsonObjectError(errors: ValidationError[], data: string, message: s
 }
 
 /** W20 — selections only exist in the org they were picked from; flag, never block, until the user confirms them here. */
+const ORG_MISMATCH_TAIL = 'was picked in a different environment. Confirm it exists here.';
 function pushOrgMismatchWarnings(warnings: ValidationWarning[], target: PaneDefinitionConfig['target']): void {
   for (const [field, value, noun] of [
     ['target.entityName', 'entityName' in target ? target.entityName : '', 'table'],
@@ -24,8 +25,21 @@ function pushOrgMismatchWarnings(warnings: ValidationWarning[], target: PaneDefi
     ['target.viewId', target.pageType === 'entitylist' ? target.viewId : '', 'view'],
     ['target.pageId', target.pageType === 'generative' ? target.pageId : '', 'page'],
   ] as const) {
-    if (value.trim()) warnings.push({ field, message: `This ${noun} was picked in a different environment. Confirm it exists here.` });
+    if (value.trim()) warnings.push({ field, message: `This ${noun} ${ORG_MISMATCH_TAIL}` });
   }
+}
+
+/**
+ * Every warning message per field, in validation order, for the Configure panel to show beside the field.
+ * The workbench banner already shows the org-mismatch messages, so they are left out rather than shown twice.
+ */
+export function warningsByField(warnings: readonly ValidationWarning[]): Record<string, string[]> {
+  const byField: Record<string, string[]> = {};
+  for (const { field, message } of warnings) {
+    if (message.endsWith(ORG_MISMATCH_TAIL)) continue;
+    byField[field] = [...(byField[field] ?? []), message];
+  }
+  return byField;
 }
 
 /** `orgMismatch` — the config was restored from another environment's save and the user has not confirmed it here. */

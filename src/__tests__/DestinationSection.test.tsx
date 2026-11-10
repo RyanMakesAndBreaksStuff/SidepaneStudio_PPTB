@@ -80,6 +80,23 @@ afterEach(async () => {
   host = undefined;
 });
 
+describe('DestinationSection — destination table warnings', () => {
+  const warned = ['Table "account" is not in the current table list for this environment.', 'A second note.'];
+
+  it.each([
+    ['a table record', cfg({ trigger: { kind: 'ManualJS' }, context: { source: { kind: 'fixed', entityName: '', id: '' } },
+      target: { pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '', createNew: false } })],
+    ['a table list', cfg({ trigger: { kind: 'ManualJS' }, context: { source: { kind: 'none' } },
+      target: { pageType: 'entitylist', entityName: 'account', viewId: '', viewType: '' } })],
+  ])('shows every target.entityName warning beside the destination table of %s', async (_name, config) => {
+    await render(<DestinationSection config={config} onChange={vi.fn()} metadataService={makeMetadataService()}
+      errors={{}} warnings={{ 'target.entityName': warned }} />);
+    const field = fieldLabel('Destination table *')?.parentElement;
+    expect(field?.textContent).toContain(warned[0]);
+    expect(field?.textContent).toContain(warned[1]);
+  });
+});
+
 describe('DestinationSection — console record source', () => {
   const sourceHint = () => fieldLabel('Record source')?.parentElement?.textContent ?? '';
 

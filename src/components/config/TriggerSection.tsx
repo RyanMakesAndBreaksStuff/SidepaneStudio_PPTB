@@ -16,10 +16,12 @@ import { Input } from '../Input';
 export type SectionSharedProps = Pick<ConfigurePanelProps,
   'config' | 'onChange' | 'metadataService' | 'readOnly' | 'onAccessibleTablesChange'> & {
   errors: Record<string, string>;
-  warnings: Record<string, string>;
+  /** Every warning message per field, from `warningsByField`. */
+  warnings: Record<string, string[]>;
 };
 
-export interface TriggerSectionProps extends SectionSharedProps {
+/** No warning is reported on a trigger or host field. */
+export interface TriggerSectionProps extends Omit<SectionSharedProps, 'warnings'> {
   formXmlService?: ConfigurePanelProps['formXmlService'];
 }
 
