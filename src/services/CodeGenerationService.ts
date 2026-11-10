@@ -2,6 +2,7 @@ import { PaneDefinitionConfig, TriggerKind, COMMAND_TRIGGERS, GRID_TRIGGERS, REC
 import { normalizeGuid } from './odataGuards';
 import { isJsIdentifier, normalizeConfigWidth } from './configGuards';
 import { isSafeRelativeImagePath } from '../components/previewHelpers';
+import { isCreating } from './triggerCapabilities';
 import { RUNTIME_FILE_NAME } from '../constants';
 
 const GRID_KINDS = GRID_TRIGGERS;
@@ -212,8 +213,7 @@ export function recordContextTable(config: PaneDefinitionConfig): string | null 
 
 /** Declare the record ID once before both navigation paths use it. */
 function declareRecordVariable(config: PaneDefinitionConfig, rc: RecordContext, indent: string): { line: string; rc: RecordContext } {
-  const creating = config.target.pageType === 'entityrecord' && config.target.createNew === true;
-  if (!rc.idExpr || creating) return { line: '', rc };
+  if (!rc.idExpr || isCreating(config.target)) return { line: '', rc };
   const name = safeIdentifier(config.context.variableName, 'recordId');
   const { kind } = config.context.source;
   // L5 — a table read from the form or grid row is captured with the ID, before any await can end the event.
@@ -232,7 +232,7 @@ function declareRecordVariable(config: PaneDefinitionConfig, rc: RecordContext, 
 /** Item 3 — createFromEntity copies mapped columns from the triggering record. Null when no record triggers the script. */
 function buildCreateFromEntityExpr(config: PaneDefinitionConfig, formContextExpr = 'formContext'): string | null {
   const { target, trigger, context: { source }, host } = config;
-  if (target.pageType !== 'entityrecord' || !target.createNew) return null;
+  if (!isCreating(target)) return null;
   const form = formObjectExpr(trigger.kind, formContextExpr);
   if (source.kind === 'host' && form) return `{ entityType: ${form}.data.entity.getEntityName(), id: ${form}.data.entity.getId() }`;
   if (source.kind === 'selectedRow' && GRID_KINDS.includes(trigger.kind)) {
@@ -402,6 +402,11 @@ function buildGetOrCreateBody(config: PaneDefinitionConfig, indent = '  '): stri
   return `${prelude}${open}`;
 }
 
+/** Prefixes every line of `text` with `indent`, blank lines included, so a body nests inside a wrapper block. */
+function indentLines(text: string, indent: string): string {
+  return text.split('\n').map(line => indent + line).join('\n');
+}
+
 function generateFormOnLoad(config: PaneDefinitionConfig, { segments, ns, fn }: ResolvedTriggerNames): string {
   const body = buildGetOrCreateBody(config, '  ');
 
@@ -409,10 +414,7 @@ function generateFormOnLoad(config: PaneDefinitionConfig, { segments, ns, fn }: 
 ${ns}.${fn} = async function(executionContext) {
   var formContext = executionContext.getFormContext();
   try {
-${body
-  .split('\n')
-  .map(l => '  ' + l)
-  .join('\n')}
+${indentLines(body, '  ')}
   } catch(e) {
     ${buildCatchBody(`${ns}.${fn}`, '    ')}
   }
@@ -431,10 +433,7 @@ ${ns}.${fn} = function(primaryControl) {
   ${PENDING_VAR}[${paneIdJson}] = Date.now();
   (async function() {
     try {
-${body
-  .split('\n')
-  .map(l => '    ' + l)
-  .join('\n')}
+${indentLines(body, '    ')}
     } catch(e) {
       ${buildCatchBody(`${ns}.${fn}`, '      ')}
     } finally {
@@ -510,10 +509,7 @@ ${ns}.${fn} = function(${arg}) {
 ${gridRowPreamble(config.trigger.kind)}  if (${pending} && (Date.now() - ${pending}) < ${PENDING_TTL_MS}) ${whenLocked}
 ${takeLock}  (async function() {
     try {
-${body
-  .split('\n')
-  .map(l => '    ' + l)
-  .join('\n')}
+${indentLines(body, '    ')}
     } catch(e) {
       ${buildCatchBody(`${ns}.${fn}`, '      ')}
     } finally {
@@ -528,10 +524,7 @@ function generateManualJS(config: PaneDefinitionConfig, { fn }: ResolvedTriggerN
 
   return `async function ${fn}() {
   try {
-${body
-  .split('\n')
-  .map(l => '  ' + l)
-  .join('\n')}
+${indentLines(body, '  ')}
   } catch(e) {
     ${buildCatchBody(fn, '    ')}
   }
@@ -559,10 +552,7 @@ ${buildCatchBody(`${ns}.${fn}`, '    ')}
   }
   ${timerVar} = setTimeout(async function() {
     try {
-${open
-    .split('\n')
-    .map(l => '  ' + l)
-    .join('\n')}
+${indentLines(open, '  ')}
     } catch(e) {
       ${buildCatchBody(`${ns}.${fn}`, '      ')}
     }
@@ -575,7 +565,7 @@ function generateLookupTagClick(config: PaneDefinitionConfig, { segments, ns, fn
   return `${namespaceDeclaration(segments)}
 ${ns}.${fn} = async function(executionContext) {
 ${lookupTagPreamble(config)}  try {
-${body.split('\n').map(line => '  ' + line).join('\n')}
+${indentLines(body, '  ')}
   } catch(e) {
     ${buildCatchBody(`${ns}.${fn}`, '    ')}
   }
