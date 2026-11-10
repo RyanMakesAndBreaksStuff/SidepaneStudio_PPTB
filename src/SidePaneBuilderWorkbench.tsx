@@ -54,6 +54,11 @@ function orgKeyOf(conn: ToolBoxAPI.Connection): string | null {
   }
 }
 
+/** PPTB Desktop sends connection:updated {id, tokenRefreshed: true} on every token refresh; nothing the tool reads changed. */
+function isTokenRefresh(data: unknown): boolean {
+  return typeof data === 'object' && data !== null && (data as { tokenRefreshed?: unknown }).tokenRefreshed === true;
+}
+
 /** Table, form, view, dashboard, page, and record selections only exist in the org they were picked from. */
 function clearOrgSelections(config: PaneDefinitionConfig): PaneDefinitionConfig {
   const { target, context: { source } } = config;
@@ -149,14 +154,16 @@ export function SidePaneBuilderWorkbench(): React.ReactElement {
     // Last connected org; kept through disconnects so A → none → B still counts as a switch.
     let connectionId: string | null = null;
 
+    // Rechecks in place: the shell stays mounted, and only a switch resets the preview, caches and selections.
     const refreshConnection = async () => {
       const generation = ++checkGeneration;
-      setConnectionState({ status: 'loading' });
       try {
         const conn = await toolbox.connections.getActiveConnection();
         if (!active || generation !== checkGeneration) return;
         if (conn) {
           if (connectionId !== null && connectionId !== conn.id) {
+            setPreviewEpoch(value => value + 1);
+            metaRef.current?.invalidate();
             configDirtyRef.current = true;
             setConfig(clearOrgSelections);
             setRestoredOrg(null);
@@ -182,9 +189,7 @@ export function SidePaneBuilderWorkbench(): React.ReactElement {
           case 'connection:created':
           case 'connection:updated':
           case 'connection:deleted':
-            setPreviewEpoch(value => value + 1);
-            metaRef.current?.invalidate();
-            void refreshConnection();
+            if (!isTokenRefresh(payload.data)) void refreshConnection();
             break;
           default:
             break;

@@ -469,7 +469,7 @@ describe('SidePaneBuilderWorkbench', () => {
     expect(workbenchShellState.props?.metadataFilterConfig).toEqual(DEFAULT_METADATA_FILTER_CONFIG);
   });
 
-  it('invalidates caches when the host reports a connection change', async () => {
+  it('shows the connection error when a deletion leaves no active connection', async () => {
     let handler: ((event: unknown, payload: ToolBoxAPI.ToolBoxEventPayload) => void) | undefined;
 
     vi.stubGlobal('toolboxAPI', {

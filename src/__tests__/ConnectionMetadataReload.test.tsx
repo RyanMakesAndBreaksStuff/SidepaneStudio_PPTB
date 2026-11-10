@@ -86,11 +86,13 @@ async function mount() {
   await act(async () => { root.render(<SidePaneBuilderWorkbench />); });
 }
 
-async function emit(event: ToolBoxAPI.ToolBoxEventPayload['event']) {
+async function emit(event: ToolBoxAPI.ToolBoxEventPayload['event'], data: unknown = null) {
   await act(async () => {
-    handler({ senderId: 'transport' }, { event, data: null, timestamp: '2026-09-23' });
+    handler({ senderId: 'transport' }, { event, data, timestamp: '2026-09-23' });
   });
 }
+
+const tableRequests = () => vi.mocked(window.dataverseAPI.queryData).mock.calls.length;
 
 function options() {
   return Array.from(host.querySelectorAll<HTMLElement>('[role="option"]'))
@@ -135,6 +137,30 @@ it('clears the old org table selection when the connection switches orgs', async
   expect(options()).toContain('new_b');
   expect(options()).not.toContain('new_a');
   expect(host.textContent).not.toContain('is not in the current table list');
+});
+
+it('ignores a token refresh: no recheck, no remount, no table refetch', async () => {
+  await mount();
+  const picker = host.querySelector('[role="combobox"]');
+  const requests = tableRequests();
+  await emit('connection:updated', { id: 'a', tokenRefreshed: true });
+  expect(getActiveConnection).toHaveBeenCalledTimes(1);
+  expect(host.querySelector('[role="combobox"]')).toBe(picker);
+  expect(tableRequests()).toBe(requests);
+});
+
+it('rechecks a same-connection update in place, without the Connecting screen or a table refetch', async () => {
+  await mount();
+  const picker = host.querySelector('[role="combobox"]');
+  const requests = tableRequests();
+  const check = deferred<{ id: string } | null>();
+  getActiveConnection.mockReturnValueOnce(check.promise);
+  await emit('connection:updated', { id: 'a', isActive: true });
+  expect(host.textContent).not.toContain('Connecting to Dataverse');
+  await act(async () => { check.resolve({ id: 'a' }); });
+  expect(getActiveConnection).toHaveBeenCalledTimes(2);
+  expect(host.querySelector('[role="combobox"]')).toBe(picker);
+  expect(tableRequests()).toBe(requests);
 });
 
 it('keeps the table selection when the same connection is updated', async () => {

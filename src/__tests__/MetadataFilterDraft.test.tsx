@@ -10,6 +10,7 @@ import { SidePaneBuilderWorkbench } from '../SidePaneBuilderWorkbench';
 
 type Handler = (event: unknown, payload: ToolBoxAPI.ToolBoxEventPayload) => void;
 let handler: Handler | undefined;
+let getActiveConnection: ReturnType<typeof vi.fn>;
 let settingsSet: ReturnType<typeof vi.fn>;
 let root: Root | undefined;
 let host: HTMLDivElement | undefined;
@@ -45,9 +46,10 @@ async function typeDraft(): Promise<void> {
 beforeEach(async () => {
   handler = undefined;
   settingsSet = vi.fn().mockResolvedValue(undefined);
+  getActiveConnection = vi.fn().mockResolvedValue({ id: 'conn-1' });
   vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} });
   vi.stubGlobal('toolboxAPI', {
-    connections: { getActiveConnection: vi.fn().mockResolvedValue({ id: 'conn-1' }) },
+    connections: { getActiveConnection },
     events: { on: vi.fn((callback: Handler) => { handler = callback; }), off: vi.fn() },
     settings: { get: vi.fn().mockResolvedValue(null), getAll: vi.fn().mockResolvedValue({}), set: settingsSet },
   });
@@ -79,9 +81,10 @@ describe('metadata filter draft', () => {
     expect(button('Save')).toBeTruthy();
   });
 
-  it('survives the workbench remount a connection event causes', async () => {
+  it('survives the workbench remount an org switch causes', async () => {
     await typeDraft();
     const before = area();
+    getActiveConnection.mockResolvedValue({ id: 'conn-2' });
     await act(async () => {
       handler!({ senderId: 'ipc' }, { event: 'connection:updated', data: null, timestamp: new Date().toISOString() });
     });
