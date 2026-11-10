@@ -21,7 +21,6 @@ export interface ConfigurePanelProps {
   validation: ValidationResult;
   metadataService: MetadataService;
   formXmlService?: FormXmlService;
-  onAccessibleTablesChange?: (tables: Set<string> | undefined) => void;
   metadataFilterConfig?: MetadataFilterConfig;
   defaultMetadataFilterConfig?: MetadataFilterConfig;
   metadataFilterPersistenceAvailable?: boolean;
@@ -36,7 +35,7 @@ export interface ConfigurePanelProps {
 }
 
 export function ConfigurePanel(props: ConfigurePanelProps): React.ReactElement {
-  const { config, onChange, validation, metadataService, onAccessibleTablesChange,
+  const { config, onChange, validation, metadataService,
     formXmlService, metadataFilterConfig, defaultMetadataFilterConfig, metadataFilterPersistenceAvailable,
     metadataFilterError, onSaveMetadataFilterConfig, onResetMetadataFilterConfig,
     metadataFilterDraft, onMetadataFilterDraftChange } = props;
@@ -60,7 +59,7 @@ export function ConfigurePanel(props: ConfigurePanelProps): React.ReactElement {
     header.current?.focus({ preventScroll: true });
     onJumpHandled?.(jumpRequest);
   }, [jumpRequest]);
-  const sectionProps = { config, onChange, errors, warnings, metadataService, onAccessibleTablesChange };
+  const sectionProps = { config, onChange, errors, warnings, metadataService };
   return (
     <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
       <Section title="Trigger & source" icon="1" open={triggerOpen} onOpenChange={setTriggerOpen} headerRef={triggerHeader}>

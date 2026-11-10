@@ -94,7 +94,7 @@ function openDocsLink(event: React.MouseEvent<HTMLAnchorElement>): void {
 }
 
 export function DestinationSection({ config, onChange, metadataService, formXmlService,
-  onAccessibleTablesChange, errors, warnings }: DestinationSectionProps): React.ReactElement {
+  errors, warnings }: DestinationSectionProps): React.ReactElement {
   const { isDark } = useTheme();
   const T = theme(isDark);
   const { target, trigger, host, context } = config;
@@ -213,7 +213,7 @@ export function DestinationSection({ config, onChange, metadataService, formXmlS
             hint={relatedTarget ? 'Derived from the selected lookup' : undefined}>
             {creating || source.kind === 'fixed' ? (
               <TablePicker ariaLabel="Destination table" value={target.entityName} metadataService={metadataService}
-                error={!!errors['target.entityName']} onAccessibleTablesChange={onAccessibleTablesChange}
+                error={!!errors['target.entityName']}
                 onChange={entityName => onChange(prev => prev.target.pageType !== 'entityrecord' || prev.target.entityName === entityName ? prev
                   : { ...prev, target: retargetRecord(prev.target, entityName) })} />
             ) : (
@@ -285,7 +285,7 @@ export function DestinationSection({ config, onChange, metadataService, formXmlS
         <>
           <Field label="Destination table" required error={errors['target.entityName']} warning={warnings['target.entityName']}>
             <TablePicker ariaLabel="Destination table" value={target.entityName} metadataService={metadataService}
-              error={!!errors['target.entityName']} onAccessibleTablesChange={onAccessibleTablesChange}
+              error={!!errors['target.entityName']}
               onChange={entityName => onChange(prev => patchTarget(prev, 'entitylist', { entityName, viewId: '', viewType: '' }))} />
           </Field>
           <Field label="View" error={errors['target.viewId'] || errors['target.viewType']}>

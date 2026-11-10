@@ -4,13 +4,15 @@ import { createRoot, Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { WorkbenchShell } from '../components/WorkbenchShell';
 import { MetadataService } from '../services/MetadataService';
-import { DEFAULT_CONFIG } from '../types/PaneDefinitionConfig';
+import { DEFAULT_CONFIG, type PaneDefinitionConfig } from '../types/PaneDefinitionConfig';
 import { DEFAULT_METADATA_FILTER_CONFIG } from '../types/MetadataFilterConfig';
 import { theme } from '../theme/tokens';
-import { rgb, xrmStub } from './testHelpers';
+import { cfg, deferred, rgb, xrmStub } from './testHelpers';
 
 vi.mock('../components/ConfigurePanel', () => ({
-  ConfigurePanel: () => <div>Configure panel</div>,
+  ConfigurePanel: ({ validation }: { validation: { warnings: Array<{ field: string }> } }) => (
+    <div>Configure panel<span data-testid="table-warning">{String(validation.warnings.some(warning => warning.field === 'target.entityName'))}</span></div>
+  ),
 }));
 
 const previewState = vi.hoisted(() => ({ throws: false }));
@@ -58,15 +60,49 @@ const GENERATOR_COL_WIDTH = '420px';
 const GENERATOR_COL_MIN_W = '360px';
 const COLLAPSED_RAIL_WIDTH = '44px';
 
-function shell(layoutMode: 'wide' | 'narrow' = 'wide', onReset: () => void = () => {}) {
+describe('WorkbenchShell — accessible tables', () => {
+  const table = (logicalName: string, isCustomEntity: boolean) => ({ logicalName, displayName: logicalName, objectTypeCode: 1, isCustomEntity });
+  const listOf = (...tables: Array<ReturnType<typeof table>>) => ({ status: 'ok', tables });
+  const withTable = (entityName: string) => cfg({ target: { pageType: 'entitylist', entityName, viewId: '', viewType: '' } });
+  const warned = () => host?.querySelector('[data-testid="table-warning"]')?.textContent;
+
+  it('flags a table missing from the environment only once the list has loaded', async () => {
+    const pending = deferred<unknown>();
+    await render(shell('wide', undefined, tablesService(() => pending.promise), withTable('new_gone')));
+    expect(warned()).toBe('false');
+    await act(async () => { pending.resolve(listOf(table('account', false), table('new_widget', true))); });
+    expect(warned()).toBe('true');
+  });
+
+  it('accepts a listed table, custom or not', async () => {
+    const service = () => tablesService(() => Promise.resolve(listOf(table('account', false), table('new_widget', true))));
+    await render(shell('wide', undefined, service(), withTable('account')));
+    expect(warned()).toBe('false');
+    await render(shell('wide', undefined, service(), withTable('new_widget')));
+    expect(warned()).toBe('false');
+  });
+
+  it('raises no warning when the table list fails or rejects', async () => {
+    await render(shell('wide', undefined, tablesService(() => Promise.resolve({ status: 'error', reason: 'offline' })), withTable('new_gone')));
+    expect(warned()).toBe('false');
+    await render(shell('wide', undefined, tablesService(() => Promise.reject(new Error('offline'))), withTable('new_gone')));
+    expect(warned()).toBe('false');
+  });
+});
+
+function tablesService(listAccessibleTables: () => Promise<unknown> = () => Promise.resolve({ status: 'ok', tables: [] })): MetadataService {
+  return { listAccessibleTables: vi.fn(listAccessibleTables), invalidate: vi.fn(), subscribeTables: vi.fn(() => () => undefined) } as unknown as MetadataService;
+}
+
+function shell(layoutMode: 'wide' | 'narrow' = 'wide', onReset: () => void = () => {}, metadataService: MetadataService = tablesService(), config: PaneDefinitionConfig = DEFAULT_CONFIG) {
   return (
     <WorkbenchShell
-      config={DEFAULT_CONFIG}
+      config={config}
       onChange={() => {}}
       onReset={onReset}
       xrm={xrmStub()}
       layoutMode={layoutMode}
-      metadataService={{} as MetadataService}
+      metadataService={metadataService}
       metadataFilterConfig={DEFAULT_METADATA_FILTER_CONFIG}
       defaultMetadataFilterConfig={DEFAULT_METADATA_FILTER_CONFIG}
       metadataFilterPersistenceAvailable={true}

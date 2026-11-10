@@ -20,26 +20,20 @@ export interface AccessibleTablesState {
   retry: () => void;
 }
 
-export function useAccessibleTables(
-  metadataService: AccessibleTablesService,
-  onAccessibleTablesChange?: (tables: Set<string> | undefined) => void,
-): AccessibleTablesState {
+export function useAccessibleTables(metadataService: AccessibleTablesService): AccessibleTablesState {
   const [loadState, setLoadState] = useState<LoadState>({ status: 'loading' });
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
     setLoadState({ status: 'loading' });
-    onAccessibleTablesChange?.(undefined);
 
     metadataService.listAccessibleTables().then(result => {
       if (cancelled) return;
       if (result.status === 'ok') {
         setLoadState({ status: 'loaded', tables: result.tables });
-        onAccessibleTablesChange?.(new Set(result.tables.map(table => table.logicalName)));
       } else {
         setLoadState({ status: 'error', reason: result.reason });
-        onAccessibleTablesChange?.(undefined);
       }
     }).catch(err => {
       if (cancelled) return;
@@ -47,11 +41,10 @@ export function useAccessibleTables(
         status: 'error',
         reason: err instanceof Error ? err.message : 'Unable to load table list.',
       });
-      onAccessibleTablesChange?.(undefined);
     });
 
     return () => { cancelled = true; };
-  }, [metadataService, onAccessibleTablesChange, reloadKey]);
+  }, [metadataService, reloadKey]);
 
   useEffect(
     () => metadataService.subscribeTables(() => setReloadKey(key => key + 1)),

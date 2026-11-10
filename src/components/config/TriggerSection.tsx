@@ -14,7 +14,7 @@ import { LookupControlsPicker } from './LookupControlsPicker';
 import { Input } from '../Input';
 
 export type SectionSharedProps = Pick<ConfigurePanelProps,
-  'config' | 'onChange' | 'metadataService' | 'onAccessibleTablesChange'> & {
+  'config' | 'onChange' | 'metadataService'> & {
   errors: Record<string, string>;
   /** Every warning message per field, from `warningsByField`. */
   warnings: Record<string, string[]>;
@@ -25,7 +25,7 @@ export interface TriggerSectionProps extends Omit<SectionSharedProps, 'warnings'
   formXmlService?: ConfigurePanelProps['formXmlService'];
 }
 
-export function TriggerSection({ config, onChange, metadataService, onAccessibleTablesChange,
+export function TriggerSection({ config, onChange, metadataService,
   formXmlService, errors }: TriggerSectionProps): React.ReactElement {
   const { trigger, host } = config;
   const caps = TRIGGER_CAPABILITIES[trigger.kind];
@@ -53,8 +53,7 @@ export function TriggerSection({ config, onChange, metadataService, onAccessible
           hint={caps.family === 'grid' ? 'The grid the command or row event belongs to' : 'Leave empty to read the table at runtime'}>
           <TablePicker ariaLabel="Trigger table" value={host.entityName} metadataService={metadataService}
             onChange={entityName => onChange(prev => changeHostTable(prev, entityName))}
-            error={!!errors['host.entityName']}
-            onAccessibleTablesChange={onAccessibleTablesChange} />
+            error={!!errors['host.entityName']} />
         </Field>
       )}
       {caps.hostPicker === 'form' && formXmlService && (

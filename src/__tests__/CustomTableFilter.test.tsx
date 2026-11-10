@@ -92,14 +92,13 @@ it('normalizes custom metadata without widening accessible-table rules', async (
   expect(webApiGet).toHaveBeenCalledTimes(1);
 });
 
-it('clears excluded values, restores choices, and reports full accessibility', async () => {
+it('clears excluded values and restores choices', async () => {
   const service = metadata();
   const listAccessibleTables = vi.spyOn(service, 'listAccessibleTables');
-  const accessible = vi.fn();
   function Picker() {
     const [value, setValue] = React.useState('account');
     return <TablePicker value={value} onChange={setValue}
-      metadataService={service} onAccessibleTablesChange={accessible} />;
+      metadataService={service} />;
   }
   await render(<Picker />);
   await openTablePicker();
@@ -108,7 +107,6 @@ it('clears excluded values, restores choices, and reports full accessibility', a
   expect(filter().getAttribute('aria-pressed')).toBe('true');
   expect(host.querySelector<HTMLInputElement>('[role="combobox"]')!.value).toBe('');
   expect(choices()).toEqual(['new_event']);
-  expect(accessible).toHaveBeenLastCalledWith(new Set(tables.map(table => table.logicalName)));
   await chooseTable('new_event');
   await click(filter());
   await openTablePicker();

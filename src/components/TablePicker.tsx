@@ -14,7 +14,6 @@ export interface TablePickerProps {
   error?: boolean;
   disabled?: boolean;
   ariaLabel?: string;
-  onAccessibleTablesChange?: (tables: Set<string> | undefined) => void;
   customOnlyState?: readonly [boolean, (enabled: boolean) => void];
 }
 
@@ -25,7 +24,6 @@ export function TablePicker({
   error,
   disabled,
   ariaLabel = 'Table',
-  onAccessibleTablesChange,
   customOnlyState,
 }: TablePickerProps): React.ReactElement {
   const { isDark } = useTheme();
@@ -35,7 +33,7 @@ export function TablePicker({
     loading,
     error: loadError,
     retry,
-  } = useAccessibleTables(metadataService, onAccessibleTablesChange);
+  } = useAccessibleTables(metadataService);
   const [localCustomOnly, setLocalCustomOnly] = useState(false);
   const customOnly = customOnlyState?.[0] ?? localCustomOnly;
   const setCustomOnly = customOnlyState?.[1] ?? setLocalCustomOnly;

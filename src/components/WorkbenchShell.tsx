@@ -15,6 +15,7 @@ import type { SummarySlot } from '../services/describeConfig';
 import { PreviewPanel } from './PreviewPanel';
 import { ErrorBoundary } from './ErrorBoundary';
 import { OutputPanel } from './OutputPanel';
+import { useAccessibleTables } from './useAccessibleTables';
 import { Callout } from './Callout';
 import { PreviewSessionProvider } from '../contexts/PreviewSessionContext';
 
@@ -75,7 +76,6 @@ function WorkbenchShellContent({
   const { isDark } = useTheme();
   const T = theme(isDark);
   const [narrowTab, setNarrowTab] = useState<NarrowTab>('configure');
-  const [accessibleTables, setAccessibleTables] = useState<Set<string> | undefined>(undefined);
   const [configPanelOpen, setConfigPanelOpen] = useState(true);
   const [codePanelOpen, setCodePanelOpen] = useState(true);
   const [jumpRequest, setJumpRequest] = useState<JumpRequest | undefined>(undefined);
@@ -87,6 +87,11 @@ function WorkbenchShellContent({
   // Applied once: a request left in state would replay whenever the panel next mounts and reopen what the user closed.
   const dropJump = useCallback((handled: JumpRequest) => setJumpRequest(prev => prev === handled ? undefined : prev), []);
 
+  const tableList = useAccessibleTables(metadataService);
+  const accessibleTables = useMemo(
+    () => tableList.loading || tableList.error !== undefined ? undefined : new Set(tableList.tables.map(table => table.logicalName)),
+    [tableList.loading, tableList.error, tableList.tables],
+  );
   const validation = useMemo(() => validate(config, accessibleTables, orgMismatch), [config, accessibleTables, orgMismatch]);
 
   const formXmlService = useMemo(() => new FormXmlService(xrm), [xrm]);
@@ -97,7 +102,6 @@ function WorkbenchShellContent({
     validation,
     metadataService,
     formXmlService,
-    onAccessibleTablesChange: setAccessibleTables,
     metadataFilterConfig,
     defaultMetadataFilterConfig,
     metadataFilterPersistenceAvailable,
