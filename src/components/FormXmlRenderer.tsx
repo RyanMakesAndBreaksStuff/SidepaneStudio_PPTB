@@ -100,7 +100,7 @@ export function FormXmlRenderer({ model }: FormXmlRendererProps): React.ReactEle
 
   if (model.tabs.length === 0) {
     return (
-      <div style={{ padding: 24, color: FL.fgLabel, fontFamily: FL.font, fontSize: 13 }}>
+      <div style={{ padding: 24, color: FL.fgMuted, fontFamily: FL.font, fontSize: 13 }}>
         No tabs in form.
       </div>
     );
@@ -119,9 +119,9 @@ export function FormXmlRenderer({ model }: FormXmlRendererProps): React.ReactEle
             style={{
               padding: '8px 16px',
               border: 'none',
-              borderBottom: i === activeTab ? `2px solid ${FL.tabActiveBorder}` : '2px solid transparent',
+              borderBottom: i === activeTab ? `2px solid ${FL.brand}` : '2px solid transparent',
               background: 'transparent',
-              color: i === activeTab ? FL.tabActiveFg : FL.tabFg,
+              color: i === activeTab ? FL.brand : FL.tabFg,
               fontFamily: FL.font,
               fontSize: 13,
               fontWeight: i === activeTab ? 600 : 400,

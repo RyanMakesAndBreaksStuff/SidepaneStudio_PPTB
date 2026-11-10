@@ -14,8 +14,6 @@ import { TokenSet } from './types';
 const INVARIANT = {
   rS: '0px',
   rM: '0px',
-  rL: '4px',
-  rXL: '8px',
   font: "'Segoe UI Variable Display','Segoe UI Variable','Segoe UI',system-ui,sans-serif",
   mono: "'Cascadia Code','Fira Code','Consolas','Courier New',monospace",
 };
@@ -25,10 +23,8 @@ const CODE = {
   codeBg2:     '#1b1b1b',
   codeStroke:  '#3a3a3a',
   codeFg:      '#e8e8e8',
-  codeFgMuted: '#b0b0b0',
   codeAccent:  '#ff9c7a',
   codeSuccess: '#9fdba9',
-  codeWarning: '#f2c46d',
 };
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -40,7 +36,6 @@ const DARK: TokenSet = {
   surface2:     '#252525',
   surface3:     '#303030',
   accent:       '#f5f5f5',
-  accentStrong: '#ffffff',
   accentFg:     '#111111',
   accentAlt:    '#ff8a65',
   accentBg:     '#3b3b3b', // accent @ 18% over pageBg
@@ -57,10 +52,7 @@ const DARK: TokenSet = {
   warnBg:       '#433a2b',
   errBg:        '#453332',
   infoBg:       '#353a45',
-  shadow2:   '0 1px 2px rgba(0,0,0,.4),0 0 2px rgba(0,0,0,.3)',
-  shadow4:   '0 2px 4px rgba(0,0,0,.4),0 0 2px rgba(0,0,0,.3)',
   shadow8:   '0 4px 10px rgba(0,0,0,.45),0 0 2px rgba(0,0,0,.3)',
-  shadow16:  '0 14px 36px rgba(0,0,0,.5),0 1px 2px rgba(0,0,0,.4)',
   ...CODE,
   ...INVARIANT,
 };
@@ -74,7 +66,6 @@ const LIGHT: TokenSet = {
   surface2:     '#e6e6e6',
   surface3:     '#d9d9d9',
   accent:       '#111111',
-  accentStrong: '#3a3a3a',
   accentFg:     '#ffffff',
   accentAlt:    '#b8320f',
   accentBg:     '#d7d7d7', // accent @ 12% over pageBg
@@ -91,10 +82,7 @@ const LIGHT: TokenSet = {
   warnBg:       '#efeae0',
   errBg:        '#f4e4e4',
   infoBg:       '#e6eaf3',
-  shadow2:   '0 1px 2px rgba(0,0,0,.08),0 0 2px rgba(0,0,0,.05)',
-  shadow4:   '0 2px 4px rgba(0,0,0,.09),0 0 2px rgba(0,0,0,.06)',
   shadow8:   '0 4px 10px rgba(0,0,0,.10),0 0 2px rgba(0,0,0,.06)',
-  shadow16:  '0 10px 28px rgba(0,0,0,.12),0 1px 2px rgba(0,0,0,.06)',
   ...CODE,
   ...INVARIANT,
 };

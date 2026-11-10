@@ -34,8 +34,8 @@ describe.each([['light', false], ['dark', true]] as const)('Newsprint %s tokens'
     ['warning', 'pageBg'], ['warning', 'surface1'], ['warning', 'warnBg'],
     ['success', 'pageBg'], ['success', 'surface1'], ['success', 'okBg'],
     ['info', 'pageBg'], ['info', 'surface1'], ['info', 'infoBg'],
-    ['codeFg', 'codeBg'], ['codeFg', 'codeBg2'], ['codeFgMuted', 'codeBg'], ['codeFgMuted', 'codeBg2'],
-    ['codeAccent', 'codeBg'], ['codeSuccess', 'codeBg'], ['codeWarning', 'codeBg'],
+    ['codeFg', 'codeBg'], ['codeFg', 'codeBg2'],
+    ['codeAccent', 'codeBg'], ['codeSuccess', 'codeBg'],
   ] as const)('text %s on %s ≥ 4.5:1', (fg, bg) => {
     expect(ratio(T[fg], T[bg])).toBeGreaterThanOrEqual(4.5);
   });

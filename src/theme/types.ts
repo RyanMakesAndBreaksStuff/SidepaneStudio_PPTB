@@ -7,7 +7,6 @@ export interface TokenSet {
   surface3: string;
   // Accents
   accent: string;        // primary — safe as fill and as text on pageBg/surface1/surface2
-  accentStrong: string;  // pressed / hover state of accent fills
   accentFg: string;      // text and icons drawn on an accent fill
   accentAlt: string;     // secondary accent — hints, status lines
   accentBg: string;      // 12% (light) / 18% (dark) accent tint — selected chips, summary slots
@@ -33,20 +32,13 @@ export interface TokenSet {
   codeBg2: string;
   codeStroke: string;
   codeFg: string;
-  codeFgMuted: string;
   codeAccent: string;
   codeSuccess: string;
-  codeWarning: string;
   // Shadows
-  shadow2: string;
-  shadow4: string;
   shadow8: string;
-  shadow16: string;
   // Radii (invariant)
   rS: string;
   rM: string;
-  rL: string;
-  rXL: string;
   // Fonts (invariant)
   font: string;
   mono: string;

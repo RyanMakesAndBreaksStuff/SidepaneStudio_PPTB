@@ -54,7 +54,7 @@ function SectionCard({ title, children }: { title: string; children: React.React
   return (
     <section
       style={{
-        background: FL.cardBg,
+        background: FL.surface,
         border: `1px solid ${FL.stroke}`,
         borderRadius: 8,
         boxShadow: FL.shadow,
