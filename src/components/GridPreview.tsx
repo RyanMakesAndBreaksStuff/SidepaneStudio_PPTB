@@ -10,6 +10,7 @@ import { ValidationResult } from '../services/ValidationService';
 import { TablePicker } from './TablePicker';
 import { ViewPicker } from './ViewPicker';
 import { LookupPicker } from './LookupPicker';
+import { useLookupColumns } from './useLookupColumns';
 import { NativeMdaFrame } from './NativeMdaFrame';
 import { MockGrid } from './MockGrid';
 import type { GridColumn } from '../services/GridViewModel';
@@ -41,7 +42,8 @@ export function GridPreview(props: Props): React.ReactElement {
     service: MetadataService;
     identity: string;
   } | null>('related-grid-lookup-identity', null);
-  const [lookupStatus, setLookupStatus] = useState<'idle' | 'loading' | 'error' | 'unavailable' | 'empty' | 'resolved'>('idle');
+  const lookupColumns = useLookupColumns(metadataService, relatedMode ? entityName : '');
+  const lookupStatus = lookupColumns.statusFor(relatedLookup);
   const [resolvedLookup, setResolvedLookup] = useState<{ entityName: string; lookup: LookupAttributeInfo } | null>(null);
   const [viewStatus, setViewStatus] = useState<'idle' | 'loading' | 'error' | 'unavailable' | 'empty' | 'resolved'>('idle');
   const [relatedContext, setRelatedContext] = usePreviewSessionState<{ key: string; generation: number }>(
@@ -84,6 +86,10 @@ export function GridPreview(props: Props): React.ReactElement {
     resetRelatedPreview();
     onConfigChange?.(prev => applyLookup(prev, entityName, null));
   };
+  useEffect(() => {
+    if (!lookupColumns.loaded) return;
+    changeLookup(lookupColumns.find(relatedLookup));
+  }, [lookupColumns.loaded, entityName, relatedLookup]);
   const changeView = (view: ViewSelection) => {
     onConfigChange?.(prev => ({ ...prev, host: { ...prev.host, viewId: view.id, viewType: view.viewType } }));
     if (relatedMode) resetRelatedPreview();
@@ -101,9 +107,8 @@ export function GridPreview(props: Props): React.ReactElement {
           onChange={changeSource} customOnlyState={customOnlyState} />
       </label>
       {relatedMode && <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>Lookup column
-        <LookupPicker entityName={entityName} value={relatedLookup} metadataService={metadataService}
-          onChange={(logicalName, lookup) => lookup ? changeLookup(lookup, true) : !logicalName && clearLookup()}
-          onResolvedSelection={changeLookup} onStatusChange={status => setLookupStatus(status)} />
+        <LookupPicker columns={lookupColumns} entityName={entityName} value={relatedLookup}
+          onChange={(logicalName, lookup) => lookup ? changeLookup(lookup, true) : !logicalName && clearLookup()} />
       </label>}
       <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>View
         <ViewPicker entityName={entityName} value={selection.id} viewType={selection.viewType}

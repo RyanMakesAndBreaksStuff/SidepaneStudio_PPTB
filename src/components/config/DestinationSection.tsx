@@ -1,8 +1,7 @@
 import * as React from 'react';
-import { useState } from 'react';
+import { useEffect } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { theme } from '../../theme/tokens';
-import type { LookupAttributeInfo } from '../../services/MetadataService';
 import type { PaneDefinitionConfig, PageType, RecordSource, RecordSourceKind, TargetConfig } from '../../types/PaneDefinitionConfig';
 import { RECORD_TARGETS } from '../../types/PaneDefinitionConfig';
 import { allowedSources, allowedTargets, defaultSource, destinationTable, isCreating, resetTarget, retargetRecord, sendsRecord } from '../../services/triggerCapabilities';
@@ -18,6 +17,7 @@ import { Input } from '../Input';
 import { TablePicker } from '../TablePicker';
 import { DashboardPicker } from '../DashboardPicker';
 import { LookupPicker } from '../LookupPicker';
+import { useLookupColumns } from '../useLookupColumns';
 import { FormSelector } from '../FormSelector';
 import { ViewPicker } from '../ViewPicker';
 import { JsonDataField } from '../JsonDataField';
@@ -101,15 +101,13 @@ export function DestinationSection({ config, onChange, metadataService, formXmlS
   const { source } = context;
   const creating = isCreating(target);
   const recordTarget = RECORD_TARGETS.includes(target.pageType);
-  const [resolvedLookup, setResolvedLookup] = useState<{
-    service: typeof metadataService;
-    hostTable: string;
-    lookupName: string;
-    metadata?: LookupAttributeInfo;
-  } | null>(null);
-  const currentLookup = source.kind === 'lookup' && resolvedLookup?.service === metadataService &&
-    resolvedLookup.hostTable === host.entityName && resolvedLookup.lookupName === source.attribute
-    ? resolvedLookup.metadata : undefined;
+  const lookupColumns = useLookupColumns(metadataService, source.kind === 'lookup' && recordTarget ? host.entityName : '');
+  const currentLookup = source.kind === 'lookup' ? lookupColumns.find(source.attribute) : undefined;
+  useEffect(() => {
+    if (!currentLookup) return;
+    onChange(prev => prev.context.source.kind === 'lookup' && prev.context.source.attribute === currentLookup.LogicalName
+      ? applyLookup(prev, host.entityName, currentLookup) : prev);
+  }, [currentLookup]);
   const resolvedTargets = Array.isArray(currentLookup?.Targets) ? [...new Set(currentLookup.Targets)] : [];
   const destination = destinationTable(config);
   const allowed = allowedSources(config);
@@ -157,22 +155,10 @@ export function DestinationSection({ config, onChange, metadataService, formXmlS
       {source.kind === 'lookup' && recordTarget && (
         <Field label="Lookup column" required hint="Lookup on the trigger table whose value opens in the pane"
           error={errors['context.source.attribute']}>
-          <LookupPicker entityName={host.entityName} value={source.attribute} metadataService={metadataService}
+          <LookupPicker columns={lookupColumns} entityName={host.entityName} value={source.attribute}
             error={!!errors['context.source.attribute']} showDestination={false}
             onChange={(value, selected) => onChange(prev => applyLookup(prev, host.entityName,
-              selected ?? (value ? { LogicalName: value } : null)))}
-            onSelectionChange={lookup => setResolvedLookup({
-              service: metadataService, hostTable: host.entityName,
-              lookupName: lookup?.LogicalName ?? '', metadata: lookup,
-            })}
-            onResolvedSelection={lookup => {
-              setResolvedLookup({ service: metadataService, hostTable: host.entityName,
-                lookupName: source.attribute, metadata: lookup });
-              if (lookup?.LogicalName === source.attribute) {
-                onChange(prev => prev.context.source.kind === 'lookup' && prev.context.source.attribute === lookup.LogicalName
-                  ? applyLookup(prev, host.entityName, lookup) : prev);
-              }
-            }} />
+              selected ?? (value ? { LogicalName: value } : null)))} />
         </Field>
       )}
       {source.kind === 'fixed' && recordTarget && (

@@ -1,70 +1,33 @@
 import * as React from 'react';
-import { useEffect, useRef } from 'react';
-import { displayLabel, type LookupAttributeInfo, type MetadataService } from '../services/MetadataService';
+import type { LookupAttributeInfo } from '../services/MetadataService';
 import { MetadataStatusMessage } from './MetadataStatusMessage';
 import { TableComboBox } from './TableComboBox';
-import { useMetadataRequest, type PickerStatus } from './useMetadataRequest';
+import { lookupLabel, type LookupColumns } from './useLookupColumns';
 
 export interface LookupPickerProps {
+  /** The loaded lookup columns of `entityName`, owned by the caller (see `useLookupColumns`). */
+  columns: LookupColumns;
   entityName: string;
   value: string;
   onChange: (logicalName: string, selection?: LookupAttributeInfo) => void;
-  onSelectionChange?: (lookup: LookupAttributeInfo | undefined) => void;
-  onResolvedSelection?: (lookup: LookupAttributeInfo | undefined) => void;
-  onStatusChange?: (status: PickerStatus, reason?: string) => void;
-  metadataService: Pick<MetadataService, 'listLookupAttributes'>;
   disabled?: boolean;
   error?: boolean;
   /** Render the resolved destination table(s) under the picker. Off where the surrounding form already states them. */
   showDestination?: boolean;
 }
 
-function lookupLabel(lookup: LookupAttributeInfo): string {
-  const label = displayLabel(lookup);
-  return label === lookup.LogicalName ? label : `${label} (${lookup.LogicalName})`;
-}
-
-/** Lookup columns on the RelatedRecord source table. Same load/retry lifecycle as ViewPicker. */
-export function LookupPicker({ entityName, value, onChange, onSelectionChange, onResolvedSelection, onStatusChange, metadataService, disabled, error, showDestination = true }: LookupPickerProps): React.ReactElement {
-  const request = useMetadataRequest(
-    entityName
-      ? () => metadataService.listLookupAttributes(entityName)
-        .then(lookups => [...lookups].sort((a, b) => lookupLabel(a).localeCompare(lookupLabel(b))))
-      : null,
-    [metadataService, entityName],
-  );
-  const onResolvedSelectionRef = useRef(onResolvedSelection);
-  onResolvedSelectionRef.current = onResolvedSelection;
-  const onStatusChangeRef = useRef(onStatusChange);
-  onStatusChangeRef.current = onStatusChange;
-  const lastResolutionRef = useRef<{ lookups: LookupAttributeInfo[]; entityName: string; value: string } | null>(null);
-  const loaded = request.data;
+/** Lookup columns on the RelatedRecord source table. Presentational: the caller fetches, resolves and reacts. */
+export function LookupPicker({ columns, entityName, value, onChange, disabled, error, showDestination = true }: LookupPickerProps): React.ReactElement {
+  const { request, loaded } = columns;
   const lookups = loaded ?? [];
-  const selectedLookup = lookups.find(lookup => lookup.LogicalName === value);
-  const status: PickerStatus = request.status !== 'loaded' ? request.status
-    : value && !selectedLookup ? 'unavailable'
-      : lookups.length === 0 ? 'empty'
-        : 'resolved';
-  useEffect(() => {
-    onStatusChangeRef.current?.(status, request.error ?? undefined);
-  }, [status, request.error]);
-  useEffect(() => {
-    if (!loaded) return;
-    const last = lastResolutionRef.current;
-    if (last?.lookups === loaded && last.entityName === entityName && last.value === value) return;
-    lastResolutionRef.current = { lookups: loaded, entityName, value };
-    onResolvedSelectionRef.current?.(selectedLookup);
-  }, [loaded, entityName, selectedLookup, value]);
+  const selectedLookup = columns.find(value);
   const targetSummary = selectedLookup?.Targets;
   return (
     <div>
       <TableComboBox ariaLabel="Lookup column" noun="lookup columns"
         items={lookups.map(lookup => ({ logicalName: lookup.LogicalName, displayName: lookupLabel(lookup) }))}
-        value={value} onChange={logicalName => {
-          const lookup = lookups.find(item => item.LogicalName === logicalName);
-          onChange(logicalName, lookup);
-          onSelectionChange?.(lookup);
-        }} loading={request.status === 'loading'}
+        value={value} onChange={logicalName => onChange(logicalName, columns.find(logicalName))}
+        loading={request.status === 'loading'}
         error={request.error ?? undefined}
         onRetry={request.retry} invalid={error || (!!value && !selectedLookup)}
         disabled={disabled || !entityName}
