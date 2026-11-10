@@ -218,6 +218,19 @@ describe('trigger names — CR-001', () => {
       expect(isValidJS(code)).toBe(true);
     }
   });
+
+  it.each(['location', 'top', 'parent', 'self', 'document', 'history', 'frames', 'opener', 'navigator', 'globalThis'])(
+    'rejects browser global %s as a namespace or console function name, which a top-level declaration would overwrite (L6)', name => {
+      const asNamespace = resolveTriggerNames(named('FormButton', name));
+      const asConsoleFunction = resolveTriggerNames(named('ManualJS', 'Contoso', name));
+      expect(asNamespace.ok ? [] : asNamespace.errors).toEqual([
+        { field: 'trigger.namespace', message: `${name} is used by the generated script. Choose another namespace.` },
+      ]);
+      expect(asConsoleFunction.ok ? [] : asConsoleFunction.errors).toEqual([
+        { field: 'trigger.functionName', message: `${name} is used by the generated script. Choose another function name.` },
+      ]);
+      for (const code of outputs(named('FormButton', name))) expect(code).not.toContain(`var ${name} = `);
+    });
 });
 
 describe('generateBasicScript — reuseExistingPane', () => {

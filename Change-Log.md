@@ -49,6 +49,9 @@
   time: a call made while that pane is opening waits, the newest waiting call
   opens next, and a repeated identical call (a double click) opens once.
   Download the runtime again and redeploy the web resource to get this.
+- Browser globals such as `location`, `top`, `self` and `document` are
+  rejected as namespace and console function names, since the generated
+  top-level declaration would overwrite them.
 
 ## v1.3.1
 

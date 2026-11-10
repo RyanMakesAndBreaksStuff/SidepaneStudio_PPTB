@@ -18,13 +18,17 @@ const PENDING_TTL_MS = 2000;
 const UNSAVED_RECORD_MESSAGE = 'Save the record before opening this pane.';
 /** L5 — the variable that holds the record's table when the script reads it from the form or grid row. */
 const TABLE_VAR = 'recordEntityName';
-/** Every identifier the generated scripts declare, receive or call; the record variable and namespace names may not shadow them. */
+/**
+ * Every identifier the generated scripts declare, receive or call, plus the browser globals that a top-level
+ * `var` namespace or console function would overwrite (L6); the record variable, namespace and function names may not shadow them.
+ */
 export const GENERATED_NAMES: ReadonlySet<string> = new Set([
   'allPanes', 'eventArgs', 'existing', 'formContext', 'pane', 'primaryControl', 'relatedAttribute',
   'relatedRecord', 'relatedSource', 'selectedControl', 'selectedEntity', 'selectedPane', 'selectedRecordId',
   'selectedRows', 'latestSelection', 'lockedAt', 'tag', 'executionContext', 'control', 'name', 'e', 'p',
   'Xrm', 'window', 'SidePaneHelper', 'console', 'JSON', 'Error', 'Promise', 'Date',
   'encodeURIComponent', 'setTimeout', 'clearTimeout', 'undefined', 'arguments', TABLE_VAR,
+  'location', 'top', 'parent', 'self', 'document', 'history', 'frames', 'opener', 'navigator', 'globalThis',
 ]);
 
 function safeIdentifier(value: string, fallback: string): string {
