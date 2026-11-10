@@ -1795,29 +1795,26 @@ describe('GridRowSelect opens the latest selection (codegen-config-model-002)', 
     }
   });
 
-  it('logs a replayed selection that throws instead of leaving an unhandled rejection', async () => {
+  it('replays a waiting selection from its stored row values, never from the ended event (M13)', async () => {
     const first = deferred<void>();
     const { pane, xrm } = trackedPanes(vi.fn().mockReturnValueOnce(first.promise).mockResolvedValue(undefined));
-    const win: { __spstudio_pendingPanes?: Record<string, number> } = {};
-    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
-    try {
-      const open = new Function('window', 'Xrm', `${generateBasicScript(rowSelect('GridRowSelect'))}\nreturn TestNs.open;`)(win, xrm) as (arg: unknown) => void;
-      const stale = new Error('stale execution context');
-      let reads = 0;
-      const staleSelection = { getEventSource: () => {
-        if (reads++ > 0) throw stale;
-        return { getId: () => '{B2}', getEntityName: () => 'account' };
-      } };
-      open(selection('{A1}'));
-      await vi.waitFor(() => expect(pane.navigate).toHaveBeenCalledOnce());
-      open(staleSelection);
-      first.resolve();
-      await vi.waitFor(() => expect(error).toHaveBeenCalledWith('TestNs.open', stale));
-      expect(win.__spstudio_pendingPanes).toEqual({});
-      expect(pane.navigate).toHaveBeenCalledOnce();
-    } finally {
-      error.mockRestore();
-    }
+    const win: { __spstudio_pendingPanes?: Record<string, number>; __spstudio_latestSelection?: Record<string, unknown> } = {};
+    const open = new Function('window', 'Xrm', `${generateBasicScript(rowSelect('GridRowSelect'))}\nreturn TestNs.open;`)(win, xrm) as (arg: unknown) => void;
+    let reads = 0;
+    const endsAfterEvent = { getEventSource: () => {
+      if (reads++ > 0) throw new Error('execution context read after its event ended');
+      return { getId: () => '{B2}', getEntityName: () => 'account' };
+    } };
+    open(selection('{A1}'));
+    await vi.waitFor(() => expect(pane.navigate).toHaveBeenCalledOnce());
+    open(endsAfterEvent);
+    expect(win.__spstudio_latestSelection).toEqual({ p: { id: '{B2}', entityName: 'account' } });
+    first.resolve();
+    await vi.waitFor(() => expect(pane.navigate).toHaveBeenCalledTimes(2));
+    expect(pane.navigate.mock.calls[1][0]).toEqual({ pageType: 'entityrecord', entityName: 'account', entityId: '{B2}' });
+    expect(reads).toBe(1);
+    await vi.waitFor(() => expect(win.__spstudio_pendingPanes).toEqual({}));
+    expect(xrm.Navigation.openErrorDialog).not.toHaveBeenCalled();
   });
 
   it('keeps dropping repeat grid button clicks while a pane is opening', () => {

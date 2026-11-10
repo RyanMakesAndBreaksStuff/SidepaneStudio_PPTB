@@ -42,6 +42,9 @@
   warning for form events) instead of opening the pane with an empty record ID.
 - Field change scripts read the form, its record and any lookup while the
   change event runs; only opening the pane waits for the 150 ms debounce.
+- Grid row select scripts remember a row selected while a pane is opening by
+  its ID and table, and open it from those values instead of re-reading an
+  event that has already ended.
 
 ## v1.3.1
 

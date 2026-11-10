@@ -484,11 +484,12 @@ function generateGridButtonScript(config: PaneDefinitionConfig, { segments, ns, 
   const arg = onSelect ? 'executionContext' : 'selectedControl';
   // codegen-config-model-002 — row selection is latest-wins: a row selected while a pane opens is opened when it finishes.
   // Each selection owns its lock by timestamp, so a call that outlives its lock neither releases a newer call's lock
-  // nor replays a selection that newer call superseded. A replay that throws (a stale context) is logged, never left
-  // unhandled. Grid buttons keep dropping a repeat click.
+  // nor replays a selection that newer call superseded. M13 — a selection is stored as the row's values and replayed
+  // from them, so the ended event is never read again. Grid buttons keep dropping a repeat click.
   const pending = `${PENDING_VAR}[${paneIdJson}]`;
   const latest = `${LATEST_VAR}[${paneIdJson}]`;
-  const whenLocked = onSelect ? `{ ${latest} = executionContext; return; }` : 'return;';
+  const whenLocked = onSelect ? `{ ${latest} = { id: selectedRecordId, entityName: selectedEntity.getEntityName() }; return; }` : 'return;';
+  const replayedRow = '{ getId: function() { return latestSelection.id; }, getEntityName: function() { return latestSelection.entityName; } }';
   const takeLock = onSelect
     ? `  var lockedAt = Date.now();\n  ${pending} = lockedAt;\n  delete ${latest};\n`
     : `  ${pending} = Date.now();\n`;
@@ -497,7 +498,7 @@ function generateGridButtonScript(config: PaneDefinitionConfig, { segments, ns, 
       `        delete ${pending};\n` +
       `        var latestSelection = ${latest};\n` +
       `        delete ${latest};\n` +
-      `        if (latestSelection) { try { ${ns}.${fn}(latestSelection); } catch(e) { console.error(${JSON.stringify(`${ns}.${fn}`)}, e); } }\n` +
+      `        if (latestSelection) ${ns}.${fn}({ getEventSource: function() { return ${replayedRow}; } });\n` +
       `      }`
     : `      delete ${pending};`;
 
