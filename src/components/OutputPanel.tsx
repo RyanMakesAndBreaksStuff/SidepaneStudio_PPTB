@@ -85,19 +85,24 @@ export const OutputPanel = React.memo(function OutputPanel({ config, xrm, valida
     }
   };
 
-  // Re-check runtime web resource every time the library tab is activated
+  // Re-check runtime web resource every time the library tab is activated; a superseded check is ignored
   useEffect(() => {
-    if (activeTab === 'library') {
-      setRuntimeExists(null);
-      setRuntimeName(null);
-      setRuntimeCheckError(null);
-      xrm.checkWebResourceExists(RUNTIME_WEB_RESOURCE_SUFFIX)
-        .then(name => {
-          setRuntimeExists(Boolean(name));
-          setRuntimeName(typeof name === 'string' ? name : null);
-        })
-        .catch((err) => setRuntimeCheckError(err instanceof Error ? err.message : String(err)));
-    }
+    if (activeTab !== 'library') return;
+    let active = true;
+    setRuntimeExists(null);
+    setRuntimeName(null);
+    setRuntimeCheckError(null);
+    xrm.checkWebResourceExists(RUNTIME_WEB_RESOURCE_SUFFIX)
+      .then(name => {
+        if (!active) return;
+        setRuntimeExists(Boolean(name));
+        setRuntimeName(typeof name === 'string' ? name : null);
+      })
+      .catch((err) => {
+        if (!active) return;
+        setRuntimeCheckError(err instanceof Error ? err.message : String(err));
+      });
+    return () => { active = false; };
   }, [activeTab, xrm]);
 
   return (
@@ -173,7 +178,7 @@ export const OutputPanel = React.memo(function OutputPanel({ config, xrm, valida
                 <strong>Prerequisite not detected:</strong> No web resource ending in <code>{RUNTIME_WEB_RESOURCE_SUFFIX}</code> was found in this environment. Deploy the shared runtime (recommended name: <code>{RUNTIME_WEB_RESOURCE_NAME}</code>) before using this output.
               </Callout>
             )}
-            {runtimeExists === true && (
+            {runtimeExists === true && !runtimeCheckError && (
               <Callout type="ok" icon="✓">Shared runtime library detected in this environment{runtimeName && <> (<code>{runtimeName}</code>)</>}.</Callout>
             )}
             <SummaryCard

@@ -240,6 +240,30 @@ describe('OutputPanel', () => {
     expect(host?.textContent).not.toContain('Prerequisite not detected');
   });
 
+  it('ignores a web-resource check that settles after the tab was left and re-entered', async () => {
+    let failFirst!: (error: Error) => void;
+    const first = new Promise<string | null>((_, reject) => { failFirst = reject; });
+    const xrm = xrmStub();
+    xrm.checkWebResourceExists = vi.fn()
+      .mockReturnValueOnce(first)
+      .mockResolvedValueOnce('acme_/scripts/sidepane.runtime.js');
+    await render(<OutputPanel config={DEFAULT_CONFIG} xrm={xrm} validation={{ isValid: true, errors: [], warnings: [] }} />);
+
+    await clickLibraryTab();
+    await act(async () => {
+      (host?.querySelector('[role="tab"]:nth-child(1)') as HTMLButtonElement).click();
+    });
+    await clickLibraryTab();
+    await act(async () => new Promise(r => setTimeout(r, 0)));
+    expect(host?.textContent).toContain('Shared runtime library detected');
+
+    await act(async () => { failFirst(new Error('late failure')); });
+
+    expect(host?.textContent).not.toContain('Could not verify prerequisite');
+    expect(host?.textContent).not.toContain('late failure');
+    expect(host?.textContent).toContain('Shared runtime library detected');
+  });
+
   it('withholds the basic-tab code block Copy affordance when validation has blocking errors', async () => {
     await render(
       <OutputPanel
