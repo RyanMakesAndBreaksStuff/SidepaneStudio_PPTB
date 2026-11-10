@@ -360,7 +360,8 @@ function buildToggleIfOpen(config: PaneDefinitionConfig, indent: string): string
   );
 }
 
-function buildGetOrCreateBody(config: PaneDefinitionConfig, indent = '  '): string {
+/** prelude: the guards and reads that need the triggering event (lookup, record, table). open: the side pane calls. */
+function buildGetOrCreateParts(config: PaneDefinitionConfig, indent = '  '): { prelude: string; open: string } {
   const { pane, behavior } = config;
   const paneOpts = buildPaneOptions(config);
   const declared = declareRecordVariable(config, buildRecordContext(config), indent);
@@ -386,7 +387,15 @@ function buildGetOrCreateBody(config: PaneDefinitionConfig, indent = '  '): stri
   const createBody = `${stateAssign}${indent}var pane = await Xrm.App.sidePanes.createPane(${paneOpts});\n${indent}await pane.navigate(${navInput});\n${badgeAssign}`;
   // Lookup handlers guard before preventDefault, so the shared body must not repeat the check.
   const availabilityGuard = config.trigger.kind === 'LookupTagClick' ? '' : buildAvailabilityGuard(config, indent);
-  return `${availabilityGuard}${buildToggleIfOpen(config, indent)}${buildRelatedRecordPreamble(config, indent)}${declared.line}${reuseCheck}${createBody}${behavior.reuseExistingPane ? `${indent}}\n` : ''}${closeOthersBlock}`;
+  return {
+    prelude: `${availabilityGuard}${buildToggleIfOpen(config, indent)}${buildRelatedRecordPreamble(config, indent)}${declared.line}`,
+    open: `${reuseCheck}${createBody}${behavior.reuseExistingPane ? `${indent}}\n` : ''}${closeOthersBlock}`,
+  };
+}
+
+function buildGetOrCreateBody(config: PaneDefinitionConfig, indent = '  '): string {
+  const { prelude, open } = buildGetOrCreateParts(config, indent);
+  return `${prelude}${open}`;
 }
 
 function generateFormOnLoad(config: PaneDefinitionConfig, { segments, ns, fn }: ResolvedTriggerNames): string {
@@ -531,19 +540,25 @@ function generateFormOnChange(config: PaneDefinitionConfig, { segments, ns, fn }
   const { pane } = config;
   const field = config.host.attribute || '';
   const timerVar = `__spstudio_tmr_${pane.paneId.replace(/[^a-zA-Z0-9_]/g, '_')}`;
-  const body = buildGetOrCreateBody(config, '    ');
+  const { prelude, open } = buildGetOrCreateParts(config, '    ');
 
+  // M12 — the form, its record and any lookup are read while the event runs; only the pane calls wait out the debounce.
   return `${namespaceDeclaration(segments)}
 var ${timerVar};
 ${ns}.${fn} = function(executionContext) {
   // Wire in OnLoad: formContext.getAttribute(${JSON.stringify(field)}).addOnChange(${ns}.${fn});
   clearTimeout(${timerVar});
+  var formContext = executionContext.getFormContext();
+  try {
+${prelude}  } catch(e) {
+${buildCatchBody(`${ns}.${fn}`, '    ')}
+    return;
+  }
   ${timerVar} = setTimeout(async function() {
-    var formContext = executionContext.getFormContext();
     try {
-${body
+${open
     .split('\n')
-    .map(l => '    ' + l)
+    .map(l => '  ' + l)
     .join('\n')}
       // Staleness guard after await
       if (executionContext.getFormContext() !== formContext) return;

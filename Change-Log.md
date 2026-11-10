@@ -40,6 +40,8 @@
 - A form trigger on a record that has not been saved yet stops with "Save the
   record before opening this pane." (a dialog for command buttons, a console
   warning for form events) instead of opening the pane with an empty record ID.
+- Field change scripts read the form, its record and any lookup while the
+  change event runs; only opening the pane waits for the 150 ms debounce.
 
 ## v1.3.1
 

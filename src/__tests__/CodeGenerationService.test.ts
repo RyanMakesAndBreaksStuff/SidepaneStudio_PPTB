@@ -1602,17 +1602,18 @@ describe('form-event record and pre-fill expressions', () => {
     expect(pane.navigate).toHaveBeenCalledWith(RECORD_NAV);
   });
 
-  it('Basic FormOnChange debounces to one record read 150ms after the last call', async () => {
+  it('Basic FormOnChange reads the record during each event and opens the pane once, 150ms after the last call (M12)', async () => {
     await withFakeTimers(async () => {
       const { events, executionContext } = formProbe();
       const { open, pane } = loadBasic(recordConfig('FormOnChange'), events);
       open(executionContext);
       open(executionContext);
-      expect(events).toEqual([]);
+      const duringEvents = ['getFormContext', 'getId', 'getFormContext', 'getId'];
+      expect(events).toEqual(duringEvents);
       await vi.advanceTimersByTimeAsync(149);
-      expect(events).toEqual([]);
+      expect(events).toEqual(duringEvents);
       await vi.advanceTimersByTimeAsync(1);
-      expect(events).toEqual(['getFormContext', 'getId', 'getPane', 'createPane', 'navigate', 'getFormContext']);
+      expect(events).toEqual([...duringEvents, 'getPane', 'createPane', 'navigate', 'getFormContext']);
       expect(pane.navigate).toHaveBeenCalledOnce();
       expect(pane.navigate).toHaveBeenCalledWith(RECORD_NAV);
     });
@@ -1645,14 +1646,14 @@ describe('form-event record and pre-fill expressions', () => {
     expect(pane.navigate).toHaveBeenCalledWith(PREFILL_NAV);
   });
 
-  it('Basic FormOnChange pre-fill debounces to one createFromEntity read', async () => {
+  it('Basic FormOnChange pre-fill captures the form during each event and debounces to one createFromEntity read', async () => {
     await withFakeTimers(async () => {
       const { events, executionContext } = formProbe();
       const { open, pane } = loadBasic(prefillConfig('FormOnChange'), events);
       open(executionContext);
       open(executionContext);
       await vi.advanceTimersByTimeAsync(150);
-      expect(events).toEqual(['getFormContext', 'getPane', 'createPane', 'getEntityName', 'getId', 'navigate', 'getFormContext']);
+      expect(events).toEqual(['getFormContext', 'getFormContext', 'getPane', 'createPane', 'getEntityName', 'getId', 'navigate', 'getFormContext']);
       expect(pane.navigate).toHaveBeenCalledOnce();
       expect(pane.navigate).toHaveBeenCalledWith(PREFILL_NAV);
     });
