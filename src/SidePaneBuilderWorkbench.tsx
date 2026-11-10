@@ -288,11 +288,7 @@ export function SidePaneBuilderWorkbench(): React.ReactElement {
     const toolbox = window.toolboxAPI;
     try {
       await toolbox?.settings?.set('lastConfig', null);
-      window.toolboxAPI?.utils?.showNotification({
-        title: 'Configuration reset',
-        body: '',
-        type: 'success',
-      });
+      notify('Configuration reset', 'Your saved configuration was cleared and the defaults were restored.', 'success');
     } catch (err) {
       reportSettingsFailure('Clearing your saved configuration', err);
     }

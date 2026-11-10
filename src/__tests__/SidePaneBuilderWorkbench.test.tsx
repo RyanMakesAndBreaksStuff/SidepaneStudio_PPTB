@@ -329,7 +329,7 @@ describe('SidePaneBuilderWorkbench', () => {
     expect(settingsSet).toHaveBeenCalledWith('lastConfig', null);
     expect(showNotification).toHaveBeenCalledTimes(1);
     expect(showNotification).toHaveBeenCalledWith(
-      expect.objectContaining({ type: 'success' })
+      expect.objectContaining({ type: 'success', body: expect.stringMatching(/\S/) })
     );
   });
 
