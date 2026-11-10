@@ -34,6 +34,31 @@ describe('parseStoredConfig', () => {
     expect(load({ ...target, createNew: true, createFromCurrent: true })).toEqual({ ...target, createNew: true });
     expect(load({ ...target, createNew: 'yes', createFromCurrent: 1 })).toEqual({ ...target, createNew: false });
   });
+  it('falls back per field for wrong-typed optional target values instead of rejecting the config', () => {
+    const base = {
+      ...DEFAULT_CONFIG,
+      trigger: { ...DEFAULT_CONFIG.trigger, kind: 'ManualJS' },
+      context: { ...DEFAULT_CONFIG.context, source: { kind: 'fixed', entityName: '', id: '' } },
+    };
+    const load = (target: object) => parseStoredConfig(JSON.stringify({ ...base, pane: { ...base.pane, title: 'Kept' }, target }));
+    const list = load({ pageType: 'entitylist', entityName: 'account', viewId: 5, viewType: 'other' });
+    expect(list?.target).toEqual({ pageType: 'entitylist', entityName: 'account', viewId: '', viewType: '' });
+    expect(list?.pane.title).toBe('Kept');
+    expect(load({ pageType: 'entityrecord', entityName: 'account', formId: null, tabName: 7, data: {} })?.target)
+      .toEqual({ pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '', createNew: false });
+    expect(load({ pageType: 'entityrecord', entityName: 7 })?.target)
+      .toEqual({ pageType: 'entityrecord', entityName: '', formId: '', tabName: '', data: '', createNew: false });
+  });
+  it('still rejects the whole config when a discriminant or container is unusable', () => {
+    for (const bad of [
+      { ...DEFAULT_CONFIG, target: 'custom' },
+      { ...DEFAULT_CONFIG, target: { pageType: 'wat' } },
+      { ...DEFAULT_CONFIG, trigger: null },
+      { ...DEFAULT_CONFIG, trigger: { ...DEFAULT_CONFIG.trigger, kind: 'Nope' } },
+      { ...DEFAULT_CONFIG, context: { source: { kind: 'wat' } } },
+    ]) expect(parseStoredConfig(JSON.stringify(bad))).toBeNull();
+  });
+
   it('rejects malformed JSON', () => {
     expect(parseStoredConfig('{not json')).toBeNull();
   });

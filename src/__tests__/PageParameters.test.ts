@@ -120,13 +120,11 @@ describe('page parameter contract', () => {
     expect(migrated?.target).toEqual({ pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '', createNew: false });
     expect(parseStoredConfig(stored({ pageType: 'entitylist', entityName: 'account' }))?.target).toEqual({ pageType: 'entitylist', entityName: 'account', viewId: '', viewType: '' });
   });
-  it('rejects wrong-shaped new settings values', () => {
-    for (const target of [
-      { pageType: 'entityrecord', entityName: 'account', formId: 3 },
-      { pageType: 'entityrecord', entityName: 'account', data: {} },
-      { pageType: 'entitylist', entityName: 'account', viewType: 'other' },
-      { pageType: 'entitylist', entityName: 'account', viewId: [] },
-    ]) expect(parseStoredConfig(stored(target))).toBeNull();
+  it('falls back per field for wrong-shaped new settings values', () => {
+    expect(parseStoredConfig(stored({ pageType: 'entityrecord', entityName: 'account', formId: 3, data: {} }))?.target)
+      .toEqual({ pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '', createNew: false });
+    expect(parseStoredConfig(stored({ pageType: 'entitylist', entityName: 'account', viewId: [], viewType: 'other' }))?.target)
+      .toEqual({ pageType: 'entitylist', entityName: 'account', viewId: '', viewType: '' });
   });
 
   it('pre-fills a new record from the selected grid row through both outputs', async () => {

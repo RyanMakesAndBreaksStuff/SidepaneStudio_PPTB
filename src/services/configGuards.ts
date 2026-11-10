@@ -86,8 +86,10 @@ export function parseStoredOrgKey(raw: unknown): string | null {
 /**
  * Parse a config previously written to toolboxAPI settings. Settings are an untrusted
  * input: they survive tool upgrades, can be hand-edited, and a wrong-shaped object
- * reaching React state crashes the whole tree. Returns null when the value cannot be
- * trusted; callers fall back to DEFAULT_CONFIG.
+ * reaching React state crashes the whole tree. Optional fields fall back to their default
+ * one by one. Returns null only when a discriminant (target.pageType, trigger.kind,
+ * context.source.kind) or a required container cannot be trusted; the workbench then
+ * offers Retry / Continue with defaults instead of overwriting the stored payload.
  */
 export function parseStoredConfig(raw: unknown): PaneDefinitionConfig | null {
   if (typeof raw !== 'string' || !raw) return null;
@@ -121,25 +123,21 @@ export function parseStoredConfig(raw: unknown): PaneDefinitionConfig | null {
   let normalizedTarget: PaneDefinitionConfig['target'];
   let legacyPrefill = false;
   if (target.pageType === 'entityrecord' || target.pageType === 'entitylist') {
-    if (typeof target.entityName !== 'string') return null;
-    const keys = target.pageType === 'entityrecord'
-      ? ['formId', 'tabName', 'data', 'entityId'] : ['viewId', 'viewType'];
-    if (keys.some(key => target[key] !== undefined && typeof target[key] !== 'string')) return null;
+    const entityName = stringOr(target.entityName, '');
     if (target.pageType === 'entityrecord') {
       legacyPrefill = booleanOr(target.createFromCurrent, false);
       normalizedTarget = {
-        pageType: 'entityrecord', entityName: target.entityName,
-        formId: (target.formId as string | undefined) ?? '',
-        tabName: (target.tabName as string | undefined) ?? '',
-        data: (target.data as string | undefined) ?? '',
+        pageType: 'entityrecord', entityName,
+        formId: stringOr(target.formId, ''),
+        tabName: stringOr(target.tabName, ''),
+        data: stringOr(target.data, ''),
         createNew: booleanOr(target.createNew, false),
       };
     } else {
-      if (target.viewType !== undefined && !['', 'savedquery', 'userquery'].includes(target.viewType as string)) return null;
       normalizedTarget = {
-        pageType: 'entitylist', entityName: target.entityName,
-        viewId: (target.viewId as string | undefined) ?? '',
-        viewType: (target.viewType as '' | 'savedquery' | 'userquery' | undefined) ?? '',
+        pageType: 'entitylist', entityName,
+        viewId: stringOr(target.viewId, ''),
+        viewType: VIEW_TYPES.includes(target.viewType as ViewType) ? target.viewType as ViewType : '',
       };
     }
   } else if (target.pageType === 'custom') {

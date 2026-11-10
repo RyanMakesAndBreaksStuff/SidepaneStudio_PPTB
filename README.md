@@ -150,7 +150,8 @@ does not supply the PPTB and Dataverse APIs needed for connected features.
 
 Side Pane Studio saves the current configuration through PPTB settings when
 available, so the last pane setup can be restored the next time the tool opens.
-If restoration fails, **Retry restore** or **Continue with defaults** lets you
-recover before new settings overwrite the saved configuration. Connection
+If restoration fails, or the saved configuration cannot be read, **Retry restore**
+or **Continue with defaults** lets you recover before new settings overwrite the
+saved configuration. Connection
 changes clear environment-specific selections and invalidate metadata and
 preview state. The studio follows PPTB's light or dark theme.

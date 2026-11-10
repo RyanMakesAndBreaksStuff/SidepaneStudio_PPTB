@@ -369,6 +369,52 @@ describe('SidePaneBuilderWorkbench', () => {
     }
   );
 
+  it.each([
+    ['malformed JSON', '{not json'],
+    ['an unknown trigger kind', JSON.stringify({ ...DEFAULT_CONFIG, trigger: { ...DEFAULT_CONFIG.trigger, kind: 'Nope' } })],
+  ])('routes an unreadable stored config (%s) to the restore recovery screen without overwriting it', async (_label, payload) => {
+    const settingsSet = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('toolboxAPI', {
+      connections: { getActiveConnection: vi.fn().mockResolvedValue({ id: 'conn-1' }) },
+      events: { on: vi.fn(), off: vi.fn() },
+      settings: { get: vi.fn().mockResolvedValue(payload), set: settingsSet },
+    });
+    await render(<SidePaneBuilderWorkbench />);
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    expect(host?.querySelector('[role="alert"]')?.textContent).toContain('could not be read');
+    expect(host?.textContent).toContain('Retry restore');
+    expect(host?.textContent).toContain('Continue with defaults');
+    expect(host?.querySelector('[data-testid="title"]')).toBeNull();
+    await act(async () => { vi.advanceTimersByTime(600); await Promise.resolve(); });
+    expect(settingsSet).not.toHaveBeenCalled();
+    await act(async () => {
+      Array.from(host?.querySelectorAll('button') ?? [])
+        .find(button => button.textContent === 'Continue with defaults')?.click();
+    });
+    expect(host?.querySelector('[data-testid="title"]')?.textContent).toBe(DEFAULT_CONFIG.pane.title);
+  });
+
+  it('restores a config whose optional fields are wrong-typed, with those fields defaulted', async () => {
+    const stored = JSON.stringify({
+      ...DEFAULT_CONFIG,
+      pane: { ...DEFAULT_CONFIG.pane, title: 'Restored Title' },
+      trigger: { ...DEFAULT_CONFIG.trigger, kind: 'ManualJS' },
+      context: { ...DEFAULT_CONFIG.context, source: { kind: 'none' } },
+      target: { pageType: 'entitylist', entityName: 'account', viewId: 5 },
+    });
+    vi.stubGlobal('toolboxAPI', {
+      connections: { getActiveConnection: vi.fn().mockResolvedValue({ id: 'conn-1' }) },
+      events: { on: vi.fn(), off: vi.fn() },
+      settings: { get: vi.fn().mockResolvedValue(stored), set: vi.fn().mockResolvedValue(undefined) },
+    });
+    await render(<SidePaneBuilderWorkbench />);
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    expect(host?.querySelector('[role="alert"]')).toBeNull();
+    expect(host?.textContent).toContain('Restored Title');
+    expect((workbenchShellState.props?.config as PaneDefinitionConfig).target)
+      .toEqual({ pageType: 'entitylist', entityName: 'account', viewId: '', viewType: '' });
+  });
+
   it('retries a rejected restore without replacing saved config', async () => {
     const restored = { ...DEFAULT_CONFIG, pane: { ...DEFAULT_CONFIG.pane, title: 'Restored Title' } };
     const settingsGet = vi.fn()

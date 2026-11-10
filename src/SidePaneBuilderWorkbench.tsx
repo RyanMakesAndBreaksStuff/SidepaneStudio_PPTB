@@ -235,7 +235,12 @@ export function SidePaneBuilderWorkbench(): React.ReactElement {
           setConfig(stored);
           const orgKey = parseStoredOrgKey(raw);
           setRestoredOrg(orgKey ? { orgKey, selections: orgSelectionsOf(stored) } : null);
-        } else if (raw) console.warn('SidePaneBuilderWorkbench: unusable stored config, using defaults');
+        } else if (raw != null && raw !== '') {
+          // Something is stored but unreadable: offer Retry / Continue with defaults rather than overwrite it silently.
+          console.warn('SidePaneBuilderWorkbench: unusable stored config', raw);
+          setSettingsRestoreError('Your saved configuration could not be read. Retry, or continue with defaults.');
+          return;
+        }
       }
       setSettingsHydrated(true);
     } catch (err) {
