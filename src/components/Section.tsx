@@ -8,10 +8,12 @@ export interface SectionProps {
   icon?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Reaches the header button, so a caller can scroll to it and focus it. */
+  headerRef?: React.Ref<HTMLButtonElement>;
   children: React.ReactNode;
 }
 
-export function Section({ title, icon, open, onOpenChange, children }: SectionProps): React.ReactElement {
+export function Section({ title, icon, open, onOpenChange, headerRef, children }: SectionProps): React.ReactElement {
   const { isDark } = useTheme();
   const T = theme(isDark);
   const toggle = () => onOpenChange(!open);
@@ -19,6 +21,7 @@ export function Section({ title, icon, open, onOpenChange, children }: SectionPr
   return (
     <div style={{ borderBottom: `1px solid ${T.stroke1}` }}>
       <button
+        ref={headerRef}
         type="button"
         onClick={toggle}
         aria-expanded={open}

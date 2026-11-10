@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 import { theme } from '../theme/tokens';
 import { PaneDefinitionConfig } from '../types/PaneDefinitionConfig';
@@ -81,8 +81,11 @@ function WorkbenchShellContent({
   const [jumpRequest, setJumpRequest] = useState<JumpRequest | undefined>(undefined);
   const jump = (slot: SummarySlot) => {
     setNarrowTab('configure');
+    setConfigPanelOpen(true);
     setJumpRequest(prev => ({ slot, seq: (prev?.seq ?? 0) + 1 }));
   };
+  // Applied once: a request left in state would replay whenever the panel next mounts and reopen what the user closed.
+  const dropJump = useCallback((handled: JumpRequest) => setJumpRequest(prev => prev === handled ? undefined : prev), []);
 
   const validation = useMemo(() => validate(config, accessibleTables, orgMismatch), [config, accessibleTables, orgMismatch]);
 
@@ -104,6 +107,7 @@ function WorkbenchShellContent({
     metadataFilterDraft,
     onMetadataFilterDraftChange,
     jumpRequest,
+    onJumpHandled: dropJump,
   };
   const previewPanelProps = { config, onChange, validation, metadataService, xrm };
   const previewPanel = (

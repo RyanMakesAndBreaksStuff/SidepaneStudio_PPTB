@@ -130,6 +130,21 @@ describe('ConfigurePanel — jump requests', () => {
     expect(sectionButton('Pane & behaviour')?.getAttribute('aria-expanded')).toBe('true');
   });
 
+  it('scrolls to and focuses the header of the section it opens, and reports the request handled once', async () => {
+    const scrolled: Element[] = [];
+    const scroll = vi.spyOn(Element.prototype, 'scrollIntoView').mockImplementation(function (this: Element) { scrolled.push(this); });
+    const onJumpHandled = vi.fn();
+    const rerender = await renderPanel(DEFAULT_CONFIG);
+    const request = { slot: 'pane', seq: 1 } as const;
+    await rerender({ jumpRequest: request, onJumpHandled });
+    const header = sectionButton('Pane & behaviour');
+    expect(scrolled).toEqual([header]);
+    expect(document.activeElement).toBe(header);
+    expect(onJumpHandled).toHaveBeenCalledTimes(1);
+    expect(onJumpHandled).toHaveBeenCalledWith(request);
+    scroll.mockRestore();
+  });
+
   it('re-expands a collapsed section for each slot, including a repeated slot', async () => {
     const rerender = await renderPanel(DEFAULT_CONFIG);
     let seq = 0;
