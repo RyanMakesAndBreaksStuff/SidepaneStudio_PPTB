@@ -20,6 +20,9 @@
   record's table at runtime (`getEntityName()`), so a table name is only
   required where a picker needs it.
 - Web resources also receive the clicked lookup tag as URL `data`.
+- Custom pages receive `recordId` as a bare GUID, without braces, as Microsoft
+  requires for record-bound custom pages; a page that already strips braces is
+  unaffected.
 - Every picker (tables, forms, views, columns, lookup columns, dashboards) is
   the searchable combobox with the custom-table filter inside the input.
 - The Form and Grid previews use the configured trigger table, form and view;

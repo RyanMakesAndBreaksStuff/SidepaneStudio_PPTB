@@ -821,7 +821,7 @@ describe('buildNavigateInput — record context (CR-001)', () => {
     expect(code).toContain('pageType: "custom"');
     expect(code).toContain('entityName: "account"');
     expect(code).toContain('var recordId = primaryControl.data.entity.getId();');
-    expect(code).toContain('recordId: recordId');
+    expect(code).toContain("recordId: recordId.replace(/[{}]/g, '')");
   });
 
   it('custom page omits both record fields when the source is none', () => {
@@ -838,7 +838,7 @@ describe('buildNavigateInput — record context (CR-001)', () => {
       cfg({ host: { entityName: '' }, context: { source: { kind: 'host' } } })
     );
     expect(code).toContain('entityName: primaryControl.data.entity.getEntityName()');
-    expect(code).toContain('recordId: recordId');
+    expect(code).toContain("recordId: recordId.replace(/[{}]/g, '')");
   });
 
   it('custom page + FormOnLoad uses formContext', () => {
@@ -849,7 +849,7 @@ describe('buildNavigateInput — record context (CR-001)', () => {
       })
     );
     expect(code).toContain('var recordId = formContext.data.entity.getId();');
-    expect(code).toContain('recordId: recordId');
+    expect(code).toContain("recordId: recordId.replace(/[{}]/g, '')");
   });
 
   it('custom page + SelectedRow + GridButton uses selectedRecordId', () => {
@@ -860,7 +860,7 @@ describe('buildNavigateInput — record context (CR-001)', () => {
       })
     );
     expect(code).toContain('var recordId = selectedRecordId;');
-    expect(code).toContain('recordId: recordId');
+    expect(code).toContain("recordId: recordId.replace(/[{}]/g, '')");
   });
 
   it('custom page + Static emits the normalized GUID literal', () => {
@@ -870,7 +870,32 @@ describe('buildNavigateInput — record context (CR-001)', () => {
       })
     );
     expect(code).toContain('var recordId = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";');
-    expect(code).toContain('recordId: recordId');
+    expect(code).toContain("recordId: recordId.replace(/[{}]/g, '')");
+  });
+
+  it('sends the custom page a bare recordId GUID from both outputs (C2)', async () => {
+    const config = cfg({
+      pane: { paneId: 'p' },
+      trigger: { kind: 'FormButton', namespace: 'TestNs', functionName: 'open' },
+      target: { pageType: 'custom', name: 'sps_Page' },
+      host: { entityName: 'account' }, context: { source: { kind: 'host' } },
+    });
+    const primaryControl = { data: { entity: { getEntityName: () => 'account', getId: () => '{A1}' } } };
+    const pane = { navigate: vi.fn().mockResolvedValue(undefined) };
+    const xrm = {
+      App: { sidePanes: { state: 0, getPane: vi.fn(), createPane: vi.fn().mockResolvedValue(pane), getAllPanes: vi.fn().mockReturnValue([]) } },
+      Navigation: { openErrorDialog: vi.fn(), openAlertDialog: vi.fn() },
+    };
+    const basic = new Function('window', 'Xrm', `${generateBasicScript(config)}\nreturn TestNs.open;`)({}, xrm) as (arg: unknown) => void;
+    basic(primaryControl);
+    await vi.waitFor(() => expect(pane.navigate).toHaveBeenCalled());
+    expect(pane.navigate).toHaveBeenCalledWith({ pageType: 'custom', name: 'sps_Page', entityName: 'account', recordId: 'A1' });
+
+    const open = vi.fn();
+    const library = new Function('Xrm', 'SidePaneHelper', `${generateLibraryScript(config)}\nreturn TestNs.open;`)(
+      { App: { sidePanes: {} }, Navigation: { openErrorDialog: vi.fn() } }, { open }) as (arg: unknown) => void;
+    library(primaryControl);
+    expect(open).toHaveBeenCalledWith(expect.objectContaining({ pageType: 'custom', name: 'sps_Page', entityName: 'account', recordId: 'A1' }));
   });
 
   it('webresource emits URL-encoded JSON data when a record resolves', () => {

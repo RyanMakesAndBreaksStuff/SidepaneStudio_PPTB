@@ -122,7 +122,7 @@ ${registrar} = function(executionContext) {
 };`;
 }
 
-/** Generative pages read recordId as a bare GUID; form, grid and tag IDs arrive as {GUID}. Static IDs are already normalized literals. */
+/** Custom and generative pages read recordId as a bare GUID; form, grid and tag IDs arrive as {GUID}. Static IDs are already normalized literals. */
 function bareGuidExpr(idExpr: string): string {
   return idExpr.startsWith('"') ? idExpr : `${idExpr}.replace(/[{}]/g, '')`;
 }
@@ -263,7 +263,7 @@ function targetFields(config: PaneDefinitionConfig, rc: RecordContext, formConte
   switch (target.pageType) {
     case 'custom':
       fields.push(['name', JSON.stringify(target.name)]);
-      if (record) fields.push(['entityName', record.entity], ['recordId', record.id]);
+      if (record) fields.push(['entityName', record.entity], ['recordId', bareGuidExpr(record.id)]);
       break;
     case 'entityrecord': {
       // Create mode: no entityId, and the configured table wins over the context table.
