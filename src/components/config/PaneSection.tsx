@@ -16,7 +16,7 @@ export type PaneSectionProps = SectionSharedProps & Pick<ConfigurePanelProps,
   'metadataFilterError' | 'onSaveMetadataFilterConfig' | 'onResetMetadataFilterConfig' |
   'metadataFilterDraft' | 'onMetadataFilterDraftChange'>;
 
-export function PaneSection({ config, onChange, readOnly, errors, warnings, metadataFilterConfig,
+export function PaneSection({ config, onChange, errors, warnings, metadataFilterConfig,
   defaultMetadataFilterConfig, metadataFilterPersistenceAvailable = false, metadataFilterError,
   onSaveMetadataFilterConfig, onResetMetadataFilterConfig, metadataFilterDraft,
   onMetadataFilterDraftChange }: PaneSectionProps): React.ReactElement {
@@ -31,18 +31,18 @@ export function PaneSection({ config, onChange, readOnly, errors, warnings, meta
     <>
       <Field label="Unique pane ID" required hint="Stable key — used to reuse or find this pane" error={errors['pane.paneId']}
         warning={warnings['pane.paneId']}>
-        <Input value={pane.paneId} disabled={readOnly} placeholder="relatedRecordsPane"
+        <Input value={pane.paneId} placeholder="relatedRecordsPane"
           error={!!errors['pane.paneId']} onChange={value => patchPane('paneId', value)} />
       </Field>
       <Field label="Pane title" warning={warnings['pane.title']}>
-        <Input value={pane.title} disabled={readOnly} placeholder="My Side Pane" onChange={value => patchPane('title', value)} />
+        <Input value={pane.title} placeholder="My Side Pane" onChange={value => patchPane('title', value)} />
       </Field>
       <Field label="Tab icon" hint="Web resource path — must be published and prefixed with WebResources/ to render">
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <div aria-hidden="true" style={{ width: 34, height: 34, background: T.surface3,
             border: `2px dashed ${T.stroke1}`, borderRadius: T.rM, display: 'flex',
             alignItems: 'center', justifyContent: 'center', color: T.fg3, fontSize: 15, flexShrink: 0 }}>🖼</div>
-          <Input value={pane.imageSrc} disabled={readOnly} placeholder="WebResources/sps_/icons/myicon.svg"
+          <Input value={pane.imageSrc} placeholder="WebResources/sps_/icons/myicon.svg"
             onChange={value => patchPane('imageSrc', value)} />
         </div>
         {warnings['pane.imageSrc']
@@ -85,7 +85,7 @@ export function PaneSection({ config, onChange, readOnly, errors, warnings, meta
         : 'Close and recreate the pane when it is already open'}
         checked={behavior.reuseExistingPane} onChange={value => patchBehavior('reuseExistingPane', value)} />
       <Field label="Initial badge value" hint="0 = no badge shown">
-        <Input type="number" value={pane.badgeValue} disabled={readOnly}
+        <Input type="number" value={pane.badgeValue}
           onChange={value => patchPane('badgeValue', +value)} />
       </Field>
       {metadataFilterConfig && defaultMetadataFilterConfig && onSaveMetadataFilterConfig && onResetMetadataFilterConfig && (

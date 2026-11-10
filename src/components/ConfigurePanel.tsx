@@ -19,7 +19,6 @@ export interface ConfigurePanelProps {
   config: PaneDefinitionConfig;
   onChange: (updater: (prev: PaneDefinitionConfig) => PaneDefinitionConfig) => void;
   validation: ValidationResult;
-  readOnly?: boolean;
   metadataService: MetadataService;
   formXmlService?: FormXmlService;
   onAccessibleTablesChange?: (tables: Set<string> | undefined) => void;
@@ -37,7 +36,7 @@ export interface ConfigurePanelProps {
 }
 
 export function ConfigurePanel(props: ConfigurePanelProps): React.ReactElement {
-  const { config, onChange, validation, readOnly, metadataService, onAccessibleTablesChange,
+  const { config, onChange, validation, metadataService, onAccessibleTablesChange,
     formXmlService, metadataFilterConfig, defaultMetadataFilterConfig, metadataFilterPersistenceAvailable,
     metadataFilterError, onSaveMetadataFilterConfig, onResetMetadataFilterConfig,
     metadataFilterDraft, onMetadataFilterDraftChange } = props;
@@ -61,10 +60,9 @@ export function ConfigurePanel(props: ConfigurePanelProps): React.ReactElement {
     header.current?.focus({ preventScroll: true });
     onJumpHandled?.(jumpRequest);
   }, [jumpRequest]);
-  const sectionProps = { config, onChange, errors, warnings, metadataService, readOnly, onAccessibleTablesChange };
+  const sectionProps = { config, onChange, errors, warnings, metadataService, onAccessibleTablesChange };
   return (
-    <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden',
-      opacity: readOnly ? 0.7 : 1, pointerEvents: readOnly ? 'none' : 'auto' }}>
+    <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
       <Section title="Trigger & source" icon="1" open={triggerOpen} onOpenChange={setTriggerOpen} headerRef={triggerHeader}>
         <TriggerSection {...sectionProps} formXmlService={formXmlService} />
       </Section>

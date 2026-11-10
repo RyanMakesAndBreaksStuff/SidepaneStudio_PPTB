@@ -9,8 +9,6 @@ import {
 } from '../types/PaneDefinitionConfig';
 import { coerceConfig, SOURCE_KINDS, TRIGGER_KINDS } from './triggerCapabilities';
 
-export { TRIGGER_KINDS };
-
 const PAGE_TYPES: PageType[] = ['custom', 'entityrecord', 'entitylist', 'webresource', 'dashboard', 'search', 'generative'];
 const LEGACY_TRIGGERS: Record<string, { kind: TriggerKind; surface: GridSurface }> = {
   MainGridButton: { kind: 'GridButton', surface: 'main' },

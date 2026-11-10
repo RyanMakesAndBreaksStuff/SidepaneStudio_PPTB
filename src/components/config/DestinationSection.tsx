@@ -94,7 +94,7 @@ function openDocsLink(event: React.MouseEvent<HTMLAnchorElement>): void {
 }
 
 export function DestinationSection({ config, onChange, metadataService, formXmlService,
-  readOnly, onAccessibleTablesChange, errors, warnings }: DestinationSectionProps): React.ReactElement {
+  onAccessibleTablesChange, errors, warnings }: DestinationSectionProps): React.ReactElement {
   const { isDark } = useTheme();
   const T = theme(isDark);
   const { target, trigger, host, context } = config;
@@ -133,7 +133,7 @@ export function DestinationSection({ config, onChange, metadataService, formXmlS
       </Field>
       {target.pageType === 'custom' && (
         <Field label="Custom page name" required hint="Logical name from your solution (e.g. sps_MyPage)" error={errors['target.name']}>
-          <Input value={target.name} disabled={readOnly} placeholder="sps_SidePaneBuilderPage" error={!!errors['target.name']}
+          <Input value={target.name} placeholder="sps_SidePaneBuilderPage" error={!!errors['target.name']}
             onChange={name => onChange(prev => patchTarget(prev, 'custom', { name }))} />
         </Field>
       )}
@@ -158,7 +158,7 @@ export function DestinationSection({ config, onChange, metadataService, formXmlS
         <Field label="Lookup column" required hint="Lookup on the trigger table whose value opens in the pane"
           error={errors['context.source.attribute']}>
           <LookupPicker entityName={host.entityName} value={source.attribute} metadataService={metadataService}
-            disabled={readOnly} error={!!errors['context.source.attribute']} showDestination={false}
+            error={!!errors['context.source.attribute']} showDestination={false}
             onChange={(value, selected) => onChange(prev => applyLookup(prev, host.entityName,
               selected ?? (value ? { LogicalName: value } : null)))}
             onSelectionChange={lookup => setResolvedLookup({
@@ -182,7 +182,7 @@ export function DestinationSection({ config, onChange, metadataService, formXmlS
               const normalized = normalizeGuid((event.target as HTMLInputElement).value);
               if (normalized) onChange(prev => patchSource(prev, 'fixed', { id: normalized }));
             }}>
-              <Input value={source.id} disabled={readOnly} placeholder="00000000-0000-0000-0000-000000000000"
+              <Input value={source.id} placeholder="00000000-0000-0000-0000-000000000000"
                 error={!!errors['context.source.id']}
                 onChange={id => onChange(prev => patchSource(prev, 'fixed', { id }))} />
             </div>
@@ -190,7 +190,7 @@ export function DestinationSection({ config, onChange, metadataService, formXmlS
           {target.pageType !== 'entityrecord' && (
             <Field label="Record table" error={errors['context.source.entityName']}>
               <TablePicker ariaLabel="Record table" value={source.entityName} metadataService={metadataService}
-                disabled={readOnly} error={!!errors['context.source.entityName']}
+                error={!!errors['context.source.entityName']}
                 onChange={entityName => onChange(prev => patchSource(prev, 'fixed', { entityName }))} />
             </Field>
           )}
@@ -199,7 +199,7 @@ export function DestinationSection({ config, onChange, metadataService, formXmlS
       {sendsRecord(config) && (
         <Field label="Variable name" hint="Name used for the resolved record ID in generated JavaScript"
           error={errors['context.variableName']}>
-          <Input value={context.variableName} disabled={readOnly} placeholder="recordId"
+          <Input value={context.variableName} placeholder="recordId"
             error={!!errors['context.variableName']}
             onChange={variableName => onChange(prev => ({
               ...prev, context: { ...prev.context, variableName },
@@ -213,7 +213,7 @@ export function DestinationSection({ config, onChange, metadataService, formXmlS
             hint={relatedTarget ? 'Derived from the selected lookup' : undefined}>
             {creating || source.kind === 'fixed' ? (
               <TablePicker ariaLabel="Destination table" value={target.entityName} metadataService={metadataService}
-                disabled={readOnly} error={!!errors['target.entityName']} onAccessibleTablesChange={onAccessibleTablesChange}
+                error={!!errors['target.entityName']} onAccessibleTablesChange={onAccessibleTablesChange}
                 onChange={entityName => onChange(prev => prev.target.pageType !== 'entityrecord' || prev.target.entityName === entityName ? prev
                   // Form data names columns of the previous table; a first pick keeps data typed before any table was chosen.
                   : patchTarget(prev, 'entityrecord', { entityName, formId: '', tabName: '', data: prev.target.entityName ? '' : prev.target.data }))} />
@@ -248,7 +248,7 @@ export function DestinationSection({ config, onChange, metadataService, formXmlS
             <Field label="Form" error={errors['target.formId']}
               hint={!tableConfirmed ? 'Choose a table to pick a form.' : undefined}>
               <FormSelector entityName={destination} onEntityNameChange={() => undefined}
-                selectedFormId={target.formId} hideEntityPicker disabled={readOnly || !tableConfirmed}
+                selectedFormId={target.formId} hideEntityPicker disabled={!tableConfirmed}
                 formXmlService={formXmlService} metadataService={metadataService}
                 onFormSelected={selection => onChange(prev => patchTarget(prev, 'entityrecord',
                   { formId: selection?.formId ?? '', tabName: '' }))} />
@@ -256,18 +256,18 @@ export function DestinationSection({ config, onChange, metadataService, formXmlS
           )}
           {source.kind !== 'clickedTag' && (
             <Field label="Tab name" hint={!tableConfirmed ? 'Choose a table to pick a form.' : 'Logical name of the form tab to focus'}>
-              <Input value={target.tabName} disabled={readOnly || !tableConfirmed}
+              <Input value={target.tabName} disabled={!tableConfirmed}
                 onChange={tabName => onChange(prev => patchTarget(prev, 'entityrecord', { tabName }))} />
             </Field>
           )}
-          <JsonDataField label="Form data" value={target.data} disabled={readOnly} placeholder={FORM_DATA_EXAMPLE}
+          <JsonDataField label="Form data" value={target.data} placeholder={FORM_DATA_EXAMPLE}
             error={errors['target.data']}
             hint="Optional JSON object of extra form parameters. Keys are column logical names (e.g. name) or pre-registered custom params. Lookups need a pair/triple: primarycontactid + primarycontactidname, or parentcustomerid + parentcustomeridname + parentcustomeridtype (account|contact|systemuser|team)."
             onChange={data => onChange(prev => patchTarget(prev, 'entityrecord', { data }))}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              <button type="button" disabled={readOnly} onClick={() => onChange(prev => patchTarget(prev, 'entityrecord', { data: FORM_DATA_EXAMPLE }))}
+              <button type="button" onClick={() => onChange(prev => patchTarget(prev, 'entityrecord', { data: FORM_DATA_EXAMPLE }))}
                 style={{ fontSize: 12, padding: '4px 10px', borderRadius: T.rM, border: `1px solid ${T.stroke1}`,
-                  background: T.surface2, color: T.fg1, fontFamily: T.font, cursor: readOnly ? 'default' : 'pointer' }}>Insert example</button>
+                  background: T.surface2, color: T.fg1, fontFamily: T.font, cursor: 'pointer' }}>Insert example</button>
               <span style={{ fontSize: 11, color: T.fg3, fontFamily: T.font }}>
                 <a href="https://learn.microsoft.com/en-us/power-apps/developer/model-driven-apps/set-field-values-using-parameters-passed-form"
                   target="_blank" rel="noreferrer" onClick={openDocsLink} style={{ color: T.accent }}>Set column values</a>
@@ -286,12 +286,12 @@ export function DestinationSection({ config, onChange, metadataService, formXmlS
         <>
           <Field label="Destination table" required error={errors['target.entityName']} warning={warnings['target.entityName']}>
             <TablePicker ariaLabel="Destination table" value={target.entityName} metadataService={metadataService}
-              disabled={readOnly} error={!!errors['target.entityName']} onAccessibleTablesChange={onAccessibleTablesChange}
+              error={!!errors['target.entityName']} onAccessibleTablesChange={onAccessibleTablesChange}
               onChange={entityName => onChange(prev => patchTarget(prev, 'entitylist', { entityName, viewId: '', viewType: '' }))} />
           </Field>
           <Field label="View" error={errors['target.viewId'] || errors['target.viewType']}>
             <ViewPicker entityName={target.entityName} value={target.viewId} viewType={target.viewType}
-              metadataService={metadataService} disabled={readOnly}
+              metadataService={metadataService}
               onChange={view => onChange(prev => patchTarget(prev, 'entitylist', { viewId: view?.id ?? '', viewType: view?.viewType ?? '' }))} />
           </Field>
         </>
@@ -300,11 +300,11 @@ export function DestinationSection({ config, onChange, metadataService, formXmlS
         <>
           <Field label="Page ID" required hint="In the app designer, select the page; the properties pane shows the ID in the Generative page field"
             error={errors['target.pageId']}>
-            <Input value={target.pageId} disabled={readOnly} placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+            <Input value={target.pageId} placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
               error={!!errors['target.pageId']} onChange={pageId => onChange(prev => patchTarget(prev, 'generative', { pageId }))} />
           </Field>
           <JsonDataField label="Page data" hint="Optional JSON object the page reads as pageInput.data"
-            value={target.data} disabled={readOnly} error={errors['target.data']}
+            value={target.data} error={errors['target.data']}
             onChange={data => onChange(prev => patchTarget(prev, 'generative', { data }))} />
           {warnings['target.pageType'] && <Callout type="warn" icon="⚠">
             {warnings['target.pageType'].join(' ')}{' '}
@@ -316,7 +316,7 @@ export function DestinationSection({ config, onChange, metadataService, formXmlS
       {target.pageType === 'webresource' && (
         <>
           <Field label="Web resource name" required hint="Logical name (e.g. sps_/pages/helper.html)" error={errors['target.name']}>
-            <Input value={target.name} disabled={readOnly} placeholder="sps_/pages/helper.html"
+            <Input value={target.name} placeholder="sps_/pages/helper.html"
               error={!!errors['target.name']} onChange={name => onChange(prev => patchTarget(prev, 'webresource', { name }))} />
           </Field>
           <Callout type="warn" icon="⚠">Web resources inside a side pane do NOT have access to <code>Xrm</code> or <code>parent.Xrm</code>. Pass data via URL <code>data</code> parameter (URL-encoded JSON).</Callout>
@@ -324,7 +324,7 @@ export function DestinationSection({ config, onChange, metadataService, formXmlS
       )}
       {target.pageType === 'dashboard' && (
         <Field label="Dashboard" required hint="Select a system or personal dashboard" error={errors['target.dashboardId']}>
-          <DashboardPicker value={target.dashboardId} metadataService={metadataService} disabled={readOnly}
+          <DashboardPicker value={target.dashboardId} metadataService={metadataService}
             error={!!errors['target.dashboardId']}
             onChange={(dashboardId, dashboardName) => onChange(prev => patchTarget(prev, 'dashboard', { dashboardId, dashboardName }))} />
         </Field>
@@ -332,7 +332,7 @@ export function DestinationSection({ config, onChange, metadataService, formXmlS
       {target.pageType === 'search' && (
         <>
           <Field label="Search text" hint="Pre-fill the global search box (optional)">
-            <Input value={target.searchText} disabled={readOnly} placeholder="e.g. Contoso"
+            <Input value={target.searchText} placeholder="e.g. Contoso"
               onChange={searchText => onChange(prev => patchTarget(prev, 'search', { searchText }))} />
           </Field>
           {warnings['target.pageType'] && <Callout type="warn" icon="⚠">{warnings['target.pageType'].join(' ')}</Callout>}
