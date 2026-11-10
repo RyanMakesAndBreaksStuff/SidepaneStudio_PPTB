@@ -239,3 +239,60 @@ describe('DestinationSection — lookup destination copy', () => {
     expect(host!.textContent).toContain('Choose a table to pick a form.');
   });
 });
+
+describe('DestinationSection — docs links', () => {
+  const formDataConfig = () => cfg({ host: { entityName: 'account' },
+    target: { pageType: 'entityrecord', entityName: 'contact', formId: '', tabName: '', data: '', createNew: true },
+    context: { source: { kind: 'none' } } });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  async function clickDocsLink(): Promise<MouseEvent> {
+    const link = Array.from(host!.querySelectorAll('a')).find(a => a.textContent === 'Set column values')!;
+    const event = new MouseEvent('click', { bubbles: true, cancelable: true });
+    await act(async () => {
+      link.dispatchEvent(event);
+      await new Promise(resolve => setTimeout(resolve, 0));
+    });
+    return event;
+  }
+
+  it('opens the link in the connection browser when the host can', async () => {
+    const openInConnectionBrowser = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('toolboxAPI', { utils: { getCurrentTheme: vi.fn().mockResolvedValue('dark'), openInConnectionBrowser } });
+    await renderSection(formDataConfig());
+    const event = await clickDocsLink();
+    expect(event.defaultPrevented).toBe(true);
+    expect(openInConnectionBrowser).toHaveBeenCalledWith(expect.stringContaining('set-field-values-using-parameters-passed-form'));
+  });
+
+  it.each([
+    ['is absent on an older host', {}],
+    ['rejects', { openInConnectionBrowser: vi.fn().mockRejectedValue(new Error('blocked')) }],
+  ])('copies the link and says so when openInConnectionBrowser %s', async (_label, openers) => {
+    const copyToClipboard = vi.fn().mockResolvedValue(undefined);
+    const showNotification = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('toolboxAPI', { utils: { getCurrentTheme: vi.fn().mockResolvedValue('dark'), ...openers, copyToClipboard, showNotification } });
+    await renderSection(formDataConfig());
+    const event = await clickDocsLink();
+    expect(event.defaultPrevented).toBe(true);
+    expect(copyToClipboard).toHaveBeenCalledWith(expect.stringContaining('set-field-values-using-parameters-passed-form'));
+    expect(showNotification).toHaveBeenCalledWith(expect.objectContaining({
+      title: 'Link copied', body: expect.stringContaining('clipboard'),
+    }));
+  });
+
+  it('puts the address in the notification when it can neither open nor copy the link', async () => {
+    const showNotification = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('navigator', { ...navigator, clipboard: undefined });
+    vi.stubGlobal('toolboxAPI', { utils: { getCurrentTheme: vi.fn().mockResolvedValue('dark'), showNotification } });
+    await renderSection(formDataConfig());
+    await clickDocsLink();
+    expect(showNotification).toHaveBeenCalledWith(expect.objectContaining({
+      title: 'Could not open link',
+      body: expect.stringContaining('set-field-values-using-parameters-passed-form'),
+    }));
+  });
+});

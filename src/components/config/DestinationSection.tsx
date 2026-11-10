@@ -8,6 +8,8 @@ import { RECORD_TARGETS } from '../../types/PaneDefinitionConfig';
 import { allowedSources, allowedTargets, defaultSource, destinationTable, isCreating, resetTarget, sendsRecord } from '../../services/triggerCapabilities';
 import { applyLookup } from '../../services/relatedRecordConfig';
 import { normalizeGuid } from '../../services/odataGuards';
+import { copyText } from '../../services/clipboard';
+import { notify } from '../../services/notify';
 import type { ConfigurePanelProps } from '../ConfigurePanel';
 import type { SectionSharedProps } from './TriggerSection';
 import { ChoiceGroup } from '../ChoiceGroup';
@@ -68,11 +70,27 @@ function patchSource<K extends RecordSourceKind>(
   return { ...prev, context: { ...prev.context, source: { ...prev.context.source, ...fields } as RecordSource } };
 }
 
+/** The host denies window.open and older hosts lack openInConnectionBrowser, so a link that cannot open is copied instead. */
+async function openOrCopyLink(href: string): Promise<void> {
+  try {
+    const open = window.toolboxAPI?.utils?.openInConnectionBrowser;
+    if (!open) throw new Error('openInConnectionBrowser is unavailable');
+    await open(href);
+    return;
+  } catch {
+    /* fall through to copying the address */
+  }
+  try {
+    await copyText(href);
+    notify('Link copied', 'This host could not open the link, so it was copied to your clipboard. Paste it into a browser.', 'info');
+  } catch {
+    notify('Could not open link', `Open this address in a browser: ${href}`, 'warning');
+  }
+}
+
 function openDocsLink(event: React.MouseEvent<HTMLAnchorElement>): void {
-  const open = window.toolboxAPI?.utils?.openInConnectionBrowser;
-  if (!open) return;
   event.preventDefault();
-  void open(event.currentTarget.href);
+  void openOrCopyLink(event.currentTarget.href);
 }
 
 export function DestinationSection({ config, onChange, metadataService, formXmlService,
