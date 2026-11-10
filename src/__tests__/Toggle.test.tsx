@@ -3,7 +3,9 @@ import { useState, act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it } from 'vitest';
 import { Toggle } from '../components/Toggle';
-import { ThemeProvider } from '../contexts/ThemeContext';
+import { ThemeContext, ThemeProvider } from '../contexts/ThemeContext';
+import { theme } from '../theme/tokens';
+import { rgb } from './testHelpers';
 
 let root: Root | undefined;
 let host: HTMLDivElement | undefined;
@@ -76,4 +78,22 @@ describe('Toggle', () => {
     await act(async () => { control.click(); });
     expect(control.getAttribute('aria-checked')).toBe('true');
   });
+
+  it.each([['light', false], ['dark', true]] as const)(
+    'draws a square track and a knob that stays visible in both states in the %s theme', async (_, isDark) => {
+      const T = theme(isDark);
+      await render(<ThemeContext.Provider value={{ isDark }}><Harness /></ThemeContext.Provider>);
+      const control = host!.querySelector<HTMLElement>('[role="switch"]')!;
+      const track = control.firstElementChild as HTMLElement;
+      const knob = track.firstElementChild as HTMLElement;
+
+      expect(track.style.backgroundColor).toBe(rgb(T.strokeAcc));
+      expect(knob.style.backgroundColor).toBe(rgb(T.surface1));
+      expect([control.style.borderRadius, track.style.borderRadius, knob.style.borderRadius]).toEqual([T.rS, T.rS, T.rS]);
+
+      await act(async () => { control.click(); });
+      expect(track.style.backgroundColor).toBe(rgb(T.accent));
+      expect(knob.style.backgroundColor).toBe(rgb(T.accentFg));
+    }
+  );
 });

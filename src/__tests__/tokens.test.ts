@@ -39,6 +39,6 @@ describe.each([['light', false], ['dark', true]] as const)('Newsprint %s tokens'
   ] as const)('text %s on %s ≥ 4.5:1', (fg, bg) => {
     expect(ratio(T[fg], T[bg])).toBeGreaterThanOrEqual(4.5);
   });
-  it.each([['strokeAcc', 'pageBg'], ['strokeAcc', 'surface1'], ['strokeAcc', 'surface2']] as const)(
+  it.each([['strokeAcc', 'pageBg'], ['strokeAcc', 'surface1'], ['strokeAcc', 'surface2'], ['surface1', 'strokeAcc']] as const)(
     'control %s on %s ≥ 3:1', (fg, bg) => { expect(ratio(T[fg], T[bg])).toBeGreaterThanOrEqual(3); });
 });

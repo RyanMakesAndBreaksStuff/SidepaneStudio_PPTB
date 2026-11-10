@@ -42,13 +42,13 @@ export function Toggle({ label, desc, checked, onChange }: ToggleProps): React.R
         onBlur={() => setFocusVisible(false)}
         style={{
           flexShrink: 0, display: 'inline-flex', alignItems: 'center', padding: 0,
-          border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: 11,
+          border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: T.rS,
           outline: focusVisible ? `2px solid ${T.accent}` : 'none', outlineOffset: 2,
         }}
       >
         <span
           style={{
-            display: 'block', width: 36, height: 18, borderRadius: 9,
+            display: 'block', width: 36, height: 18, borderRadius: T.rS,
             background: checked ? T.accent : T.strokeAcc,
             position: 'relative', transition: 'background 200ms',
           }}
@@ -56,8 +56,8 @@ export function Toggle({ label, desc, checked, onChange }: ToggleProps): React.R
           <span style={{
             display: 'block', position: 'absolute',
             left: checked ? 19 : 1, top: 1,
-            width: 16, height: 16, borderRadius: '50%',
-            background: 'white',
+            width: 16, height: 16, borderRadius: T.rS,
+            background: checked ? T.accentFg : T.surface1,
             transition: 'left 200ms cubic-bezier(.4,0,.2,1)',
             boxShadow: '0 1px 3px rgba(0,0,0,.25)',
           }} />
