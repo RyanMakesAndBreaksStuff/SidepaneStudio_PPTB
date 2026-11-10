@@ -259,15 +259,32 @@ export function SidePaneBuilderWorkbench(): React.ReactElement {
   // Persist config to PPTB settings, debounced 500ms. An unconfirmed restore keeps the org it was saved for;
   // an unknown active org saves no key, like a legacy payload.
   const persistOrgKey = activeOrgKey === null ? null : savedOrgKey ?? activeOrgKey;
+  const pendingSaveRef = useRef<(() => void) | null>(null);
   useEffect(() => {
+    pendingSaveRef.current = null;
     const toolbox = window.toolboxAPI;
     if (!toolbox || !settingsHydrated || !configDirtyRef.current) return;
-    const id = setTimeout(() => {
+    const save = () => {
+      if (pendingSaveRef.current !== save) return;
+      pendingSaveRef.current = null;
       toolbox.settings.set('lastConfig', JSON.stringify(persistOrgKey ? { ...config, orgKey: persistOrgKey } : config))
         .catch((err: unknown) => reportSettingsFailure('Saving your configuration', err));
-    }, 500);
+    };
+    pendingSaveRef.current = save;
+    const id = setTimeout(save, 500);
     return () => clearTimeout(id);
   }, [config, settingsHydrated, persistOrgKey]);
+
+  // Unload hooks are unreliable in this host, so a hidden window or an unmount is the last chance to write the pending edit.
+  useEffect(() => {
+    const flush = () => pendingSaveRef.current?.();
+    const onVisibilityChange = () => { if (document.visibilityState === 'hidden') flush(); };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      flush();
+    };
+  }, []);
 
   const handleChange = useCallback(
     (updater: (prev: PaneDefinitionConfig) => PaneDefinitionConfig) => {

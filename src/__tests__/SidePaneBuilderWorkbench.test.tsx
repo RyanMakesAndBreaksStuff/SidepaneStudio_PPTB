@@ -609,3 +609,88 @@ describe('SidePaneBuilderWorkbench', () => {
     })).not.toThrow();
   });
 });
+
+describe('SidePaneBuilderWorkbench — pending save flush', () => {
+  const settingsSet = vi.fn();
+
+  function setVisibility(state: 'visible' | 'hidden') {
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => state });
+    document.dispatchEvent(new Event('visibilitychange'));
+  }
+
+  async function renderHydrated() {
+    settingsSet.mockReset().mockResolvedValue(undefined);
+    vi.stubGlobal('toolboxAPI', {
+      connections: { getActiveConnection: vi.fn().mockResolvedValue({ id: 'conn-1' }) },
+      events: { on: vi.fn(), off: vi.fn() },
+      settings: { get: vi.fn().mockResolvedValue(null), set: settingsSet },
+    });
+    await render(<SidePaneBuilderWorkbench />);
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+  }
+
+  async function editTitle() {
+    await act(async () => {
+      Array.from(host?.querySelectorAll('button') ?? []).find(b => b.textContent === 'Edit title')?.click();
+    });
+  }
+
+  afterEach(() => {
+    Reflect.deleteProperty(document, 'visibilityState');
+  });
+
+  it('writes the pending edit as soon as the window is hidden, and only once', async () => {
+    await renderHydrated();
+    await editTitle();
+    expect(settingsSet).not.toHaveBeenCalled();
+
+    await act(async () => { setVisibility('hidden'); });
+    expect(settingsSet).toHaveBeenCalledTimes(1);
+    expect(settingsSet).toHaveBeenCalledWith('lastConfig', expect.stringContaining('"title":"Edited Title"'));
+
+    await act(async () => { vi.advanceTimersByTime(600); await Promise.resolve(); });
+    expect(settingsSet).toHaveBeenCalledTimes(1);
+  });
+
+  it('writes nothing on hide when no edit is pending', async () => {
+    await renderHydrated();
+    await act(async () => { setVisibility('hidden'); });
+    await act(async () => { setVisibility('visible'); });
+    expect(settingsSet).not.toHaveBeenCalled();
+  });
+
+  it('writes the pending edit when the workbench unmounts', async () => {
+    await renderHydrated();
+    await editTitle();
+    expect(settingsSet).not.toHaveBeenCalled();
+
+    await act(async () => { root?.unmount(); });
+    root = undefined;
+
+    expect(settingsSet).toHaveBeenCalledTimes(1);
+    expect(settingsSet).toHaveBeenCalledWith('lastConfig', expect.stringContaining('"title":"Edited Title"'));
+  });
+
+  it('does not write the pre-reset config when the window is hidden after Reset', async () => {
+    await renderHydrated();
+    await editTitle();
+    await act(async () => {
+      const onReset = workbenchShellState.props?.onReset as () => Promise<void>;
+      await onReset();
+    });
+    await act(async () => { setVisibility('hidden'); });
+
+    expect(settingsSet).toHaveBeenCalledTimes(1);
+    expect(settingsSet).toHaveBeenCalledWith('lastConfig', null);
+  });
+
+  it('keeps the 500 ms debounce for ordinary edits', async () => {
+    await renderHydrated();
+    await editTitle();
+    await editTitle();
+    await act(async () => { vi.advanceTimersByTime(499); });
+    expect(settingsSet).not.toHaveBeenCalled();
+    await act(async () => { vi.advanceTimersByTime(1); await Promise.resolve(); });
+    expect(settingsSet).toHaveBeenCalledTimes(1);
+  });
+});
