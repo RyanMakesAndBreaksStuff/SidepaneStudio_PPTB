@@ -16,13 +16,15 @@ const LATEST_VAR = 'window.__spstudio_latestSelection';
 const PENDING_TTL_MS = 2000;
 /** L4 — shown (commands) or logged (events) when the triggering form record has no ID yet. */
 const UNSAVED_RECORD_MESSAGE = 'Save the record before opening this pane.';
+/** L5 — the variable that holds the record's table when the script reads it from the form or grid row. */
+const TABLE_VAR = 'recordEntityName';
 /** Every identifier the generated scripts declare, receive or call; the record variable and namespace names may not shadow them. */
 export const GENERATED_NAMES: ReadonlySet<string> = new Set([
   'allPanes', 'eventArgs', 'existing', 'formContext', 'pane', 'primaryControl', 'relatedAttribute',
   'relatedRecord', 'relatedSource', 'selectedControl', 'selectedEntity', 'selectedPane', 'selectedRecordId',
   'selectedRows', 'latestSelection', 'lockedAt', 'tag', 'executionContext', 'control', 'name', 'e', 'p',
   'Xrm', 'window', 'SidePaneHelper', 'console', 'JSON', 'Error', 'Promise', 'Date',
-  'encodeURIComponent', 'setTimeout', 'clearTimeout', 'undefined', 'arguments',
+  'encodeURIComponent', 'setTimeout', 'clearTimeout', 'undefined', 'arguments', TABLE_VAR,
 ]);
 
 function safeIdentifier(value: string, fallback: string): string {
@@ -210,11 +212,17 @@ function declareRecordVariable(config: PaneDefinitionConfig, rc: RecordContext, 
   if (!rc.idExpr || creating) return { line: '', rc };
   const name = safeIdentifier(config.context.variableName, 'recordId');
   const { kind } = config.context.source;
+  // L5 — a table read from the form or grid row is captured with the ID, before any await can end the event.
+  const readsTable = (kind === 'host' || kind === 'selectedRow') && rc.table === '';
+  const tableLine = readsTable ? `${indent}var ${TABLE_VAR} = ${rc.entityExpr};\n` : '';
   // L4 — a form record that has never been saved has an empty ID; stop before any pane opens.
   const unsaved = kind === 'host'
     ? `${indent}if (!${name}) { ${buildNotice(config, UNSAVED_RECORD_MESSAGE)} return; }\n`
     : '';
-  return { line: `${indent}var ${name} = ${rc.idExpr};\n${unsaved}`, rc: { ...rc, idExpr: name } };
+  return {
+    line: `${indent}var ${name} = ${rc.idExpr};\n${tableLine}${unsaved}`,
+    rc: { ...rc, idExpr: name, entityExpr: readsTable ? TABLE_VAR : rc.entityExpr },
+  };
 }
 
 /** Item 3 — createFromEntity copies mapped columns from the triggering record. Null when no record triggers the script. */

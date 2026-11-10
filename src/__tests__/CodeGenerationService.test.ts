@@ -44,6 +44,24 @@ describe('record variable', () => {
     const config = cfg({ trigger: { kind }, host: { entityName: 'account' }, context: { source: { kind: 'host' } } });
     for (const code of [generateBasicScript(config), generateLibraryScript(config)]) expect(code).toContain(`if (!recordId) { ${notice}`);
   });
+  it('reads a runtime table next to the record id, before createPane is awaited (L5)', async () => {
+    const events: string[] = [];
+    const pane = { navigate: vi.fn(async () => { events.push('navigate'); }) };
+    const xrm = {
+      App: { sidePanes: { state: 0, getPane: vi.fn(), getAllPanes: vi.fn().mockReturnValue([]),
+        createPane: vi.fn(async () => { events.push('createPane'); return pane; }) } },
+      Navigation: { openErrorDialog: vi.fn(), openAlertDialog: vi.fn() },
+    };
+    const config = cfg({ trigger: { kind: 'FormButton', namespace: 'TestNs', functionName: 'open' }, host: { entityName: '' }, context: { source: { kind: 'host' } } });
+    const open = new Function('window', 'Xrm', `${generateBasicScript(config)}\nreturn TestNs.open;`)({}, xrm) as (arg: unknown) => void;
+    open({ data: { entity: {
+      getId: () => { events.push('getId'); return '{A1}'; },
+      getEntityName: () => { events.push('getEntityName'); return 'account'; },
+    } } });
+    await vi.waitFor(() => expect(pane.navigate).toHaveBeenCalled());
+    expect(events).toEqual(['getId', 'getEntityName', 'createPane', 'navigate']);
+    expect(pane.navigate).toHaveBeenCalledWith({ pageType: 'custom', name: 'sps_SidePaneBuilderPage', entityName: 'account', recordId: 'A1' });
+  });
 });
 
 describe('record variable name collisions', () => {
@@ -426,7 +444,8 @@ describe('buildNavigateInput — pageType branches', () => {
         host: { entityName: '' }, context: { source: { kind: 'host' } },
       })
     );
-    expect(code).toContain('entityName: primaryControl.data.entity.getEntityName()');
+    expect(code).toContain('var recordEntityName = primaryControl.data.entity.getEntityName();');
+    expect(code).toContain('entityName: recordEntityName');
   });
 
   it('entitylist emits pageType and entityName but no entityId', () => {
@@ -902,7 +921,8 @@ describe('buildNavigateInput — record context (CR-001)', () => {
     const code = generateBasicScript(
       cfg({ host: { entityName: '' }, context: { source: { kind: 'host' } } })
     );
-    expect(code).toContain('entityName: primaryControl.data.entity.getEntityName()');
+    expect(code).toContain('var recordEntityName = primaryControl.data.entity.getEntityName();');
+    expect(code).toContain('entityName: recordEntityName');
     expect(code).toContain("recordId: recordId.replace(/[{}]/g, '')");
   });
 
