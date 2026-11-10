@@ -869,8 +869,7 @@ describe('Basic and Shared Library behave the same for every legal configuration
   }
 
   /** The finding that makes a case diverge today. Each fix task in Wave 6 deletes its line, which turns those cases into plain tests. */
-  function knownDivergence({ scenario, config }: Case): string | undefined {
-    if (scenario === 'toggle' && config.context.source.kind === 'lookup') return 'L3';
+  function knownDivergence({ scenario }: Case): string | undefined {
     if (scenario === 'unsaved') return 'L4';
     return undefined;
   }

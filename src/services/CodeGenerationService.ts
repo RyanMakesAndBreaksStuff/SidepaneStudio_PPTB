@@ -580,6 +580,11 @@ export function generateLibraryScript(config: PaneDefinitionConfig): string {
     ? 'executionContext.getFormContext()'
     : 'formContext';
   const declared = declareRecordVariable(config, buildRecordContext(config, formContextExpr), '  ');
+  const relatedPreamble = buildRelatedRecordPreamble(config, '      ', formContextExpr);
+  // L3 — an empty lookup returns before SidePaneHelper.open, so a closing click is handled here first, as in Basic.
+  // The availability guard comes first because the toggle reads Xrm.App.sidePanes.
+  const toggle = relatedPreamble ? buildToggleIfOpen(config, '  ') : '';
+  const toggleFirst = toggle ? `${buildAvailabilityGuard(config, '  ')}${toggle}` : '';
 
   // Contract C4: the same pane and target keys as the Basic script, then the behavior keys Basic implements inline.
   const fields: Field[] = [...paneFields(config), ...targetFields(config, declared.rc, formContextExpr)];
@@ -588,7 +593,7 @@ export function generateLibraryScript(config: PaneDefinitionConfig): string {
   // M1 — only a command click expands the rail, as in the Basic script (buildStateAssignment).
   if (!behavior.expandOnOpen || !COMMAND_TRIGGERS.includes(trigger.kind)) fields.push(['expandOnOpen', 'false']);
   if (behavior.closeOthers) fields.push(['closeOthers', 'true']);
-  if (behavior.toggleIfOpen && COMMAND_TRIGGERS.includes(trigger.kind)) fields.push(['toggleIfOpen', 'true']);
+  if (behavior.toggleIfOpen && COMMAND_TRIGGERS.includes(trigger.kind) && !toggleFirst) fields.push(['toggleIfOpen', 'true']);
 
   const param =
     trigger.kind === 'FormOnLoad' || trigger.kind === 'FormOnChange' || trigger.kind === 'LookupTagClick' || GRID_SELECT_KINDS.includes(trigger.kind)
@@ -609,10 +614,9 @@ export function generateLibraryScript(config: PaneDefinitionConfig): string {
   const manualInvocation = trigger.kind === 'ManualJS' ? `\n${ns}.${fn}();` : '';
 
   const openCall = `  SidePaneHelper.open({\n${fields.map(field => `    ${formatField(field)}`).join(',\n')}\n  });\n`;
-  const relatedPreamble = buildRelatedRecordPreamble(config, '      ', formContextExpr);
   // Lookup resolution awaits the lookup, so the open call and record variable share its async scope.
   const body = relatedPreamble
-    ? `  (async function() {\n    try {\n${relatedPreamble}${declared.line.replace(/^ {2}/, '      ')}${openCall.replace(/^(?=.)/gm, '    ')}` +
+    ? `${toggleFirst}  (async function() {\n    try {\n${relatedPreamble}${declared.line.replace(/^ {2}/, '      ')}${openCall.replace(/^(?=.)/gm, '    ')}` +
       `    } catch(e) {\n${buildCatchBody(`${ns}.${fn}`, '      ')}\n    }\n  })();\n`
     : `${declared.line}${openCall}`;
 

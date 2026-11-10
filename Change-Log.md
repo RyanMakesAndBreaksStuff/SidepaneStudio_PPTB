@@ -35,6 +35,8 @@
   tag and console scripts leave a collapsed rail collapsed.
 - Basic output sets the configured badge on a pane it reuses, as the Shared
   Library already did.
+- Shared Library output with **Close if already open** and a lookup record
+  source closes the open pane even when the lookup is empty.
 
 ## v1.3.1
 
