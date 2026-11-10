@@ -5,8 +5,11 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: ['src/__tests__/setup.ts'],
+    include: ['src/**/*.test.{ts,tsx}'],
+    exclude: ['node_modules/**', '.claude/**', '.worktrees/**', '.superpowers/**'],
     coverage: {
       provider: 'v8',
+      include: ['src/**'],
       thresholds: {
         statements: 70,
         branches: 55,
