@@ -228,6 +228,26 @@ describe('v1 migration', () => {
     expect(parseStoredConfig(v1({ kind: 'FormOnChange', fieldName: 'name' }, { mode: 'None', entityName: 'account' }))?.host.entityName).toBe('account');
     expect(parseStoredConfig(v1({ kind: 'LookupTagClick', fieldName: 'parentaccountid' }, { mode: 'Static', entityName: 'account' }))?.host.entityName).toBe('account');
   });
+  it.each([
+    ['another table', 'account', { entityName: 'account', formId: '', tabName: '' }],
+    ['the target table', 'contact', { entityName: 'contact', formId: FORM, tabName: 'tab_1' }],
+    ['no table', '', { entityName: 'contact', formId: FORM, tabName: 'tab_1' }],
+  ])('opens the table v1 opened for a Static record named with %s', async (_label, contextTable, kept) => {
+    const id = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+    const raw = v1({ kind: 'FormButton' }, { mode: 'Static', entityName: contextTable, staticRecordId: id }, contactRecord);
+    const v1Table = contextTable || contactRecord.entityName;
+    expect(parseStoredConfig(raw)).toMatchObject({
+      host: { entityName: '' },
+      target: { pageType: 'entityrecord', data: '{"a":"b"}', createNew: false, ...kept },
+      context: { source: { kind: 'fixed', entityName: contextTable, id } },
+    });
+    const input = await opens(raw);
+    expect(input.entityName).toBe(v1Table);
+    expect(input).toEqual({
+      pageType: 'entityrecord', entityName: v1Table, entityId: id, data: { a: 'b' },
+      ...(kept.formId ? { formId: FORM, tabName: 'tab_1' } : {}),
+    });
+  });
 });
 
 describe('parseLookupFieldNames', () => {

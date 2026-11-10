@@ -191,6 +191,11 @@ export function parseStoredConfig(raw: unknown): PaneDefinitionConfig | null {
     else if (grid) source = { kind: 'selectedRow' };
     else if (kind === 'ManualJS') source = legacyId ? { kind: 'fixed', entityName: legacyEntity, id: legacyId } : { kind: 'none' };
     else source = { kind: 'host' };
+    // v1 opened a record of context.entityName || target.entityName. A fixed record keeps that table; the form and tab
+    // were picked for the target table, so they go when the table changes.
+    if (source.kind === 'fixed' && normalizedTarget.pageType === 'entityrecord' && legacyEntity && legacyEntity !== normalizedTarget.entityName) {
+      normalizedTarget = { ...normalizedTarget, entityName: legacyEntity, formId: '', tabName: '' };
+    }
     if (!hostRecord) {
       // v1 named the record's table, not the trigger's. A Static or None table is not the host's, so it stays only where
       // the trigger requires a host; a form or grid record with no table named was a record of the target table.
