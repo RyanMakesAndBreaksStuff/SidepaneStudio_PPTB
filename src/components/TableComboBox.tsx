@@ -58,6 +58,7 @@ export function TableComboBox({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [highlight, setHighlight] = useState(0);
+  const [focused, setFocused] = useState(false);
   const isOpen = open && !disabled;
   const rootRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -152,7 +153,7 @@ export function TableComboBox({
     border: `1px solid ${error || invalid ? T.error : T.stroke1}`,
     borderRadius: T.rS,
     background: T.surface1,
-    boxShadow: isOpen && !error && !invalid ? `inset 0 -2px ${T.accent}` : 'none',
+    boxShadow: focused && !loading && !disabled ? `inset 0 -2px ${T.accent}` : 'none',
     fontFamily: T.font,
     fontSize: 13,
     boxSizing: 'border-box',
@@ -182,7 +183,8 @@ export function TableComboBox({
           value={isOpen ? query : displayValue}
           placeholder={value ? '' : (placeholder ?? `Select a ${singular}…`)}
           onChange={e => { setOpen(true); setQuery(e.target.value); }}
-          onFocus={() => { if (!disabled) setOpen(true); }}
+          onFocus={() => { setFocused(true); if (!disabled) setOpen(true); }}
+          onBlur={() => setFocused(false)}
           onKeyDown={handleKeyDown}
           aria-label={ariaLabel}
           aria-invalid={Boolean(error || invalid) || undefined}

@@ -123,6 +123,34 @@ describe('MetadataFilterConfigEditor', () => {
     }
   );
 
+  it.each([['valid', '["contact"]'], ['invalid', '{"bad":true}']] as const)(
+    'shows a focus underline on a %s filter textarea and removes it on blur', async (_, text) => {
+      await render(
+        <MetadataFilterConfigEditor
+          config={customConfig}
+          defaultConfig={DEFAULT_METADATA_FILTER_CONFIG}
+          persistenceAvailable={true}
+          onSave={() => {}}
+          onReset={() => {}}
+        />
+      );
+      const field = textarea('Deny exact table names');
+      await setTextareaValue(field, text);
+      await act(async () => {
+        button('Save')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        await Promise.resolve();
+      });
+      expect(field.style.boxShadow).not.toContain(theme(true).accent);
+
+      await act(async () => { field.focus(); });
+      expect(field.style.boxShadow).toContain(theme(true).accent);
+      expect(textarea('Allowed standard tables').style.boxShadow).not.toContain(theme(true).accent);
+
+      await act(async () => { field.blur(); });
+      expect(field.style.boxShadow).not.toContain(theme(true).accent);
+    }
+  );
+
   it('rejects invalid JSON array content', async () => {
     const onSave = vi.fn();
     await render(

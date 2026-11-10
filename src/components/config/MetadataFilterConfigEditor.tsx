@@ -115,6 +115,7 @@ export function MetadataFilterConfigEditor({
   const [errors, setErrors] = useState<Partial<Record<MetadataFilterConfigKey, string>>>({});
   const [saving, setSaving] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [focusedKey, setFocusedKey] = useState<MetadataFilterConfigKey | null>(null);
 
   useEffect(() => {
     setErrors({});
@@ -182,6 +183,8 @@ export function MetadataFilterConfigEditor({
             value={texts[key]}
             onChange={event => updateText(key, event.currentTarget.value)}
             spellCheck={false}
+            onFocus={() => setFocusedKey(key)}
+            onBlur={() => setFocusedKey(current => current === key ? null : current)}
             style={{
               minHeight: 86,
               width: '100%',
@@ -196,6 +199,7 @@ export function MetadataFilterConfigEditor({
               lineHeight: 1.35,
               padding: '8px 9px',
               outline: 'none',
+              boxShadow: focusedKey === key ? `inset 0 -2px ${T.accent}` : 'none',
             }}
           />
           </>}

@@ -191,6 +191,24 @@ describe('TableComboBox', () => {
     expect(host?.querySelectorAll('[role="option"]')).toHaveLength(tables.length);
   });
 
+  it.each([['invalid', { invalid: true }], ['errored', { error: 'offline' }]] as const)(
+    'keeps the focus underline while the field is %s and drops it on blur', async (_, state) => {
+      const dark = theme(true);
+      await render(<TableComboBox value="" onChange={vi.fn()} items={tables} {...state} />);
+      const input = combo();
+      const field = input.parentElement!;
+      expect(field.style.borderColor).toBe(rgb(dark.error));
+      expect(field.style.boxShadow).toBe('none');
+
+      await focus(input);
+      expect(field.style.boxShadow).toContain(dark.accent);
+      expect(field.style.borderColor).toBe(rgb(dark.error));
+
+      await act(async () => { input.blur(); });
+      expect(field.style.boxShadow).toBe('none');
+    }
+  );
+
   it('closes an open popup and blocks keyboard commits when disabled becomes true', async () => {
     const onChange = vi.fn();
     const props = { value: '', onChange, items: tables };
