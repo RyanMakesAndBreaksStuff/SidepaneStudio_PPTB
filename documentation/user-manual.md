@@ -117,7 +117,9 @@ Expected output: the summary strip reads “2 errors · 0 warnings”, and **Bas
 | Lookup tag click  | A lookup tag is clicked                       | **Lookup controls**                                        |
 | Grid button       | A command-bar button on a grid                | **Main grid / Subgrid**, **View**                          |
 | Grid row select   | One row is selected                           | **Main grid / Subgrid**, **View**, Power Apps grid control |
-| Console           | You paste the script into the browser console | No trigger table, form, or namespace fields               |
+| Console           | You paste the script into the browser console | No trigger table or form. **Function name** and **Namespace** are required |
+
+**Console** uses the same **Function name** and **Namespace** fields as every other trigger. The pasted script defines `YOUR_NAMESPACE.YOUR_FUNCTION_NAME` and calls it once, so pasting it opens the pane. Paste it again to reopen the pane.
 
 **Verification**:
 
@@ -141,7 +143,7 @@ Expected output: the summary strip reads “1 error · 0 warnings”, and the **
 
 - `YOUR_CUSTOM_PAGE` is the logical name from the solution, for example `contoso_relatedrecords`. An empty name cannot generate a usable script.
 - **Record source** says where the record ID comes from. The list only contains sources the trigger allows:
-  - **The record on this form** — the form record. Form triggers.
+  - **The record on this form** — the form record. Form triggers. On a form that has not been saved yet there is no record ID, so the script stops without opening a pane: a form button shows "Save the record before opening this pane.", and form load or field change handlers write the same message to the browser console.
   - **The selected row** — the first selected row. Grid triggers.
   - **The clicked tag record** — the record behind the clicked lookup tag. Lookup tag click, where it is the only source.
   - **A record in a lookup** — pick the **Lookup column** on the trigger table; the record it points to opens. When the lookup is empty at runtime, the script returns without opening a pane.
@@ -180,7 +182,7 @@ Expected output: the summary strip reads “0 errors · 0 warnings”, **Basic S
 
 - Keep the pane id stable if later buttons should reuse this pane instead of creating a second one.
 - Width is stored in pixels. Values outside 300–1200 are rejected.
-- An icon path renders in the model-driven app after that web resource is published. The preview keeps a placeholder and says: `Icon will render in the live app once the web resource is published. Showing placeholder in preview.`
+- An icon path renders in the model-driven app after that web resource is published. The field hint reads `Web resource path — must be published and prefixed with WebResources/ to render`. While the field holds a path, the preview shows `Preview loads this image.` A path the script cannot emit safely is dropped, and the field warns `Not emitted: path must be relative to WebResources.`
 - **Hide header bar** also hides the close button. If both **Hide header bar** and **Show close button** are on, the studio warns and the generated script emits `canClose: false`.
 
 **Verification**:
@@ -206,7 +208,7 @@ Expected output: **Output** does not report `Pane ID is required.` or `Pane widt
 **Explanation**:
 
 - **Reuse open pane** navigates the existing pane to the new page and then selects it. Turning it off closes and recreates the pane when it is already open.
-- **Expand pane on open** expands the side-pane rail after a command-bar trigger creates the pane.
+- **Expand pane on open** expands the side-pane rail after a command-bar trigger (form button or grid button) creates the pane. The other triggers (form on load, field change, lookup tag click, grid row select, console) leave the rail as it is, in both Basic Script and Shared Library output.
 - **Close other side panes** closes every other open pane after this one opens. The Output panel then shows: `closeOthers is active: The generated script closes all other side panes after opening this one.`
 - **Close if already open** works only for command bar buttons. On any other trigger the studio blocks generation with: `Close if already open works only for command bar buttons. Any other trigger would close its own pane when it fires again.`
 - **Keep loaded when inactive** (`alwaysRender`) keeps the pane in memory when the user switches away. The studio warns about that memory cost. Leave it off unless you have measured a need.
@@ -426,7 +428,7 @@ Solution:
 1. Set **Record source** to **No record** when the page does not need a record.
 2. Or set it to **A specific record**, enter the record GUID from that environment, and for content types other than Table record pick the **Record table**.
 
-Verify the fix: **Basic Script** shows an `async function` you can paste into the console. Command Steps then says to open the model-driven app, press F12, and paste into the Console tab.
+Verify the fix: **Basic Script** shows a script that defines `YOUR_NAMESPACE.YOUR_FUNCTION_NAME` and calls it, so pasting it into the console opens the pane. Command Steps then says to open the model-driven app, press F12, and paste into the Console tab.
 
 **Error 7: Enter the full GUID of the record to open**
 
@@ -469,7 +471,7 @@ Verify the fix: **Basic Script** shows the code block. For a specific record, ex
 Full error message:
 
 ```text
-Prerequisite not detected: The shared runtime library (spstudio_/scripts/sidepane.runtime.js) is not deployed in this environment. Deploy it before using this output.
+Prerequisite not detected: No web resource ending in /scripts/sidepane.runtime.js was found in this environment. Deploy the shared runtime (recommended name: spstudio_/scripts/sidepane.runtime.js) before using this output.
 ```
 
 Cause: you opened **Shared Library**, and the web resource `spstudio_/scripts/sidepane.runtime.js` is not in the active environment. **Basic Script** does not need this file.
@@ -480,7 +482,7 @@ Solution:
 2. If you do want the shared library, stay on **Shared Library**, click **Download runtime**, and upload that file as the web resource `spstudio_/scripts/sidepane.runtime.js`.
 3. Publish it, then add it as a library that loads before the generated handler.
 
-Verify the fix: reopen **Shared Library**. The callout changes to `Shared runtime library detected in this environment.`
+Verify the fix: reopen **Shared Library**. The callout changes to `Shared runtime library detected in this environment` followed by the web resource name in parentheses.
 
 A failed check says `Could not verify prerequisite:` plus the Dataverse error. Reconnect the environment and open the tab again. A failed save says `Could not download runtime:` plus the reason. Retry **Download runtime**. Inside ToolBox the button uses the ToolBox save dialog. The button label is **Saving runtime...** while the save is in progress.
 
@@ -526,7 +528,7 @@ Recommended resources:
 
 **Direction 3: Grid commands and row select** | Difficulty: Intermediate
 
-**Grid button** and **Grid row select** each have a **Main grid / Subgrid** choice and a **View**. **Grid button** passes `primaryControl` and reads the first selected row. With no selection, the generated script returns without opening a pane. Extra selected rows are ignored. **Grid row select** requires the **Power Apps grid control**. After you enable it, the control shows an **Events** tab. Add the web resource, add an **OnRecordSelect** handler, pass execution context, and select `YOUR_NAMESPACE.YOUR_FUNCTION_NAME`.
+**Grid button** and **Grid row select** each have a **Main grid / Subgrid** choice and a **View**. **Grid button** needs **SelectedControl** as the first Action parameter in Command Designer (it is the grid on both main grids and subgrids) and reads the first selected row from it. Without it the script shows `This command needs the grid. In Command Designer, add SelectedControl as the first Action parameter.` With no selection, the generated script returns without opening a pane. Extra selected rows are ignored. **Grid row select** requires the **Power Apps grid control**. After you enable it, the control shows an **Events** tab. Add the web resource, add an **OnRecordSelect** handler, pass execution context, and select `YOUR_NAMESPACE.YOUR_FUNCTION_NAME`.
 
 **The selected row** as the **Record source** warns: `The generated script uses the first selected row. It exits without opening a pane when no row is selected, and ignores rows beyond the first.` The **Grid** preview shows the same behavior with checkbox selection and **Preview command**.
 
@@ -556,7 +558,7 @@ Recommended resources:
 
 **Direction 5: Metadata table filters** | Difficulty: Advanced
 
-**Pane & behaviour → Metadata table filters** limits which tables the pickers load. Saving uses ToolBox settings when that API is available. If settings cannot be saved, the field shows the save error. Reset restores the default filter. A table that drops out of the accessible set produces a warning, not a hard stop: `Table "YOUR_TABLE_LOGICAL_NAME" is no longer accessible in this app or for the current user.`
+**Pane & behaviour → Metadata table filters** limits which tables the pickers load. Saving uses ToolBox settings when that API is available. If settings cannot be saved, the field shows the save error. Reset restores the default filter. For a **Table record** or **Table list** target, a table that is not in the accessible set produces a warning, not a hard stop, and is counted in the summary strip: `Table "YOUR_TABLE_LOGICAL_NAME" is not in the current table list for this environment.`
 
 Recommended resources:
 
@@ -565,7 +567,7 @@ Recommended resources:
 ### Hands-on projects
 
 1. **Related records button** — A form command on Account opens your custom page at 480 pixels with **Reuse open pane** on. Uses custom page, Form button, the form record as the source, and Command Designer.
-2. **Contact list for the open account** — Change the target to **Table list**, table `contact`, and pass the current account through the record source. Uses table list, view id, and the form record as the source.
+2. **Contact list from an account form** — Change the target to **Table list**, table `contact`, and optionally a **View**. A table list takes no record, so **Record source** is **No record**. Uses table list and view id.
 3. **Lookup tag opens the account** — On a contact form, **Lookup tag click** for `parentcustomerid` opens that account as a **Table record**. Uses lookup registration from OnLoad and **The clicked tag record**.
 
 ### Best practices
@@ -656,7 +658,7 @@ spstudio_/scripts/sidepane.runtime.js
 | Prerequisite not detected: `spstudio_/scripts/sidepane.runtime.js`  | Shared Library without the helper  | Use Basic Script, or upload the runtime                             |
 | Clipboard access blocked.                                           | Browser clipboard permission       | Select the text and copy with Ctrl+C or Cmd+C                       |
 | Could not load dashboards                                           | Metadata call failed               | Check the connection and dashboard privilege                        |
-| Button does nothing in the app                                      | Function or parameter mismatch     | Match `YOUR_NAMESPACE.YOUR_FUNCTION_NAME` and pass `primaryControl` |
+| Button does nothing in the app                                      | Function or parameter mismatch     | Match `YOUR_NAMESPACE.YOUR_FUNCTION_NAME` and pass `primaryControl` (`SelectedControl` for a grid button) |
 
 ## Appendix
 
@@ -672,7 +674,7 @@ spstudio_/scripts/sidepane.runtime.js
 | Logical name           | The schema name of a table, column, or control, such as `account` or `parentaccountid`.                     |
 | Pane ID                | Stable key the script uses to find or reuse one side pane.                                                  |
 | Power Platform ToolBox | Desktop host that connects to Dataverse and runs Side Pane Studio.                                          |
-| primaryControl         | First argument Command Designer passes into a command-bar function so the script can read the form or grid. |
+| primaryControl         | First argument Command Designer passes into a command-bar function so the script can read the form. A grid button receives **SelectedControl** (the grid) instead. |
 | Shared Library         | Shorter generated handler that calls `SidePaneHelper` in the runtime web resource.                          |
 | Side pane              | Panel docked beside a model-driven app page.                                                                |
 | Web resource           | A file stored in Dataverse. JavaScript web resources hold the generated handler.                            |
