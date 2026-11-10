@@ -129,4 +129,24 @@ describe('ThemeProvider', () => {
 
     expect(Object.keys(captured as object)).toEqual(['isDark']);
   });
+
+  it('unsubscribes on unmount with the disposer events.on returns', async () => {
+    const dispose = vi.fn();
+    const off = vi.fn();
+    vi.stubGlobal('toolboxAPI', {
+      utils: { getCurrentTheme: vi.fn().mockResolvedValue('dark') },
+      events: { on: vi.fn(() => dispose), off },
+    });
+
+    await render(
+      <ThemeProvider>
+        <ThemeProbe />
+      </ThemeProvider>
+    );
+    await act(async () => { root?.unmount(); });
+    root = undefined;
+
+    expect(dispose).toHaveBeenCalledTimes(1);
+    expect(off).not.toHaveBeenCalled();
+  });
 });

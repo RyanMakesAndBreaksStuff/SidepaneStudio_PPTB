@@ -503,6 +503,23 @@ describe('SidePaneBuilderWorkbench', () => {
     expect(host?.textContent).toContain('No active Dataverse connection');
   });
 
+  it('unsubscribes from host events on unmount with the disposer events.on returns', async () => {
+    const dispose = vi.fn();
+    const off = vi.fn();
+    vi.stubGlobal('toolboxAPI', {
+      connections: { getActiveConnection: vi.fn().mockResolvedValue({ id: 'conn-1' }) },
+      events: { on: vi.fn(() => dispose), off },
+      settings: { get: vi.fn().mockResolvedValue(null), set: vi.fn().mockResolvedValue(undefined) },
+    });
+
+    await render(<SidePaneBuilderWorkbench />);
+    await act(async () => { root?.unmount(); });
+    root = undefined;
+
+    expect(dispose).toHaveBeenCalledTimes(1);
+    expect(off).not.toHaveBeenCalled();
+  });
+
   it('does not throw when the host emits an unrelated event', async () => {
     let handler: ((event: unknown, payload: ToolBoxAPI.ToolBoxEventPayload) => void) | undefined;
 

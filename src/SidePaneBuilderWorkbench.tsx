@@ -5,6 +5,7 @@ import { parseStoredConfig, parseStoredOrgKey } from './services/configGuards';
 import { coerceConfig } from './services/triggerCapabilities';
 import { WorkbenchShell } from './components/WorkbenchShell';
 import { PptbContextAdapter } from './adapters/PptbContextAdapter';
+import { subscribeToolboxEvents } from './adapters/toolboxEvents';
 import { MetadataService } from './services/MetadataService';
 import { MetadataFilterSettingsService } from './services/MetadataFilterSettingsService';
 import {
@@ -194,12 +195,12 @@ export function SidePaneBuilderWorkbench(): React.ReactElement {
       }
     };
 
-    toolbox.events.on(handler);
+    const unsubscribe = subscribeToolboxEvents(toolbox.events, handler);
     void refreshConnection();
     return () => {
       active = false;
       ++checkGeneration;
-      toolbox.events.off(handler);
+      unsubscribe();
     };
   }, []);
 
