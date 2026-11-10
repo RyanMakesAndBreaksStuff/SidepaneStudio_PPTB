@@ -13,6 +13,7 @@ import { SummaryCard } from './SummaryCard';
 import { Callout } from './Callout';
 import { CommandStepsTab, deploySteps } from './CommandStepsTab';
 import { describeConfigText } from '../services/describeConfig';
+import { notify } from '../services/notify';
 import runtimeSource from '../runtime/sidepane.runtime.js?raw';
 
 export interface OutputPanelProps {
@@ -62,7 +63,8 @@ export const OutputPanel = React.memo(function OutputPanel({ config, xrm, valida
     setSavingRuntime(true);
     try {
       if (window.toolboxAPI?.fileSystem?.saveFile) {
-        await window.toolboxAPI.fileSystem.saveFile(RUNTIME_FILE_NAME, runtimeSource);
+        const savedPath = await window.toolboxAPI.fileSystem.saveFile(RUNTIME_FILE_NAME, runtimeSource);
+        if (savedPath) notify('Runtime saved', `Saved ${RUNTIME_FILE_NAME} to ${savedPath}`, 'success');
         return;
       }
       const url = URL.createObjectURL(new Blob([runtimeSource], { type: 'text/javascript;charset=utf-8' }));

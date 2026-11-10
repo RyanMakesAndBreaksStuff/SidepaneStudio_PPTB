@@ -78,20 +78,27 @@ describe('runtime download', () => {
     expect(xrm.App.sidePanes.createPane).not.toHaveBeenCalled();
   });
 
-  it('saves JavaScript through the native dialog', async () => {
+  it('saves JavaScript through the native dialog and reports the saved path', async () => {
     const saveFile = vi.fn().mockResolvedValue(`C:/${RUNTIME_FILE_NAME}`);
-    vi.stubGlobal('toolboxAPI', { fileSystem: { saveFile } });
+    const showNotification = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('toolboxAPI', { fileSystem: { saveFile }, utils: { showNotification } });
     await clickRuntimeDownload();
     expect(saveFile).toHaveBeenCalledWith(RUNTIME_FILE_NAME, runtimeSource);
+    expect(showNotification).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'success',
+      body: expect.stringContaining(`C:/${RUNTIME_FILE_NAME}`),
+    }));
   });
 
-  it('respects native cancellation without a browser download', async () => {
+  it('respects native cancellation without a browser download or a notification', async () => {
     const saveFile = vi.fn().mockResolvedValue(null);
+    const showNotification = vi.fn().mockResolvedValue(undefined);
     const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
-    vi.stubGlobal('toolboxAPI', { fileSystem: { saveFile } });
+    vi.stubGlobal('toolboxAPI', { fileSystem: { saveFile }, utils: { showNotification } });
     await clickRuntimeDownload();
     expect(saveFile).toHaveBeenCalledOnce();
     expect(click).not.toHaveBeenCalled();
+    expect(showNotification).not.toHaveBeenCalled();
   });
 
   it('downloads a Blob and releases its URL when the native API is absent', async () => {
