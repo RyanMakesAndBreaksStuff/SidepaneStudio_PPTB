@@ -80,6 +80,29 @@ afterEach(async () => {
   host = undefined;
 });
 
+describe('DestinationSection — console record source', () => {
+  const sourceHint = () => fieldLabel('Record source')?.parentElement?.textContent ?? '';
+
+  it('explains why an existing table record needs a specific record from the console', async () => {
+    await renderSection(cfg({ trigger: { kind: 'ManualJS' },
+      target: { pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '', createNew: false },
+      context: { source: { kind: 'fixed', entityName: '', id: '' } } }));
+    expect(sourceHint()).toContain('The console runs outside any form or grid');
+    expect(sourceHint()).not.toContain('Set by the trigger.');
+  });
+
+  it('keeps the plain hint where the trigger fixes the source for another reason', async () => {
+    await renderSection(cfg({ trigger: { kind: 'LookupTagClick' }, context: { source: { kind: 'clickedTag' } } }));
+    expect(sourceHint()).toContain('Set by the trigger.');
+  });
+
+  it('shows no hint while the console offers a choice', async () => {
+    await renderSection(cfg({ trigger: { kind: 'ManualJS' }, context: { source: { kind: 'none' } } }));
+    expect(sourceHint()).not.toContain('Set by the trigger.');
+    expect(sourceHint()).not.toContain('The console runs outside');
+  });
+});
+
 describe('DestinationSection — re-clicking the selected pill (W8)', () => {
   it('keeps the custom page name when Custom page is clicked again', async () => {
     const get = await renderSection(cfg({ target: { pageType: 'custom', name: 'sps_Page' } }));

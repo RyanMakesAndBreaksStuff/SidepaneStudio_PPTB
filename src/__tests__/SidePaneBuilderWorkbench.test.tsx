@@ -86,7 +86,7 @@ describe('SidePaneBuilderWorkbench', () => {
     });
     await act(async () => { vi.advanceTimersByTime(500); await Promise.resolve(); });
     const saved = settingsSet.mock.calls.find(([key]) => key === 'lastConfig');
-    expect(JSON.parse(saved![1]).context.source.kind).toBe('fixed');
+    expect(JSON.parse(saved![1]).context.source.kind).toBe('none');
   });
   it('does not save default config before hydration and persists user edits after hydration', async () => {
     const restoredConfig = {

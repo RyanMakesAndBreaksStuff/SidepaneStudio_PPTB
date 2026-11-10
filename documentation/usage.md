@@ -91,7 +91,9 @@ record or use a specific record, and otherwise shown as
 `Destination table: <name>`, read from the form record, row, or lookup.
 
 Changing the trigger snaps the source and content to values that are legal for
-it, so the panel never shows an error for a choice it just offered.
+it. The console starts on **No record** wherever a record is optional. A Table
+record opened from the console can only use **A specific record**, so **Record
+ID** is reported as missing until you enter one.
 
 ## 4. Set the pane and its behaviour
 

@@ -155,7 +155,7 @@ describe('ConfigurePanel — trigger section', () => {
     expect(get().target.pageType).not.toBe('entitylist');
     expect(get().context.source.kind).toBe('selectedRow');
     await clickChip('Trigger type', 'Console');
-    expect(get().context.source.kind).toBe('fixed');
+    expect(get().context.source.kind).toBe('none');
     await clickChip('Trigger type', 'Lookup tag click');
     await clickChip('Content type', 'Table record');
     expect(get().context.source.kind).toBe('clickedTag');

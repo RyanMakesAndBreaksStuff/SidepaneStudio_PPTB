@@ -29,7 +29,7 @@ export const TRIGGER_CAPABILITIES: Record<TriggerKind, TriggerCapabilities> = {
   LookupTagClick: { label: 'Lookup tag click', desc: 'Opens when a tag is clicked in a lookup control',              family: 'form',   hostPicker: 'lookup', sources: ['clickedTag'], targets: ALL_TARGETS, gridPreview: false },
   GridButton:     { label: 'Grid button',      desc: 'Wired to a command bar button on a main grid or subgrid',      family: 'grid',   hostPicker: 'view',   sources: GRID_SOURCES,   targets: NO_LIST,     gridPreview: true },
   GridRowSelect:  { label: 'Grid row select',  desc: 'Opens when a single row is selected (Power Apps grid control)', family: 'grid',   hostPicker: 'view',   sources: GRID_SOURCES,   targets: NO_LIST,     gridPreview: true },
-  ManualJS:       { label: 'Console',          desc: 'Paste into the browser console (F12)',                         family: 'manual', hostPicker: null,     sources: ['fixed', 'none'], targets: ALL_TARGETS, gridPreview: false },
+  ManualJS:       { label: 'Console',          desc: 'Paste into the browser console (F12)',                         family: 'manual', hostPicker: null,     sources: ['none', 'fixed'], targets: ALL_TARGETS, gridPreview: false },
 };
 
 export const TRIGGER_KINDS = Object.keys(TRIGGER_CAPABILITIES) as TriggerKind[];

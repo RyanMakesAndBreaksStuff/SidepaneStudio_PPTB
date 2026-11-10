@@ -96,6 +96,10 @@ export function DestinationSection({ config, onChange, metadataService, formXmlS
   const destination = destinationTable(config);
   const allowed = allowedSources(config);
   const relatedTarget = source.kind === 'lookup' && target.pageType === 'entityrecord' && !creating;
+  const sourceHint = allowed.length !== 1 ? undefined
+    : trigger.kind === 'ManualJS' && target.pageType === 'entityrecord' && !creating
+      ? 'The console runs outside any form or grid, so opening an existing table record needs a specific record ID.'
+      : 'Set by the trigger.';
   const tableConfirmed = relatedTarget ? resolvedTargets.length === 1 : !!destination;
 
   return (
@@ -122,8 +126,7 @@ export function DestinationSection({ config, onChange, metadataService, formXmlS
         </Field>
       )}
       {recordTarget && (
-        <Field label="Record source" error={errors['context.source']}
-          hint={allowed.length === 1 ? 'Set by the trigger.' : undefined}>
+        <Field label="Record source" error={errors['context.source']} hint={sourceHint}>
           <ChoiceGroup label="Record source"
             options={allowed.map(kind => kind === 'none' && creating
               ? { ...SOURCE_OPTIONS.none, desc: 'Open a blank form' } : SOURCE_OPTIONS[kind])}
