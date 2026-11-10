@@ -870,7 +870,6 @@ describe('Basic and Shared Library behave the same for every legal configuration
 
   /** The finding that makes a case diverge today. Each fix task in Wave 6 deletes its line, which turns those cases into plain tests. */
   function knownDivergence({ scenario, config }: Case): string | undefined {
-    if (scenario === 'open' && !COMMAND_TRIGGERS.includes(config.trigger.kind)) return 'M1';
     if (scenario === 'reuseBadge') return 'L1';
     if (scenario === 'toggle' && config.context.source.kind === 'lookup') return 'L3';
     if (scenario === 'unsaved') return 'L4';
@@ -1476,8 +1475,8 @@ describe('form-event record and pre-fill expressions', () => {
   const LIBRARY_PREFILL = 'createFromEntity: { entityType: executionContext.getFormContext().data.entity.getEntityName(), id: executionContext.getFormContext().data.entity.getId() }';
   const RECORD_NAV = { pageType: 'entityrecord', entityName: 'account', entityId: '{A1}' };
   const PREFILL_NAV = { pageType: 'entityrecord', entityName: 'contact', createFromEntity: { entityType: 'account', id: '{A1}' } };
-  // width and canClose are explicit, as in Basic createPane (WR-007).
-  const LIBRARY_PANE = { paneId: 'p', title: 'Related Records', width: 480, canClose: true };
+  // width and canClose are explicit, as in Basic createPane (WR-007). Form events never expand the rail (M1).
+  const LIBRARY_PANE = { paneId: 'p', title: 'Related Records', width: 480, canClose: true, expandOnOpen: false };
   const LIBRARY_RECORD_OPEN = { ...LIBRARY_PANE, pageType: 'entityrecord', entityName: 'account', entityId: '{A1}' };
   const LIBRARY_PREFILL_OPEN = { ...LIBRARY_PANE, pageType: 'entityrecord', entityName: 'contact', createFromEntity: { entityType: 'account', id: '{A1}' } };
 

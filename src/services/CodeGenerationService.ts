@@ -583,7 +583,8 @@ export function generateLibraryScript(config: PaneDefinitionConfig): string {
   const fields: Field[] = [...paneFields(config), ...targetFields(config, declared.rc, formContextExpr)];
   if (pane.badgeValue) fields.push(['badge', JSON.stringify(pane.badgeValue)]);
   if (!behavior.reuseExistingPane) fields.push(['reuseExistingPane', 'false']);
-  if (!behavior.expandOnOpen) fields.push(['expandOnOpen', 'false']);
+  // M1 — only a command click expands the rail, as in the Basic script (buildStateAssignment).
+  if (!behavior.expandOnOpen || !COMMAND_TRIGGERS.includes(trigger.kind)) fields.push(['expandOnOpen', 'false']);
   if (behavior.closeOthers) fields.push(['closeOthers', 'true']);
   if (behavior.toggleIfOpen && COMMAND_TRIGGERS.includes(trigger.kind)) fields.push(['toggleIfOpen', 'true']);
 

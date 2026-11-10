@@ -30,6 +30,9 @@
 - Stored configurations from earlier versions load unchanged in meaning: grid
   trigger kinds, context modes, static IDs, lookup columns, typed field names
   and pre-fill settings are migrated automatically.
+- Shared Library output expands the side pane rail only for command-bar
+  buttons, as Basic output does; form load, field change, row select, lookup
+  tag and console scripts leave a collapsed rail collapsed.
 
 ## v1.3.1
 
