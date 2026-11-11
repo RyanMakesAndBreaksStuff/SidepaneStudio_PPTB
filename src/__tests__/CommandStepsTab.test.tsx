@@ -2,7 +2,7 @@ import { act } from 'react';
 import { createRoot, Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { CommandStepsTab, deploySteps } from '../components/CommandStepsTab';
-import type { TriggerConfig, TriggerKind } from '../types/PaneDefinitionConfig';
+import type { RecordSource, TriggerConfig, TriggerKind } from '../types/PaneDefinitionConfig';
 import { cfg } from './testHelpers';
 
 let root: Root;
@@ -36,14 +36,40 @@ describe('CommandStepsTab — grid command parameter (codegen-config-model-001)'
   });
 });
 
+describe('CommandStepsTab — grid button wording follows the record source (r2 item 5)', () => {
+  async function gridText(source: RecordSource): Promise<string> {
+    await act(async () => { root.render(<CommandStepsTab config={cfg({ trigger: { kind: 'GridButton' }, context: { source } })} />); });
+    return host.textContent ?? '';
+  }
+
+  it.each([
+    { kind: 'selectedRow' },
+    { kind: 'lookup', attribute: 'parentcustomerid' },
+  ] as RecordSource[])('$kind says the function reads the selected rows', async source => {
+    const text = await gridText(source);
+    expect(text).toContain('reads the selected rows');
+    expect(text).toContain('SelectedControl');
+  });
+
+  it.each([
+    { kind: 'none' },
+    { kind: 'fixed', entityName: 'account', id: '{AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE}' },
+  ] as RecordSource[])('$kind says the function does not read the selection', async source => {
+    const text = await gridText(source);
+    expect(text).toContain('does not read the selection');
+    expect(text).not.toContain('This is required');
+    expect(text).toContain('SelectedControl');
+  });
+});
+
 describe('deploySteps — Shared Library runtime dependency (codegen-config-model-006)', () => {
   const COMMAND_STEP = 'Command Designer runs one library per command, so open the generated handler\'s web resource and add the runtime on its Dependencies tab.';
   const LIBRARY_STEP = 'Add the runtime as a library everywhere you add the generated handler\'s library, such as Form libraries.';
   const CONSOLE_STEP = 'paste the runtime file into the console and press Enter before you paste the generated code';
 
   async function deployText(kind: TriggerKind, output: 'basic' | 'library'): Promise<string> {
-    const trigger: TriggerConfig = { ...cfg().trigger, kind };
-    await act(async () => { root.render(<ol>{deploySteps(trigger, output).map((step, i) => <li key={i}>{step}</li>)}</ol>); });
+    const config = cfg({ trigger: { kind } });
+    await act(async () => { root.render(<ol>{deploySteps(config, output).map((step, i) => <li key={i}>{step}</li>)}</ol>); });
     return host.textContent ?? '';
   }
 

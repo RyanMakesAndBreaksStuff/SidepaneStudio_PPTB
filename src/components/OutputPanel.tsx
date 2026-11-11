@@ -135,7 +135,7 @@ export const OutputPanel = React.memo(function OutputPanel({ config, xrm, valida
             <SummaryCard
               title="📋 What this script does"
               body={describeConfigText(config)}
-              steps={deploySteps(config.trigger, 'basic')}
+              steps={deploySteps(config, 'basic')}
             />
             {validation.errors.length > 0 && (
               <Callout type="err" icon="✕">
@@ -177,7 +177,7 @@ export const OutputPanel = React.memo(function OutputPanel({ config, xrm, valida
             <SummaryCard
               title="📚 Shared library version"
               body={<>Shorter snippet that calls the pre-deployed <strong>SidePaneHelper</strong> runtime.</>}
-              steps={deploySteps(config.trigger, 'library')}
+              steps={deploySteps(config, 'library')}
             />
             {validation.errors.length > 0 && (
               <Callout type="err" icon="✕">

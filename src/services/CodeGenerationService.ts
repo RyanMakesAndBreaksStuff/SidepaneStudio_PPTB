@@ -447,6 +447,12 @@ ${indentLines(body, '    ')}
  * Grid triggers that read the row declare selectedEntity and selectedRecordId first; such a command does nothing with
  * no selected row. '' for other triggers, and for a grid command whose source is a fixed record or no record.
  */
+/** r2 CR-001 — a grid button reads the selected row only for these sources (buildRecordContext, buildCreateFromEntityExpr, buildRelatedRecordPreamble). Shared with the deploy steps. */
+export function gridButtonReadsSelection(config: PaneDefinitionConfig): boolean {
+  const source = config.context.source.kind;
+  return config.trigger.kind === 'GridButton' && (source === 'selectedRow' || source === 'lookup');
+}
+
 function gridRowPreamble(config: PaneDefinitionConfig): string {
   const { kind } = config.trigger;
   // OnRecordSelect: executionContext.getEventSource().getId() — Power Apps grid control sample
@@ -454,9 +460,7 @@ function gridRowPreamble(config: PaneDefinitionConfig): string {
   if (GRID_SELECT_KINDS.includes(kind)) {
     return `  var selectedEntity = executionContext.getEventSource();\n  var selectedRecordId = selectedEntity.getId();\n`;
   }
-  // r2 CR-001 — only these sources read the row (buildRecordContext, buildCreateFromEntityExpr, buildRelatedRecordPreamble).
-  const source = config.context.source.kind;
-  if (kind !== 'GridButton' || (source !== 'selectedRow' && source !== 'lookup')) return '';
+  if (!gridButtonReadsSelection(config)) return '';
   // codegen-config-model-001 — SelectedControl is the grid context for main grids and subgrids; a command that
   // passes PrimaryControl first (the form, on a subgrid) still finds the grid as the second argument. With no grid at all,
   // the user is told which parameter to add instead of seeing a TypeError.

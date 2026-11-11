@@ -3,13 +3,13 @@ import * as React from 'react';
 import { useState } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 import { theme } from '../theme/tokens';
-import { COMMAND_TRIGGERS, PaneDefinitionConfig, TriggerConfig, TriggerKind } from '../types/PaneDefinitionConfig';
+import { COMMAND_TRIGGERS, PaneDefinitionConfig, TriggerKind } from '../types/PaneDefinitionConfig';
 import { TRIGGER_CAPABILITIES } from '../services/triggerCapabilities';
 import { Field } from './Field';
 import { Callout } from './Callout';
 import { RUNTIME_WEB_RESOURCE_SUFFIX } from '../constants';
 import { copyText } from '../services/clipboard';
-import { lookupRegistrarName, resolveTriggerNames } from '../services/CodeGenerationService';
+import { gridButtonReadsSelection, lookupRegistrarName, resolveTriggerNames } from '../services/CodeGenerationService';
 
 const STEPS: Record<Exclude<TriggerKind, 'GridButton' | 'GridRowSelect'>, React.ReactNode[]> = {
   FormOnLoad: [
@@ -55,12 +55,15 @@ function runtimeStep(kind: TriggerKind): React.ReactNode {
 }
 
 /** Deployment steps for a trigger and output; grid steps name the configured surface. Only Shared Library output needs the runtime. */
-export function deploySteps(trigger: TriggerConfig, output: 'basic' | 'library'): React.ReactNode[] {
+export function deploySteps(config: PaneDefinitionConfig, output: 'basic' | 'library'): React.ReactNode[] {
+  const { trigger } = config;
   const subgrid = trigger.surface === 'subgrid';
   const steps = trigger.kind === 'GridButton' ? [
     'Paste this function into a new JavaScript web resource and publish it.',
     <React.Fragment key="s9">In Command Designer, select <strong>{subgrid ? 'Subgrid commands' : 'Grid commands'}</strong> and create a new button with Action: Run JavaScript.</React.Fragment>,
-    <React.Fragment key="s10">Select your web resource as the library and enter the full function name (including namespace). In Action parameters, add <strong>SelectedControl</strong> as the first argument. This is required — SelectedControl is the grid on both main grids and subgrids, and the function reads the selected rows from it.</React.Fragment>,
+    <React.Fragment key="s10">Select your web resource as the library and enter the full function name (including namespace). In Action parameters, add <strong>SelectedControl</strong> as the first argument. {gridButtonReadsSelection(config)
+      ? 'This is required — SelectedControl is the grid on both main grids and subgrids, and the function reads the selected rows from it.'
+      : 'SelectedControl is the grid on both main grids and subgrids. With this record source the function does not read the selection, so the pane opens whether or not a row is selected.'}</React.Fragment>,
   ] : trigger.kind === 'GridRowSelect' ? [
     'Paste this function into a new JavaScript web resource and publish it.',
     <React.Fragment key="s11">Enable the <strong>Power Apps grid control</strong> on the {subgrid ? 'form subgrid' : 'table views'}. An <strong>Events</strong> tab appears on the control.</React.Fragment>,
@@ -85,7 +88,7 @@ export function CommandStepsTab({ config }: CommandStepsTabProps): React.ReactEl
     : null;
   const nameError = names.ok ? '' : names.errors.map(error => error.message).join(' ');
   // The prerequisites below deploy the Basic Script, so these steps follow it.
-  const steps = deploySteps(config.trigger, 'basic');
+  const steps = deploySteps(config, 'basic');
   const isManual = config.trigger.kind === 'ManualJS';
 
   const copyFqn = (value: string) => {
