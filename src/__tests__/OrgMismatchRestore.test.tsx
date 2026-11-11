@@ -125,6 +125,8 @@ beforeEach(() => {
   stored = null;
   handler = undefined;
   vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} });
+  // These tests read the Output panel's Copy button, which the wide layout always renders; jsdom's 1024px is narrow.
+  vi.stubGlobal('innerWidth', 1280);
 });
 
 afterEach(async () => {

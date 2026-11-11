@@ -818,6 +818,41 @@ describe('SidePaneBuilderWorkbench', () => {
     expect(host?.textContent).toContain('toolboxAPI unavailable');
     expect(Array.from(host?.querySelectorAll('button') ?? []).some(b => b.textContent === 'Retry')).toBe(false);
   });
+
+  it('uses the narrow layout below the width the three wide panels need (revie2 WR-002)', async () => {
+    vi.stubGlobal('innerWidth', 1000);
+    vi.stubGlobal('toolboxAPI', {
+      connections: { getActiveConnection: vi.fn().mockResolvedValue({ id: 'conn-1' }) },
+      events: { on: vi.fn(), off: vi.fn() },
+      settings: { get: vi.fn().mockResolvedValue(null), set: vi.fn().mockResolvedValue(undefined) },
+    });
+    await render(<SidePaneBuilderWorkbench />);
+    await act(async () => { await Promise.resolve(); });
+    expect(workbenchShellState.props?.layoutMode).toBe('narrow');
+  });
+
+  describe('connection screens (revie2 WR-010)', () => {
+    const toolbox = (getActiveConnection: ReturnType<typeof vi.fn>) => ({
+      connections: { getActiveConnection },
+      events: { on: vi.fn(), off: vi.fn() },
+      settings: { get: vi.fn().mockResolvedValue(null), set: vi.fn().mockResolvedValue(undefined) },
+    });
+
+    it('announces the connecting screen as a status', async () => {
+      vi.stubGlobal('toolboxAPI', toolbox(vi.fn().mockReturnValue(new Promise(() => undefined))));
+      await render(<SidePaneBuilderWorkbench />);
+      expect(host?.textContent).toContain('Connecting to Dataverse');
+      expect(host?.querySelector('[role="status"]')?.textContent).toContain('Connecting to Dataverse');
+    });
+
+    it('announces a failed connection as an alert', async () => {
+      vi.stubGlobal('toolboxAPI', toolbox(vi.fn().mockRejectedValue(new Error('No connection'))));
+      await render(<SidePaneBuilderWorkbench />);
+      await act(async () => { await Promise.resolve(); });
+      expect(host?.textContent).toContain('Connection unavailable');
+      expect(host?.querySelector('[role="alert"]')?.textContent).toContain('Connection unavailable');
+    });
+  });
 });
 
 describe('SidePaneBuilderWorkbench — pending save flush', () => {

@@ -79,11 +79,14 @@ function orgSelectionsOf(config: PaneDefinitionConfig): string {
   return JSON.stringify([targetValues, host, source.kind === 'fixed' || source.kind === 'lookup' ? source : null]);
 }
 
+/** The wide layout's three panels need 308 + 300 + 420 px and two borders; below this the Output panel is clipped. */
+const WIDE_LAYOUT_MIN_WIDTH = 1040;
+
 export function SidePaneBuilderWorkbench(): React.ReactElement {
   const [config, setConfig] = useState<PaneDefinitionConfig>(DEFAULT_CONFIG);
   const [previewEpoch, setPreviewEpoch] = useState(0);
   const [layoutMode, setLayoutMode] = useState<'wide' | 'narrow'>(
-    window.innerWidth >= 900 ? 'wide' : 'narrow'
+    window.innerWidth >= WIDE_LAYOUT_MIN_WIDTH ? 'wide' : 'narrow'
   );
   const [connectionState, setConnectionState] = useState<ConnectionState>({ status: 'loading' });
   const [settingsHydrated, setSettingsHydrated] = useState(false);
@@ -238,7 +241,7 @@ export function SidePaneBuilderWorkbench(): React.ReactElement {
   // Responsive layout via ResizeObserver
   useEffect(() => {
     const ro = new ResizeObserver(() => {
-      setLayoutMode(window.innerWidth >= 900 ? 'wide' : 'narrow');
+      setLayoutMode(window.innerWidth >= WIDE_LAYOUT_MIN_WIDTH ? 'wide' : 'narrow');
     });
     ro.observe(document.body);
     return () => ro.disconnect();
@@ -381,12 +384,12 @@ export function SidePaneBuilderWorkbench(): React.ReactElement {
   }, [applyFilterResult]);
 
   if (connectionState.status === 'loading') {
-    return <StatusScreen message="Connecting to Dataverse…" />;
+    return <StatusScreen role="status" message="Connecting to Dataverse…" />;
   }
 
   if (connectionState.status === 'error') {
     return (
-      <StatusScreen icon="⚠" title="Connection unavailable" message={connectionState.message}
+      <StatusScreen role="alert" icon="⚠" title="Connection unavailable" message={connectionState.message}
         action={connectionState.retryable ? { label: 'Retry', onClick: handleRetryConnection } : undefined} />
     );
   }
