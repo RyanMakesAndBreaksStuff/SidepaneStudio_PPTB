@@ -722,6 +722,16 @@ describe('SidePaneBuilderWorkbench — pending save flush', () => {
     expect(settingsSet).toHaveBeenCalledTimes(1);
   });
 
+  it('writes the pending edit when the page is hidden for unload (r2 WR-008)', async () => {
+    await renderHydrated();
+    await editTitle();
+    expect(settingsSet).not.toHaveBeenCalled();
+
+    await act(async () => { window.dispatchEvent(new Event('pagehide')); });
+    expect(settingsSet).toHaveBeenCalledTimes(1);
+    expect(settingsSet).toHaveBeenCalledWith('lastConfig', expect.stringContaining('"title":"Edited Title"'));
+  });
+
   it('writes nothing on hide when no edit is pending', async () => {
     await renderHydrated();
     await act(async () => { setVisibility('hidden'); });

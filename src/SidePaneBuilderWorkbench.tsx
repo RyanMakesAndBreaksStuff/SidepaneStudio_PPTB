@@ -284,13 +284,16 @@ export function SidePaneBuilderWorkbench(): React.ReactElement {
     return () => clearTimeout(id);
   }, [config, settingsHydrated, persistOrgKey]);
 
-  // Unload hooks are unreliable in this host, so a hidden window or an unmount is the last chance to write the pending edit.
+  // The host sends no event when a tool tab closes, so a hidden window, a page unload or an unmount is the last
+  // chance to write the pending edit.
   useEffect(() => {
     const flush = () => pendingSaveRef.current?.();
     const onVisibilityChange = () => { if (document.visibilityState === 'hidden') flush(); };
     document.addEventListener('visibilitychange', onVisibilityChange);
+    window.addEventListener('pagehide', flush);
     return () => {
       document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('pagehide', flush);
       flush();
     };
   }, []);
