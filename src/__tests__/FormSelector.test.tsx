@@ -147,6 +147,26 @@ describe('FormSelector', () => {
     expect(host?.textContent).not.toContain('Could not load main forms');
   });
 
+  it('shows the host message when forms fail for a reason it has no hint for (revie2 WR-006)', async () => {
+    const failure = { ok: false as const, error: { code: 'query-failed', message: 'Failed to load forms for entity.', cause: new Error('Network request failed') } };
+    const formXmlService = {
+      getFormsForEntityResult: vi.fn().mockResolvedValue(failure),
+    } as unknown as FormXmlService;
+
+    await render(
+      <FormSelector
+        entityName="account"
+        onEntityNameChange={vi.fn()}
+        formXmlService={formXmlService}
+        metadataService={mockMetadataService}
+        onFormSelected={vi.fn()}
+      />
+    );
+    await act(async () => { await Promise.resolve(); });
+
+    expect(host?.textContent).toContain('Could not load main forms. Network request failed');
+  });
+
   it('validates error payload shape on failed load', async () => {
     const getFormsForEntityResult = vi.fn().mockResolvedValueOnce({
       ok: false,
