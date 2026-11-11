@@ -1917,3 +1917,56 @@ describe('ManualJS Basic output defines and runs its namespaced function (M7)', 
     expect(generateBasicScript(manual(''))).toBe('// Fix the trigger namespace and function name errors to generate this script.');
   });
 });
+
+describe('grid button without a row-based source opens with no selection (r2 CR-001)', () => {
+  const GUID = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+  const gridButton = { kind: 'GridButton', namespace: 'TestNs', functionName: 'open' } as const;
+  const emptyGrid = { getGrid: () => ({ getSelectedRows: () => ({ getLength: () => 0 }) }) };
+  const cases: Array<[string, PaneDefinitionConfig]> = [
+    ['a dashboard', cfg({ pane: { paneId: 'p' }, trigger: gridButton, context: { source: { kind: 'none' } },
+      target: { pageType: 'dashboard', dashboardId: GUID, dashboardName: 'Sales' } })],
+    ['a custom page with a specific record', cfg({ pane: { paneId: 'p' }, trigger: gridButton,
+      context: { source: { kind: 'fixed', entityName: 'account', id: GUID } } })],
+  ];
+  const basic = (config: PaneDefinitionConfig, xrm: unknown) =>
+    new Function('window', 'Xrm', `${generateBasicScript(config)}\nreturn TestNs.open;`)({}, xrm) as (...args: unknown[]) => void;
+  const library = (config: PaneDefinitionConfig, openErrorDialog = vi.fn()) => {
+    const helperOpen = vi.fn();
+    const open = new Function('Xrm', 'SidePaneHelper', `${generateLibraryScript(config)}\nreturn TestNs.open;`)(
+      { Navigation: { openErrorDialog } }, { open: helperOpen }) as (...args: unknown[]) => void;
+    return { open, helperOpen, openErrorDialog };
+  };
+
+  it.each(cases)('Basic opens %s with no row selected', async (_name, config) => {
+    const { pane, xrm } = trackedPanes();
+    basic(config, xrm)(emptyGrid);
+    await vi.waitFor(() => expect(pane.navigate).toHaveBeenCalledTimes(1));
+    expect(xrm.Navigation.openErrorDialog).not.toHaveBeenCalled();
+  });
+
+  it.each(cases)('Shared Library opens %s with no row selected', (_name, config) => {
+    const { open, helperOpen, openErrorDialog } = library(config);
+    open(emptyGrid);
+    expect(helperOpen).toHaveBeenCalledTimes(1);
+    expect(openErrorDialog).not.toHaveBeenCalled();
+  });
+
+  it('neither output asks for SelectedControl when the command passes no parameter', async () => {
+    const { pane, xrm } = trackedPanes();
+    basic(cases[0][1], xrm)();
+    await vi.waitFor(() => expect(pane.navigate).toHaveBeenCalledTimes(1));
+    expect(xrm.Navigation.openErrorDialog).not.toHaveBeenCalled();
+    const { open, helperOpen, openErrorDialog } = library(cases[0][1]);
+    open();
+    expect(helperOpen).toHaveBeenCalledTimes(1);
+    expect(openErrorDialog).not.toHaveBeenCalled();
+  });
+
+  it('still exits without opening when the source is the selected row', () => {
+    const { open, helperOpen } = library(cfg({ pane: { paneId: 'p' }, trigger: gridButton,
+      host: { entityName: 'account' }, context: { source: { kind: 'selectedRow' } },
+      target: { pageType: 'entityrecord', entityName: 'account', formId: '', tabName: '', data: '' } }));
+    open(emptyGrid);
+    expect(helperOpen).not.toHaveBeenCalled();
+  });
+});

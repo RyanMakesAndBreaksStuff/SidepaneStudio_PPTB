@@ -443,14 +443,20 @@ ${indentLines(body, '    ')}
 };`;
 }
 
-/** Grid triggers declare selectedEntity and selectedRecordId first; a command with no selected row does nothing. '' for other triggers. */
-function gridRowPreamble(kind: TriggerKind): string {
+/**
+ * Grid triggers that read the row declare selectedEntity and selectedRecordId first; such a command does nothing with
+ * no selected row. '' for other triggers, and for a grid command whose source is a fixed record or no record.
+ */
+function gridRowPreamble(config: PaneDefinitionConfig): string {
+  const { kind } = config.trigger;
   // OnRecordSelect: executionContext.getEventSource().getId() — Power Apps grid control sample
   // https://learn.microsoft.com/power-apps/developer/model-driven-apps/clientapi/reference/events/grid-onrecordselect
   if (GRID_SELECT_KINDS.includes(kind)) {
     return `  var selectedEntity = executionContext.getEventSource();\n  var selectedRecordId = selectedEntity.getId();\n`;
   }
-  if (kind !== 'GridButton') return '';
+  // r2 CR-001 — only these sources read the row (buildRecordContext, buildCreateFromEntityExpr, buildRelatedRecordPreamble).
+  const source = config.context.source.kind;
+  if (kind !== 'GridButton' || (source !== 'selectedRow' && source !== 'lookup')) return '';
   // codegen-config-model-001 — SelectedControl is the grid context for main grids and subgrids; a command that
   // passes PrimaryControl first (the form, on a subgrid) still finds the grid as the second argument. With no grid at all,
   // the user is told which parameter to add instead of seeing a TypeError.
@@ -506,7 +512,7 @@ function generateGridButtonScript(config: PaneDefinitionConfig, { segments, ns, 
   return `${namespaceDeclaration(segments)}
 ${PENDING_VAR} = ${PENDING_VAR} || {};${onSelect ? `\n${LATEST_VAR} = ${LATEST_VAR} || {};` : ''}
 ${ns}.${fn} = function(${arg}) {
-${gridRowPreamble(config.trigger.kind)}  if (${pending} && (Date.now() - ${pending}) < ${PENDING_TTL_MS}) ${whenLocked}
+${gridRowPreamble(config)}  if (${pending} && (Date.now() - ${pending}) < ${PENDING_TTL_MS}) ${whenLocked}
 ${takeLock}  (async function() {
     try {
 ${indentLines(body, '    ')}
@@ -649,5 +655,5 @@ export function generateLibraryScript(config: PaneDefinitionConfig): string {
 
   return `${namespaceDeclaration(segments)}
 ${ns}.${fn} = function(${param}) {
-${runtimeGuard}${lookupTagPreamble(config)}${gridRowPreamble(trigger.kind)}${body}};${lookupRegistration}${manualInvocation}`;
+${runtimeGuard}${lookupTagPreamble(config)}${gridRowPreamble(config)}${body}};${lookupRegistration}${manualInvocation}`;
 }
