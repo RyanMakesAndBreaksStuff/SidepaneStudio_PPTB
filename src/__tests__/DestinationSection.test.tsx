@@ -296,3 +296,37 @@ describe('DestinationSection — docs links', () => {
     }));
   });
 });
+
+describe('DestinationSection — unconfirmed environment (r2 WR-003)', () => {
+  const restored = cfg({
+    trigger: { kind: 'FormButton' }, host: { entityName: 'account' },
+    context: { source: { kind: 'lookup', attribute: 'primarycontactid' } },
+    target: { pageType: 'entityrecord', entityName: 'contact', formId: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee', tabName: 'general', data: '', createNew: false },
+  });
+  const lookupService = () => ({
+    ...makeMetadataService(),
+    listLookupAttributes: vi.fn().mockResolvedValue([{ LogicalName: 'primarycontactid', Targets: ['lead'] }]),
+  }) as unknown as MetadataService;
+  const settle = async () => {
+    await act(async () => { await Promise.resolve(); });
+    await act(async () => { await Promise.resolve(); });
+  };
+
+  it('leaves the restored destination alone until the environment is confirmed', async () => {
+    const onChange = vi.fn();
+    await render(<DestinationSection config={restored} onChange={onChange} metadataService={lookupService()}
+      formXmlService={formXmlService} errors={{}} warnings={{}} orgMismatch />);
+    await settle();
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('re-resolves the lookup once the environment is confirmed', async () => {
+    const onChange = vi.fn();
+    await render(<DestinationSection config={restored} onChange={onChange} metadataService={lookupService()}
+      formXmlService={formXmlService} errors={{}} warnings={{}} />);
+    await settle();
+    expect(onChange).toHaveBeenCalled();
+    const updater = onChange.mock.calls[0][0] as Updater;
+    expect(updater(restored).target).toMatchObject({ entityName: 'lead', formId: '', tabName: '' });
+  });
+});

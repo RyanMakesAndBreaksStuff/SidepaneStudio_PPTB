@@ -303,8 +303,13 @@ export function SidePaneBuilderWorkbench(): React.ReactElement {
 
   const handleChange = useCallback(
     (updater: (prev: PaneDefinitionConfig) => PaneDefinitionConfig) => {
-      configDirtyRef.current = true;
-      setConfig(prev => coerceConfig(updater(prev)));
+      setConfig(prev => {
+        const next = coerceConfig(updater(prev));
+        // r2 WR-003 — a handler that returns the configuration unchanged is not an edit: it must not block a
+        // pending restore or schedule a save.
+        if (next !== prev) configDirtyRef.current = true;
+        return next;
+      });
     },
     []
   );

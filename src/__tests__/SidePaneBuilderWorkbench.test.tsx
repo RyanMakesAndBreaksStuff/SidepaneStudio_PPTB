@@ -773,4 +773,28 @@ describe('SidePaneBuilderWorkbench — pending save flush', () => {
     await act(async () => { vi.advanceTimersByTime(1); await Promise.resolve(); });
     expect(settingsSet).toHaveBeenCalledTimes(1);
   });
+
+  it('treats a change that returns the same configuration as no edit (r2 WR-003)', async () => {
+    const getLastConfig = deferred<string | null>();
+    settingsSet.mockReset().mockResolvedValue(undefined);
+    vi.stubGlobal('toolboxAPI', {
+      connections: { getActiveConnection: vi.fn().mockResolvedValue({ id: 'conn-1' }) },
+      events: { on: vi.fn(), off: vi.fn() },
+      settings: { get: vi.fn(() => getLastConfig.promise), set: settingsSet },
+    });
+    await render(<SidePaneBuilderWorkbench />);
+    await act(async () => { await Promise.resolve(); });
+    await act(async () => {
+      const onChange = workbenchShellState.props?.onChange as (update: (prev: PaneDefinitionConfig) => PaneDefinitionConfig) => void;
+      onChange(prev => prev);
+    });
+    await act(async () => {
+      getLastConfig.resolve(JSON.stringify({ ...DEFAULT_CONFIG, pane: { ...DEFAULT_CONFIG.pane, title: 'Restored Title' } }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(host?.querySelector('[data-testid="title"]')?.textContent).toBe('Restored Title');
+    await act(async () => { vi.advanceTimersByTime(600); await Promise.resolve(); });
+    expect(settingsSet).not.toHaveBeenCalled();
+  });
 });

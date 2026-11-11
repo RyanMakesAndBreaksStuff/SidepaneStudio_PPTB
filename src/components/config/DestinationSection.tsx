@@ -23,7 +23,7 @@ import { ViewPicker } from '../ViewPicker';
 import { JsonDataField } from '../JsonDataField';
 import { Callout } from '../Callout';
 
-export type DestinationSectionProps = SectionSharedProps & Pick<ConfigurePanelProps, 'formXmlService'>;
+export type DestinationSectionProps = SectionSharedProps & Pick<ConfigurePanelProps, 'formXmlService' | 'orgMismatch'>;
 
 const FORM_DATA_EXAMPLE = `{
   "name": "Contoso",
@@ -94,7 +94,7 @@ function openDocsLink(event: React.MouseEvent<HTMLAnchorElement>): void {
 }
 
 export function DestinationSection({ config, onChange, metadataService, formXmlService,
-  errors, warnings }: DestinationSectionProps): React.ReactElement {
+  errors, warnings, orgMismatch = false }: DestinationSectionProps): React.ReactElement {
   const { isDark } = useTheme();
   const T = theme(isDark);
   const { target, trigger, host, context } = config;
@@ -104,10 +104,12 @@ export function DestinationSection({ config, onChange, metadataService, formXmlS
   const lookupColumns = useLookupColumns(metadataService, source.kind === 'lookup' && recordTarget ? host.entityName : '');
   const currentLookup = source.kind === 'lookup' ? lookupColumns.find(source.attribute) : undefined;
   useEffect(() => {
-    if (!currentLookup) return;
+    // r2 WR-003 — while a restore from another environment is unconfirmed, this environment's metadata must not
+    // retarget it: that would read as a re-pick and dismiss the warning.
+    if (!currentLookup || orgMismatch) return;
     onChange(prev => prev.context.source.kind === 'lookup' && prev.context.source.attribute === currentLookup.LogicalName
       ? applyLookup(prev, host.entityName, currentLookup) : prev);
-  }, [currentLookup]);
+  }, [currentLookup, orgMismatch]);
   const resolvedTargets = Array.isArray(currentLookup?.Targets) ? [...new Set(currentLookup.Targets)] : [];
   const destination = destinationTable(config);
   const allowed = allowedSources(config);

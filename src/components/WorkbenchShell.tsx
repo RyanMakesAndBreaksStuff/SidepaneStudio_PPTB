@@ -114,6 +114,7 @@ function WorkbenchShellContent({
     onMetadataFilterDraftChange,
     jumpRequest,
     onJumpHandled: dropJump,
+    orgMismatch,
   };
   const previewPanelProps = { config, onChange, validation, metadataService, xrm };
   const previewPanel = (

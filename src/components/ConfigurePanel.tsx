@@ -32,6 +32,8 @@ export interface ConfigurePanelProps {
   jumpRequest?: JumpRequest;
   /** Called once a jump request has been applied, so its owner can drop it and a later remount does not replay it. */
   onJumpHandled?: (request: JumpRequest) => void;
+  /** W20 — the restored config is unconfirmed for this environment; metadata must not rewrite it until the user confirms. */
+  orgMismatch?: boolean;
 }
 
 export function ConfigurePanel(props: ConfigurePanelProps): React.ReactElement {
@@ -66,7 +68,7 @@ export function ConfigurePanel(props: ConfigurePanelProps): React.ReactElement {
         <TriggerSection {...sectionProps} formXmlService={formXmlService} />
       </Section>
       <Section title="Destination" icon="2" open={destinationOpen} onOpenChange={setDestinationOpen} headerRef={destinationHeader}>
-        <DestinationSection {...sectionProps} formXmlService={formXmlService} />
+        <DestinationSection {...sectionProps} formXmlService={formXmlService} orgMismatch={props.orgMismatch} />
       </Section>
       <Section title="Pane & behaviour" icon="3" open={paneOpen} onOpenChange={setPaneOpen} headerRef={paneHeader}>
         <PaneSection {...sectionProps} metadataFilterConfig={metadataFilterConfig}
