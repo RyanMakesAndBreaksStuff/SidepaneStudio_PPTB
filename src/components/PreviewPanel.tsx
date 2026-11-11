@@ -31,6 +31,7 @@ export interface PreviewPanelProps {
    */
   metadataService: MetadataService;
   xrm: IXrmContext;
+  orgMismatch?: boolean;
 }
 
 type PreviewMode = 'mock' | 'form' | 'grid';
@@ -68,6 +69,7 @@ const PreviewPanelContent = React.memo(function PreviewPanelContent({
   validation,
   metadataService,
   xrm,
+  orgMismatch,
 }: PreviewPanelProps): React.ReactElement {
   const { isDark } = useTheme();
   const T = theme(isDark);
@@ -111,7 +113,7 @@ const PreviewPanelContent = React.memo(function PreviewPanelContent({
   }, []);
 
   const formXmlSvcRef = useRef<FormXmlService | null>(null);
-  if (!formXmlSvcRef.current) formXmlSvcRef.current = new FormXmlService(xrm);
+  if (!formXmlSvcRef.current) formXmlSvcRef.current = new FormXmlService(xrm, () => metadataService.userLanguageCode);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -211,6 +213,7 @@ const PreviewPanelContent = React.memo(function PreviewPanelContent({
           key={JSON.stringify([config.host.entityName, config.host.viewId, config.host.viewType, relatedLookup])}
           config={config} validation={validation} metadataService={metadataService} xrm={xrm}
           onConfigChange={onChange}
+          orgMismatch={orgMismatch}
         />}
 
         {/* Form mode */}

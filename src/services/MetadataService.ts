@@ -65,7 +65,7 @@ export type AccessibleDashboardsResult =
 interface RawEntityMetadata {
   LogicalName: string;
   SchemaName: string;
-  DisplayName?: { UserLocalizedLabel?: { Label: string } | null } | null;
+  DisplayName?: { UserLocalizedLabel?: { Label: string; LanguageCode?: number } | null } | null;
   EntitySetName?: string | null;
   IsCustomEntity?: boolean;
   IsActivity?: boolean;
@@ -151,6 +151,12 @@ export class MetadataService {
   private _denyExact: Set<string>;
   private _allowedStandardTables: Set<string>;
   private _tableListeners = new Set<() => void>();
+  private _languageCode: number | null = null;
+
+  /** The LCID Dataverse used for user-localized labels; null until a table list has loaded. */
+  get userLanguageCode(): number | null {
+    return this._languageCode;
+  }
 
   constructor(
     private readonly xrm: Pick<IXrmContext, 'webApiGet'>,
@@ -182,7 +188,10 @@ export class MetadataService {
         const response = await this.xrm.webApiGet<RawEntityMetadata[]>(
           buildEntityDefinitionsPath()
         );
-        return rowsWith(response, ['LogicalName'], 'table')
+        const rows = rowsWith(response, ['LogicalName'], 'table');
+        this._languageCode = rows.map(e => e.DisplayName?.UserLocalizedLabel?.LanguageCode)
+          .find((code): code is number => typeof code === 'number') ?? this._languageCode;
+        return rows
           .filter(e => keepEntity(e, this._filterConfig, this._denyExact, this._allowedStandardTables))
           .map(e => ({
             logicalName: e.LogicalName,

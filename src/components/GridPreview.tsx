@@ -20,6 +20,7 @@ import { applyLookup, changeHostTable } from '../services/relatedRecordConfig';
 import type { LookupAttributeInfo } from '../services/MetadataService';
 import { isValidLogicalName } from '../services/odataGuards';
 import { describeDataverseError } from '../services/dataverseErrorText';
+import { gridButtonReadsSelection } from '../services/CodeGenerationService';
 
 interface Props {
   config: PaneDefinitionConfig;
@@ -27,6 +28,8 @@ interface Props {
   metadataService: MetadataService;
   xrm: Pick<IXrmContext, 'fetchXml'>;
   onConfigChange?: (updater: (prev: PaneDefinitionConfig) => PaneDefinitionConfig) => void;
+  /** The config was restored from another environment and is not confirmed here; metadata must not rewrite it. */
+  orgMismatch?: boolean;
 }
 
 export function GridPreview(props: Props): React.ReactElement {
@@ -88,9 +91,9 @@ export function GridPreview(props: Props): React.ReactElement {
     onConfigChange?.(prev => applyLookup(prev, entityName, null));
   };
   useEffect(() => {
-    if (!lookupColumns.loaded) return;
+    if (!lookupColumns.loaded || props.orgMismatch) return;
     changeLookup(lookupColumns.find(relatedLookup));
-  }, [lookupColumns.loaded, entityName, relatedLookup]);
+  }, [lookupColumns.loaded, entityName, relatedLookup, props.orgMismatch]);
   const changeView = (view: ViewSelection) => {
     onConfigChange?.(prev => ({ ...prev, host: { ...prev.host, viewId: view.id, viewType: view.viewType } }));
     if (relatedMode) resetRelatedPreview();
@@ -148,16 +151,25 @@ function GridData({ config, validation, metadataService, xrm, entityName, viewId
   const resolveRow = (index: number) => relatedLookup !== '' && state.status === 'loaded'
     ? resolveRelatedRecord(state.rows[index], relatedLookup, relatedTargets) : null;
   /** Each command or row selection is one invocation of the generated script. */
+  const [rowlessOpen, setRowlessOpen] = usePreviewSessionState<boolean>(`${selectionKey}:rowless`, false);
   const invoke = (index: number | null) => {
+    setRowlessOpen(false);
     setActiveRow(index);
     if (index !== null && (relatedLookup === '' || resolveRow(index)?.status === 'resolved')) {
       openPane(config.pane.isSelected, config.behavior.reuseExistingPane);
     }
   };
+  // The generated grid-button script reads the selection only for row-based sources; other triggers always have a row.
+  const needsRow = config.trigger.kind !== 'GridButton' || gridButtonReadsSelection(config);
+  const runCommand = () => {
+    if (selectedRows.length > 0) { invoke(Math.min(...selectedRows)); return; }
+    if (!needsRow) { setActiveRow(null); setRowlessOpen(true); openPane(config.pane.isSelected, config.behavior.reuseExistingPane); }
+  };
   const onSelectionChange = (indices: number[]) => {
+    const ticked = indices.filter(index => !selectedRows.includes(index));
     setSelectedRows(indices);
-    const onSelect = config.trigger.kind === 'GridRowSelect';
-    invoke(onSelect && indices.length === 1 ? indices[0] : null);
+    // OnRecordSelect fires for the row the user just ticked, whatever else is ticked.
+    invoke(config.trigger.kind === 'GridRowSelect' && ticked.length === 1 ? ticked[0] : null);
   };
   const request = useRef(0);
   useEffect(() => {
@@ -168,6 +180,7 @@ function GridData({ config, validation, metadataService, xrm, entityName, viewId
     setCompleted(null);
     setSelectedRows([]);
     setActiveRow(null);
+    setRowlessOpen(false);
     setState({ status: 'loading' });
     try {
       const result = await metadataService.listViewsForEntity(entityName);
@@ -196,7 +209,7 @@ function GridData({ config, validation, metadataService, xrm, entityName, viewId
   };
   const relatedResolution = activeRow !== null ? resolveRow(activeRow) : null;
   const related = relatedResolution?.status === 'resolved' ? relatedResolution.record : null;
-  const paneOpen = activeRow !== null && (relatedLookup === '' || relatedResolution?.status === 'resolved');
+  const paneOpen = rowlessOpen || (activeRow !== null && (relatedLookup === '' || relatedResolution?.status === 'resolved'));
   return <>
     <p style={{ color: T.accent, fontFamily: T.font, fontSize: 12 }}>Reads up to 10 rows from the selected view. Preview only.</p>
     <button
@@ -231,7 +244,7 @@ function GridData({ config, validation, metadataService, xrm, entityName, viewId
       variant={{ kind: 'grid', caption: `${entityName} · ${state.viewName} · live data, simulated command`, record: related }}>
       <MockGrid rows={state.rows} columns={state.columns} viewName={state.viewName}
         selectedRows={selectedRows} activeRow={activeRow} onSelectionChange={onSelectionChange}
-        onCommand={() => { if (selectedRows.length === 1) invoke(selectedRows[0]); }}
+        commandEnabled={!needsRow || selectedRows.length > 0} onCommand={runCommand}
         onRefresh={() => void generate()} />
     </NativeMdaFrame>}
   </>;

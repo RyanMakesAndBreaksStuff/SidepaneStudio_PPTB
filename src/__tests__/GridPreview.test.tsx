@@ -135,18 +135,14 @@ describe('grid preview', () => {
     setFetch(fetchXmlQuery);
     await render(preview());
     await click('Generate grid preview');
-    const command = () => Array.from(host!.querySelectorAll('button')).find(b => b.textContent === 'Preview command')!;
-    expect(command().disabled).toBe(true);
     const boxes = () => Array.from(host!.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'));
     expect(boxes()).toHaveLength(3);
     await act(async () => { boxes()[2].click(); });
     expect(boxes()[0].indeterminate).toBe(true);
-    expect(command().disabled).toBe(false);
     await click('Preview command');
     expect(host!.textContent).toContain('SelectedRow: row 2');
     await act(async () => { boxes()[0].click(); });
     expect(boxes().every(b => b.checked)).toBe(true);
-    expect(command().disabled).toBe(true);
     expect(host!.textContent).not.toContain('SelectedRow:');
     expect(host!.querySelector('[aria-label="Grid commands"]')).toBeTruthy();
     for (const label of ['New', 'Delete', 'Visualize this view', 'Email a Link', 'Flow', 'Run Report', 'Share']) {
@@ -157,7 +153,61 @@ describe('grid preview', () => {
     expect(boxes().every(b => !b.checked)).toBe(true);
   });
 
-  it.each(['main', 'subgrid'] as const)('simulates row selection on %s only for one selected row', async surface => {
+  it('leaves a restored configuration alone until its environment is confirmed (revie2 WR-001)', async () => {
+    const related = cfg({ trigger: { kind: 'GridButton' }, host: { entityName: 'account', viewId: view.id, viewType: view.viewType },
+      context: { source: { kind: 'lookup', attribute: 'primarycontactid' } } });
+    const service = metadata();
+    const onConfigChange = vi.fn();
+    const element = (orgMismatch: boolean) => <GridPreview config={related} validation={validation} metadataService={service}
+      xrm={xrm} onConfigChange={onConfigChange} orgMismatch={orgMismatch} />;
+    await render(element(true));
+    await act(async () => { await Promise.resolve(); });
+    expect(onConfigChange).not.toHaveBeenCalled();
+    await render(element(false));
+    await act(async () => { await Promise.resolve(); });
+    expect(onConfigChange).toHaveBeenCalled();
+  });
+
+  describe('selection rule (revie2 WR-004)', () => {
+    const rows = { value: [{ name: 'Acme' }, { name: 'Beta' }, { name: 'Cora' }] };
+    const command = () => Array.from(host!.querySelectorAll('button')).find(b => b.textContent === 'Preview command')!;
+    const tick = async (row: number) => act(async () => {
+      host!.querySelector<HTMLInputElement>(`input[aria-label="Select row ${row}"]`)!.click();
+    });
+    async function open(overrides: Partial<typeof config>) {
+      setFetch(vi.fn().mockResolvedValue(rows));
+      await render(<GridPreview config={{ ...config, ...overrides }} validation={validation} metadataService={metadata()} xrm={xrm} />);
+      await click('Generate grid preview');
+    }
+
+    it('enables the command with no row ticked when the script reads no row', async () => {
+      await open({ context: { ...config.context, source: { kind: 'none' } } });
+      expect(command().disabled).toBe(false);
+      await click('Preview command');
+      expect(host!.textContent).toContain(config.pane.title);
+      expect(host!.textContent).not.toContain('SelectedRow:');
+    });
+
+    it('needs a ticked row and uses the first one when the script reads the selection', async () => {
+      await open({ context: { ...config.context, source: { kind: 'selectedRow' } } });
+      expect(command().disabled).toBe(true);
+      await tick(3);
+      await tick(2);
+      expect(command().disabled).toBe(false);
+      await click('Preview command');
+      expect(host!.textContent).toContain('SelectedRow: row 2');
+    });
+
+    it('opens for the row just ticked on row select, also when another row is already ticked', async () => {
+      await open({ trigger: { ...config.trigger, kind: 'GridRowSelect', surface: 'main' } });
+      await tick(1);
+      expect(host!.textContent).toContain('SelectedRow: row 1');
+      await tick(2);
+      expect(host!.textContent).toContain('SelectedRow: row 2');
+    });
+  });
+
+  it.each(['main', 'subgrid'] as const)('simulates row selection on %s for the row just ticked', async surface => {
     setFetch(vi.fn().mockResolvedValue({ value: [{ name: 'Acme' }, { name: 'Beta' }] }));
     await render(<GridPreview config={{ ...config, trigger: { ...config.trigger, kind: 'GridRowSelect', surface } }} validation={validation}
       metadataService={metadata()} xrm={xrm} />);
@@ -165,7 +215,7 @@ describe('grid preview', () => {
     await act(async () => { host!.querySelector<HTMLInputElement>('input[aria-label="Select row 2"]')!.click(); });
     expect(host!.textContent).toContain('SelectedRow: row 2');
     await act(async () => { host!.querySelector<HTMLInputElement>('input[aria-label="Select row 1"]')!.click(); });
-    expect(host!.textContent).not.toContain('SelectedRow:');
+    expect(host!.textContent).toContain('SelectedRow: row 1');
   });
 
   it('shows empty results and query failures with a repeatable explicit action', async () => {

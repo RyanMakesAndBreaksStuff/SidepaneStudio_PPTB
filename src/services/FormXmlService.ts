@@ -82,13 +82,16 @@ function classIdToFieldType(classId: string): FormCell['fieldType'] {
   return CLASSID_FIELD_TYPE[prefix] ?? 'unknown';
 }
 
-function firstLabel(el: Element | null): string {
-  if (!el) return '';
-  return el.querySelector('labels > label')?.getAttribute('description') ?? '';
+/** The element's own label in the user's language, else its first label. */
+function labelOf(el: Element | null, languageCode: number | null): string {
+  const labels = Array.from(el?.children ?? []).find(child => child.tagName === 'labels');
+  const all = Array.from(labels?.children ?? []).filter(child => child.tagName === 'label');
+  const match = languageCode === null ? undefined : all.find(label => label.getAttribute('languagecode') === String(languageCode));
+  return (match ?? all[0])?.getAttribute('description') ?? '';
 }
 
 export class FormXmlService {
-  constructor(private readonly xrm: IXrmContext) {}
+  constructor(private readonly xrm: IXrmContext, private readonly userLanguageCode: () => number | null | undefined = () => null) {}
 
   async getFormsForEntityResult(entityLogicalName: string): Promise<FormsForEntityResult> {
     if (!isValidLogicalName(entityLogicalName)) {
@@ -173,6 +176,8 @@ export class FormXmlService {
     try {
       const doc = new DOMParser().parseFromString(xml, 'text/xml');
       if (doc.querySelector('parsererror')) return null;
+      const code = this.userLanguageCode();
+      const languageCode = typeof code === 'number' ? code : null;
 
       const tabs: FormTab[] = [];
       for (const tabEl of Array.from(doc.querySelectorAll('form > tabs > tab'))) {
@@ -186,7 +191,7 @@ export class FormXmlService {
               const isEmpty = !controlEl;
               const classId = controlEl?.getAttribute('classid') ?? '';
               cells.push({
-                label: firstLabel(cellEl),
+                label: labelOf(cellEl, languageCode),
                 fieldName: controlEl?.getAttribute('datafieldname') ?? '',
                 fieldType: isEmpty ? 'unknown' : classIdToFieldType(classId),
                 colspan: parseInt(cellEl.getAttribute('colspan') ?? '1', 10),
@@ -197,7 +202,7 @@ export class FormXmlService {
           }
           sections.push({
             name: sectionEl.getAttribute('name') ?? '',
-            label: firstLabel(sectionEl),
+            label: labelOf(sectionEl, languageCode),
             showLabel: sectionEl.getAttribute('showlabel') !== 'false',
             columnCount: parseInt(sectionEl.getAttribute('columns') ?? '1', 10),
             rows,
@@ -205,7 +210,7 @@ export class FormXmlService {
         }
         tabs.push({
           name: tabEl.getAttribute('name') ?? '',
-          label: firstLabel(tabEl),
+          label: labelOf(tabEl, languageCode),
           sections,
         });
       }

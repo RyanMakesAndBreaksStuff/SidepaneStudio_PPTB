@@ -99,7 +99,7 @@ function WorkbenchShellContent({
   );
   const validation = useMemo(() => validate(config, accessibleTables, orgMismatch), [config, accessibleTables, orgMismatch]);
 
-  const formXmlService = useMemo(() => new FormXmlService(xrm), [xrm]);
+  const formXmlService = useMemo(() => new FormXmlService(xrm, () => metadataService.userLanguageCode), [xrm, metadataService]);
 
   const configurePanelProps = {
     config,
@@ -120,7 +120,7 @@ function WorkbenchShellContent({
     onJumpHandled: dropJump,
     orgMismatch,
   };
-  const previewPanelProps = { config, onChange, validation, metadataService, xrm };
+  const previewPanelProps = { config, onChange, validation, metadataService, xrm, orgMismatch };
   const previewPanel = (
     <ErrorBoundary fallback={(error, retry) => <PreviewCrash error={error} retry={retry} />}>
       <PreviewPanel {...previewPanelProps} />

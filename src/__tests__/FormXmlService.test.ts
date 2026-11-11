@@ -161,4 +161,33 @@ describe('FormXmlService', () => {
     expect(webApiGetEntity).toHaveBeenCalledTimes(1);
     expect(queryData).not.toHaveBeenCalled();
   });
+
+  describe('label language (revie2 WR-007)', () => {
+    const TWO_LANGUAGES = MINIMAL_FORM_XML.replace(
+      '<labels><label description="General" languagecode="1033"/></labels>',
+      '<labels><label description="General" languagecode="1033"/><label description="Général" languagecode="1036"/></labels>');
+
+    async function tabLabel(languageCode: number | null) {
+      const svc = new FormXmlService(makeXrm([], TWO_LANGUAGES), () => languageCode);
+      const result = await svc.getFormModelResult('11111111-1111-1111-1111-111111111111');
+      if (!result.ok) throw new Error(result.error.message);
+      return result.model.tabs[0].label;
+    }
+
+    it('shows the label in the user language', async () => {
+      expect(await tabLabel(1036)).toBe('Général');
+    });
+
+    it('falls back to the first label when the language is unknown or has no label', async () => {
+      expect(await tabLabel(null)).toBe('General');
+      expect(await tabLabel(1031)).toBe('General');
+    });
+
+    it('reads a section label from the section, not from its first field', async () => {
+      const svc = new FormXmlService(makeXrm([], MINIMAL_FORM_XML.replace('<labels><label description="Info"/></labels>', '')));
+      const result = await svc.getFormModelResult('11111111-1111-1111-1111-111111111111');
+      if (!result.ok) throw new Error(result.error.message);
+      expect(result.model.tabs[0].sections[0].label).toBe('');
+    });
+  });
 });

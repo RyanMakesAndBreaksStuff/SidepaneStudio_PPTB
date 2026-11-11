@@ -105,6 +105,14 @@ describe('MetadataService', () => {
       expect(result.tables.map(t => t.logicalName)).toContain('new_widget');
     });
 
+    it('remembers the language of the user-localized labels (revie2 WR-007)', async () => {
+      const xrm = makeXrm([{ ...ENTITY_ACCOUNT, DisplayName: { UserLocalizedLabel: { Label: 'Compte', LanguageCode: 1036 } } }]);
+      const service = new MetadataService(xrm);
+      expect(service.userLanguageCode).toBeNull();
+      await service.listAccessibleTables();
+      expect(service.userLanguageCode).toBe(1036);
+    });
+
     it('accepts unwrapped collection arrays from webApiGet', async () => {
       const xrm: MetaXrm = {
         webApiGet: vi.fn().mockResolvedValue([ENTITY_ACCOUNT]),
