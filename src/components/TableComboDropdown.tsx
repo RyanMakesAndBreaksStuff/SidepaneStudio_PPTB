@@ -10,6 +10,8 @@ export interface TableComboDropdownProps {
   error?: string;
   onRetry?: () => void;
   filtered: FilteredEntry[];
+  /** All matches, including those past the rendered ones. */
+  matchCount?: number;
   query: string;
   customOnly?: boolean;
   noun?: string;
@@ -27,6 +29,7 @@ export function TableComboDropdown({
   error,
   onRetry,
   filtered,
+  matchCount = filtered.length,
   query,
   customOnly,
   noun = 'tables',
@@ -124,6 +127,11 @@ export function TableComboDropdown({
             </button>
           );
         })}
+        {matchCount > filtered.length && (
+          <div role="presentation" style={{ padding: '6px 10px', color: T.fg3, fontFamily: T.font, fontSize: 11 }}>
+            Showing the first {filtered.length} of {matchCount} {noun}. Type to narrow the list.
+          </div>
+        )}
       </div>
     );
   }

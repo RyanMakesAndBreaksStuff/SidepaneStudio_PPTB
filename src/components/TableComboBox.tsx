@@ -35,6 +35,9 @@ export interface TableComboBoxProps {
   disabled?: boolean;
 }
 
+/** A broad query in a large org matches thousands of rows; mounting them all on each keystroke stalls typing. */
+const MAX_VISIBLE_OPTIONS = 100;
+
 export function TableComboBox({
   value,
   onChange,
@@ -81,7 +84,8 @@ export function TableComboBox({
     () => customOnly ? list.filter(table => table.isCustomEntity === true) : list,
     [list, customOnly]
   );
-  const filtered = useMemo(() => filterTables(customTables, query), [customTables, query]);
+  const matches = useMemo(() => filterTables(customTables, query), [customTables, query]);
+  const filtered = useMemo(() => matches.slice(0, MAX_VISIBLE_OPTIONS), [matches]);
 
   // Close and clear transient search when the picker becomes unavailable.
   useEffect(() => {
@@ -297,6 +301,7 @@ export function TableComboBox({
           error={error}
           onRetry={onRetry}
           filtered={filtered}
+          matchCount={matches.length}
           query={query}
           customOnly={customOnly}
           noun={noun}

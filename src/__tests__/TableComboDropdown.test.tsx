@@ -93,3 +93,29 @@ describe('TableComboDropdown keyboard and pointer model', () => {
     expect(host!.querySelectorAll('[role="option"]')).toHaveLength(1);
   });
 });
+
+describe('long lists (revie2 WR-011)', () => {
+  async function open(count: number) {
+    const many: ComboItem[] = Array.from({ length: count }, (_, i) => (
+      { logicalName: `new_t${i}`, displayName: `Table ${String(i).padStart(3, '0')}`, isCustomEntity: true }));
+    host = document.createElement('div');
+    document.body.appendChild(host);
+    root = createRoot(host);
+    await act(async () => {
+      root?.render(<ThemeProvider><TableComboBox ariaLabel="Table" value="" items={many} onChange={() => undefined} /></ThemeProvider>);
+    });
+    await act(async () => { host!.querySelector<HTMLInputElement>('[role="combobox"]')!.focus(); });
+  }
+
+  it('mounts at most 100 options and says how many matched', async () => {
+    await open(150);
+    expect(host!.querySelectorAll('[role="option"]')).toHaveLength(100);
+    expect(host!.textContent).toContain('Showing the first 100 of 150 tables. Type to narrow the list.');
+  });
+
+  it('adds no note when everything fits', async () => {
+    await open(100);
+    expect(host!.querySelectorAll('[role="option"]')).toHaveLength(100);
+    expect(host!.textContent).not.toContain('Showing the first');
+  });
+});
