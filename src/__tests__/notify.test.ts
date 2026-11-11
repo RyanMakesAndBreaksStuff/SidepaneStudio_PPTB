@@ -27,4 +27,18 @@ describe('notify', () => {
     expect(() => notify('t', 'b', 'error')).not.toThrow();
     await new Promise(resolve => setTimeout(resolve, 0));
   });
+
+  it.each(['error', 'warning'] as const)('keeps a %s notification on screen until dismissed (r2 WR-004)', type => {
+    const showNotification = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('toolboxAPI', { utils: { showNotification } });
+    notify('Preferences not saved', 'The write failed.', type);
+    expect(showNotification).toHaveBeenCalledWith({ title: 'Preferences not saved', body: 'The write failed.', type, duration: 0 });
+  });
+
+  it('leaves an info notification on the host timer', () => {
+    const showNotification = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('toolboxAPI', { utils: { showNotification } });
+    notify('Link copied', 'Paste it into a browser.', 'info');
+    expect(showNotification).toHaveBeenCalledWith({ title: 'Link copied', body: 'Paste it into a browser.', type: 'info' });
+  });
 });
