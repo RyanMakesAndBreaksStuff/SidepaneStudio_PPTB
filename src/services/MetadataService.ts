@@ -147,7 +147,7 @@ export class MetadataService {
   private readonly _views = new RequestCache<ViewInfo[]>();
   private readonly _attributeLabels = new RequestCache<AttributeLabel[]>();
   private readonly _lookupAttributes = new RequestCache<LookupAttributeInfo[]>();
-  private _dashboardCache?: { dashboards: DashboardInfo[]; expiresAt: number };
+  private readonly _dashboards = new RequestCache<DashboardInfo[]>();
   private _connectionGeneration = 0;
   private _filterConfig: MetadataFilterConfig;
   private _denyExact: Set<string>;
@@ -202,26 +202,19 @@ export class MetadataService {
   }
 
   async listAccessibleDashboards(): Promise<AccessibleDashboardsResult> {
+    const generation = this._connectionGeneration;
     try {
-      const cached = this._dashboardCache;
-      if (cached && Date.now() < cached.expiresAt) {
-        return { status: 'ok', dashboards: cached.dashboards };
-      }
-      const generation = this._connectionGeneration;
-      const [sysResult, userResult] = await Promise.all([
-        this.xrm.webApiGet<RawSystemDashboard[]>(
-          buildSystemDashboardsPath()
-        ),
-        this.xrm.webApiGet<RawUserDashboard[]>(
-          buildUserDashboardsPath()
-        ),
-      ]);
+      const dashboards = await this._dashboards.get('all', async () => {
+        const [sysResult, userResult] = await Promise.all([
+          this.xrm.webApiGet<RawSystemDashboard[]>(buildSystemDashboardsPath()),
+          this.xrm.webApiGet<RawUserDashboard[]>(buildUserDashboardsPath()),
+        ]);
+        return [
+          ...rowsWith(sysResult, ['formid', 'name'], 'system dashboard').map(d => ({ id: d.formid, name: d.name, isPersonal: false })),
+          ...rowsWith(userResult, ['userformid', 'name'], 'personal dashboard').map(d => ({ id: d.userformid, name: d.name, isPersonal: true })),
+        ].sort((a, b) => a.name.localeCompare(b.name));
+      });
       if (generation !== this._connectionGeneration) return this.listAccessibleDashboards();
-      const dashboards: DashboardInfo[] = [
-        ...rowsWith(sysResult, ['formid', 'name'], 'system dashboard').map(d => ({ id: d.formid, name: d.name, isPersonal: false })),
-        ...rowsWith(userResult, ['userformid', 'name'], 'personal dashboard').map(d => ({ id: d.userformid, name: d.name, isPersonal: true })),
-      ].sort((a, b) => a.name.localeCompare(b.name));
-      this._dashboardCache = { dashboards, expiresAt: Date.now() + CACHE_TTL_MS };
       return { status: 'ok', dashboards };
     } catch (err) {
       return { status: 'error', reason: describeDataverseError(err, 'Unknown error loading dashboards.') };
@@ -281,7 +274,7 @@ export class MetadataService {
   invalidate(): void {
     this._connectionGeneration += 1;
     this._tables.clear();
-    this._dashboardCache = undefined;
+    this._dashboards.clear();
     this._views.clear();
     this._attributeLabels.clear();
     this._lookupAttributes.clear();

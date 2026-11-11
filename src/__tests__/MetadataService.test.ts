@@ -753,3 +753,15 @@ describe('untrusted host rows (r2 WR-014)', () => {
     }
   });
 });
+
+describe('dashboard requests (r2 PR-005)', () => {
+  it('shares one request pair between concurrent callers', async () => {
+    const webApiGet = vi.fn()
+      .mockResolvedValueOnce([{ name: 'Sales Dashboard', formid: 'sys-1' }])
+      .mockResolvedValueOnce([]);
+    const svc = new MetadataService({ webApiGet });
+    const [first, second] = await Promise.all([svc.listAccessibleDashboards(), svc.listAccessibleDashboards()]);
+    expect(webApiGet).toHaveBeenCalledTimes(2);
+    expect(second).toEqual(first);
+  });
+});
