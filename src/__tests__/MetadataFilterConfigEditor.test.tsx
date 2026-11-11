@@ -69,6 +69,33 @@ describe('MetadataFilterConfigEditor', () => {
     expect(onRetryLoad).toHaveBeenCalledTimes(1);
   });
 
+  it('warns that saving replaces the unread saved filters after a failed load', async () => {
+    await render(
+      <MetadataFilterConfigEditor config={customConfig} defaultConfig={DEFAULT_METADATA_FILTER_CONFIG}
+        persistenceAvailable={true} onSave={() => {}} onReset={() => {}}
+        error="settings backend offline" onRetryLoad={() => {}} />
+    );
+    expect(host?.textContent).toContain('Saving now replaces the saved filters.');
+  });
+
+  it('does not warn about replacing saved filters without a retry handler', async () => {
+    await render(
+      <MetadataFilterConfigEditor config={customConfig} defaultConfig={DEFAULT_METADATA_FILTER_CONFIG}
+        persistenceAvailable={true} onSave={() => {}} onReset={() => {}}
+        error="settings backend offline" />
+    );
+    expect(host?.textContent).not.toContain('Saving now replaces the saved filters.');
+  });
+
+  it('does not warn about replacing saved filters when persistence is unavailable', async () => {
+    await render(
+      <MetadataFilterConfigEditor config={customConfig} defaultConfig={DEFAULT_METADATA_FILTER_CONFIG}
+        persistenceAvailable={false} onSave={() => {}} onReset={() => {}}
+        error="settings backend offline" onRetryLoad={() => {}} />
+    );
+    expect(host?.textContent).not.toContain('Saving now replaces the saved filters.');
+  });
+
   it('renders helper text for each filter type', async () => {
     await render(
       <MetadataFilterConfigEditor

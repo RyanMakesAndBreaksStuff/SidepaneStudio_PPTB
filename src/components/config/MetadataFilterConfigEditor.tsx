@@ -19,7 +19,7 @@ export interface MetadataFilterConfigEditorProps {
   onSave: (config: MetadataFilterConfig) => Promise<void> | void;
   onReset: () => Promise<void> | void;
   error?: string | null;
-  /** Supplied only when `error` is a failed settings load; shows Retry beside it. */
+  /** Supplied only when `error` is a failed settings load; shows Retry beside it and, when persistence is available, a warning that saving replaces the unread saved filters. */
   onRetryLoad?: () => void;
   /** Controlled draft, owned above any remount (Section collapse, connection change); omit both to keep it locally. */
   draft?: MetadataFilterDraft | null;
@@ -179,6 +179,11 @@ export function MetadataFilterConfigEditor({
             <span>{error}</span>
             {onRetryLoad && <RetryButton onClick={onRetryLoad} />}
           </span>
+        </Callout>
+      )}
+      {onRetryLoad && persistenceAvailable && (
+        <Callout type="warn" icon="!">
+          The saved filters could not be loaded, so the defaults are shown. Saving now replaces the saved filters.
         </Callout>
       )}
 
