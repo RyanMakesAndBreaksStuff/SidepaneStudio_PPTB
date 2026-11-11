@@ -649,8 +649,8 @@ describe('view metadata', () => {
       }]);
     const result = await new MetadataService({ webApiGet }).listViewsForEntity('account');
     expect(webApiGet.mock.calls).toEqual([
-      ["savedqueries?$select=name,savedqueryid,fetchxml,layoutxml&$filter=returnedtypecode eq 'account' and querytype eq 0&$orderby=name asc"],
-      ["userqueries?$select=name,userqueryid,fetchxml,layoutxml&$filter=returnedtypecode eq 'account' and querytype eq 0&$orderby=name asc"],
+      ["savedqueries?$select=name,savedqueryid,fetchxml,layoutxml&$filter=returnedtypecode eq 'account' and querytype eq 0 and statecode eq 0&$orderby=name asc"],
+      ["userqueries?$select=name,userqueryid,fetchxml,layoutxml&$filter=returnedtypecode eq 'account' and querytype eq 0 and statecode eq 0&$orderby=name asc"],
     ]);
     expect(result).toEqual({ status: 'ok', views: [
       { id: 'bbbbbbbb-0000-0000-0000-000000000002', name: 'My accounts', viewType: 'userquery', fetchXml: '<fetch top="3"><entity name="account"/></fetch>', layoutXml: '' },

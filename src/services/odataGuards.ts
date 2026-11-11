@@ -16,7 +16,7 @@ export function escapeODataStringLiteral(value: string): string {
 
 export function buildSystemFormsForEntityPath(entityLogicalName: string): string {
   return (
-    `systemforms?$filter=objecttypecode eq '${escapeODataStringLiteral(entityLogicalName)}' and type eq 2` +
+    `systemforms?$filter=objecttypecode eq '${escapeODataStringLiteral(entityLogicalName)}' and type eq 2 and formactivationstate eq 1` +
     `&$select=name,formid&$orderby=name asc`
   );
 }
@@ -51,7 +51,7 @@ export function buildViewsForEntityPath(
   if (!isValidLogicalName(entityLogicalName)) return null;
   const collection = viewType === 'savedquery' ? 'savedqueries' : 'userqueries';
   return `${collection}?$select=name,${viewType}id,fetchxml,layoutxml` +
-    `&$filter=returnedtypecode eq '${entityLogicalName}' and querytype eq 0&$orderby=name asc`;
+    `&$filter=returnedtypecode eq '${entityLogicalName}' and querytype eq 0 and statecode eq 0&$orderby=name asc`;
 }
 
 export function buildAttributeLabelsPath(entityLogicalName: string): string | null {

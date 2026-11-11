@@ -2,7 +2,9 @@ import { describe, it, expect } from 'vitest';
 import {
   buildEntityDefinitionsPath,
   buildSystemDashboardsPath,
+  buildSystemFormsForEntityPath,
   buildUserDashboardsPath,
+  buildViewsForEntityPath,
 } from '../services/odataGuards';
 
 describe('OData path builders', () => {
@@ -31,4 +33,15 @@ describe('OData path builders', () => {
     expect(path).toContain('userformid');
     expect(path).toContain('type eq 0');
   });
+
+  it('buildSystemFormsForEntityPath lists active main forms only (r2 WR-002)', () => {
+    expect(buildSystemFormsForEntityPath('account')).toBe(
+      "systemforms?$filter=objecttypecode eq 'account' and type eq 2 and formactivationstate eq 1&$select=name,formid&$orderby=name asc");
+  });
+
+  it.each([['savedquery', 'savedqueries'], ['userquery', 'userqueries']] as const)(
+    'buildViewsForEntityPath lists active %s rows only (r2 WR-002)', (viewType, collection) => {
+      expect(buildViewsForEntityPath('account', viewType)).toBe(
+        `${collection}?$select=name,${viewType}id,fetchxml,layoutxml&$filter=returnedtypecode eq 'account' and querytype eq 0 and statecode eq 0&$orderby=name asc`);
+    });
 });
