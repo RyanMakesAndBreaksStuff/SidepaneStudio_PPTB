@@ -92,6 +92,7 @@ export function WidthPicker({
             <button
               key={preset}
               type="button"
+              aria-pressed={active}
               onClick={() => onChange(preset)}
               style={{
                 padding: '3px 10px',

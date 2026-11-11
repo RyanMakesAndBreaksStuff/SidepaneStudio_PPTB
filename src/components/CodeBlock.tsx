@@ -65,6 +65,12 @@ function highlight(code: string, lang: string): string {
   ]));
 }
 
+/** Read by screen readers, not drawn. */
+const VISUALLY_HIDDEN: React.CSSProperties = {
+  position: 'absolute', width: 1, height: 1, margin: -1, padding: 0, border: 0,
+  overflow: 'hidden', clip: 'rect(0 0 0 0)', whiteSpace: 'nowrap',
+};
+
 export function CodeBlock({ code, lang = 'js', copyDisabled = false }: CodeBlockProps): React.ReactElement {
   const { isDark } = useTheme();
   const T = theme(isDark);
@@ -96,6 +102,7 @@ export function CodeBlock({ code, lang = 'js', copyDisabled = false }: CodeBlock
             {lang === 'json' ? 'JSON' : lang === 'text' ? 'Text' : 'JavaScript'}
           </span>
           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <span role="status" style={VISUALLY_HIDDEN}>{copied ? 'Copied to clipboard' : ''}</span>
             <button
               type="button"
               onClick={() => setWrap(w => !w)}
@@ -120,6 +127,7 @@ export function CodeBlock({ code, lang = 'js', copyDisabled = false }: CodeBlock
               Wrap
             </button>
             <button
+              type="button"
               onClick={copy}
               disabled={copyDisabled}
               style={{

@@ -8,10 +8,12 @@ export type CalloutType = 'warn' | 'err' | 'ok' | 'info';
 export interface CalloutProps {
   type?: CalloutType;
   icon?: string;
+  /** Announce politely when this callout appears or changes; an `err` callout is always an alert. */
+  live?: boolean;
   children: React.ReactNode;
 }
 
-export function Callout({ type = 'warn', icon, children }: CalloutProps): React.ReactElement {
+export function Callout({ type = 'warn', icon, live = false, children }: CalloutProps): React.ReactElement {
   const { isDark } = useTheme();
   const T = theme(isDark);
 
@@ -25,7 +27,7 @@ export function Callout({ type = 'warn', icon, children }: CalloutProps): React.
   const c = colors[type] ?? colors.warn;
 
   return (
-    <div role={type === 'err' ? 'alert' : undefined} style={{
+    <div role={type === 'err' ? 'alert' : live ? 'status' : undefined} style={{
       display: 'flex', gap: 8, padding: '8px 10px',
       background: c.bg, borderLeft: `3px solid ${c.border}`,
       borderRadius: T.rM, fontSize: 12, color: c.fg, lineHeight: 1.5,

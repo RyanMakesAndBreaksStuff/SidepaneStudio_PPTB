@@ -115,4 +115,17 @@ describe('CodeBlock', () => {
     expect((header.querySelector('span') as HTMLElement).style.color).toBe(rgb(T.codeAccent));
     expect(host!.innerHTML).not.toMatch(/#1E1E1E|#252526|#D4D4D4|#4EC9B0/i);
   });
+
+  it('announces a successful copy through a status region (r2 WR-012)', async () => {
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: vi.fn().mockResolvedValue(undefined) } });
+    await render(<CodeBlock code="var a = 1;" lang="js" />);
+    const status = () => host?.querySelector('[role="status"]');
+    expect(status()?.textContent).toBe('');
+    const copyButton = Array.from(host?.querySelectorAll('button') ?? []).find(b => b.textContent?.includes('Copy'));
+    await act(async () => {
+      copyButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await new Promise(resolve => setTimeout(resolve, 0));
+    });
+    expect(status()?.textContent).toBe('Copied to clipboard');
+  });
 });

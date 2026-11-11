@@ -91,3 +91,12 @@ it('preset click updates the displayed draft', async () => {
     expect(t.input().value).toBe('800');
   } finally { await t.cleanup(); }
 });
+
+it('marks the active preset as pressed (r2 WR-012)', async () => {
+  const t = setup(400);
+  try {
+    await t.rerender();
+    const presets = Array.from(t.host.querySelectorAll<HTMLButtonElement>('button')).map(b => [b.textContent, b.getAttribute('aria-pressed')]);
+    expect(presets).toEqual([['320', 'false'], ['400', 'true'], ['480', 'false'], ['600', 'false'], ['800', 'false']]);
+  } finally { await t.cleanup(); }
+});

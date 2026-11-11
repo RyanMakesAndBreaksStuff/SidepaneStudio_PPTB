@@ -45,6 +45,7 @@ export const OutputPanel = React.memo(function OutputPanel({ config, xrm, valida
 
   const [activeTab, setActiveTab] = useState('basic');
   const tabsId = useId();
+  const rawId = useId();
   const [showRaw, setShowRaw] = useState(false);
   const [runtimeExists, setRuntimeExists] = useState<boolean | null>(null);
   const [runtimeName, setRuntimeName] = useState<string | null>(null);
@@ -166,12 +167,12 @@ export const OutputPanel = React.memo(function OutputPanel({ config, xrm, valida
               </Callout>
             )}
             {runtimeExists === false && !runtimeCheckError && (
-              <Callout type="warn" icon="⚠">
+              <Callout type="warn" icon="⚠" live>
                 <strong>Prerequisite not detected:</strong> No web resource ending in <code>{RUNTIME_WEB_RESOURCE_SUFFIX}</code> was found in this environment. Deploy the shared runtime (recommended name: <code>{RUNTIME_WEB_RESOURCE_NAME}</code>) before using this output.
               </Callout>
             )}
             {runtimeExists === true && !runtimeCheckError && (
-              <Callout type="ok" icon="✓">Shared runtime library detected in this environment{runtimeName && <> (<code>{runtimeName}</code>)</>}.</Callout>
+              <Callout type="ok" icon="✓" live>Shared runtime library detected in this environment{runtimeName && <> (<code>{runtimeName}</code>)</>}.</Callout>
             )}
             <SummaryCard
               title="📚 Shared library version"
@@ -211,6 +212,9 @@ export const OutputPanel = React.memo(function OutputPanel({ config, xrm, valida
             blocking validation errors, regardless of warnings. */}
         <div>
           <button
+            type="button"
+            aria-expanded={showRaw}
+            aria-controls={rawId}
             onClick={() => setShowRaw(r => !r)}
             style={{
               display: 'flex', alignItems: 'center', gap: 6,
@@ -227,7 +231,7 @@ export const OutputPanel = React.memo(function OutputPanel({ config, xrm, valida
             Advanced — Raw Config
           </button>
           {showRaw && (
-            <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div id={rawId} style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
               <Callout type="info" icon="ℹ">
                 Resolved <code>PaneDefinitionConfig</code> — for debugging and diagnostics only.
               </Callout>

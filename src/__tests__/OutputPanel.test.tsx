@@ -406,4 +406,22 @@ describe('OutputPanel', () => {
     await render(<OutputPanel config={DEFAULT_CONFIG} xrm={xrmStub()} validation={{ isValid: true, errors: [], warnings: [] }} />);
     expect(Array.from(host!.querySelectorAll('[role="tab"]')).map(t => t.textContent)).not.toContain('Page prompt');
   });
+
+  it('exposes the raw-config disclosure state and what it controls (r2 WR-012)', async () => {
+    await render(<OutputPanel config={DEFAULT_CONFIG} xrm={xrmStub()} validation={{ isValid: true, errors: [], warnings: [] }} />);
+    const expander = Array.from(host!.querySelectorAll('button')).find(b => b.textContent?.includes('Advanced — Raw Config'))!;
+    expect(expander.getAttribute('aria-expanded')).toBe('false');
+    await act(async () => { expander.click(); });
+    expect(expander.getAttribute('aria-expanded')).toBe('true');
+    expect(document.getElementById(expander.getAttribute('aria-controls')!)).not.toBeNull();
+  });
+
+  it('announces the runtime check result as a status (r2 WR-012)', async () => {
+    const xrm = { ...xrmStub(), checkWebResourceExists: vi.fn().mockResolvedValue(null) };
+    await render(<OutputPanel config={DEFAULT_CONFIG} xrm={xrm} validation={{ isValid: true, errors: [], warnings: [] }} />);
+    await clickLibraryTab();
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
+    const statuses = Array.from(host!.querySelectorAll('[role="status"]')).map(el => el.textContent ?? '');
+    expect(statuses.some(text => text.includes('Prerequisite not detected'))).toBe(true);
+  });
 });
