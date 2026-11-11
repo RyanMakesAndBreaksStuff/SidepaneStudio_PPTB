@@ -137,7 +137,7 @@ export const OutputPanel = React.memo(function OutputPanel({ config, xrm, valida
               body={describeConfigText(config)}
               steps={deploySteps(config, 'basic')}
             />
-            {validation.errors.length > 0 && (
+            {!validation.isValid && (
               <Callout type="err" icon="✕">
                 Fix {validation.errors.length} validation error{validation.errors.length > 1 ? 's' : ''} before using this code: {validation.errors[0].message}
               </Callout>
@@ -147,7 +147,7 @@ export const OutputPanel = React.memo(function OutputPanel({ config, xrm, valida
                 <strong>closeOthers is active:</strong> The generated script closes all other side panes after opening this one.
               </Callout>
             )}
-            {validation.errors.length === 0 && <CodeBlock code={basicCode} lang="js" copyDisabled={copyBlocked} />}
+            {validation.isValid && <CodeBlock code={basicCode} lang="js" copyDisabled={copyBlocked} />}
           </>
         )}
 
@@ -179,12 +179,12 @@ export const OutputPanel = React.memo(function OutputPanel({ config, xrm, valida
               body={<>Shorter snippet that calls the pre-deployed <strong>SidePaneHelper</strong> runtime.</>}
               steps={deploySteps(config, 'library')}
             />
-            {validation.errors.length > 0 && (
+            {!validation.isValid && (
               <Callout type="err" icon="✕">
                 Fix {validation.errors.length} validation error{validation.errors.length > 1 ? 's' : ''} before using this code: {validation.errors[0].message}
               </Callout>
             )}
-            {validation.errors.length === 0 && <CodeBlock code={libCode} lang="js" copyDisabled={copyBlocked} />}
+            {validation.isValid && <CodeBlock code={libCode} lang="js" copyDisabled={copyBlocked} />}
           </>
         )}
 
@@ -207,7 +207,7 @@ export const OutputPanel = React.memo(function OutputPanel({ config, xrm, valida
         )}
 
         {/* Advanced expander — Raw Config.
-            Gated on validation.errors.length === 0, same as the basic/library tabs, for
+            Gated on validation.isValid, same as the basic/library tabs, for
             consistency: the Copy/CodeBlock affordance is withheld whenever there are
             blocking validation errors, regardless of warnings. */}
         <div>
@@ -235,7 +235,7 @@ export const OutputPanel = React.memo(function OutputPanel({ config, xrm, valida
               <Callout type="info" icon="ℹ">
                 Resolved <code>PaneDefinitionConfig</code> — for debugging and diagnostics only.
               </Callout>
-              {validation.errors.length === 0 && <CodeBlock code={rawCode} lang="json" copyDisabled={copyBlocked} />}
+              {validation.isValid && <CodeBlock code={rawCode} lang="json" copyDisabled={copyBlocked} />}
             </div>
           )}
         </div>
