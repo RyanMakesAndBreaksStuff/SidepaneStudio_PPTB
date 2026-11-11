@@ -10,7 +10,7 @@ let host: HTMLDivElement | undefined;
 
 const OPTIONS = [
   { value: 'a', label: 'Alpha' },
-  { value: 'b', label: 'Bravo', disabled: true },
+  { value: 'b', label: 'Bravo' },
   { value: 'c', label: 'Charlie' },
 ];
 
@@ -65,12 +65,12 @@ describe('ChoiceGroup', () => {
     expect(tabbable(host!)).toEqual([radio('Charlie')]);
   });
 
-  it('puts the first enabled pill in the tab order when nothing is selected', async () => {
+  it('puts the first pill in the tab order when nothing is selected', async () => {
     await render(<ChoiceGroup label="Letter" options={OPTIONS} value="" onChange={vi.fn()} />);
     expect(tabbable(host!)).toEqual([radio('Alpha')]);
   });
 
-  it('moves focus and selection with the arrow keys, skipping disabled pills and wrapping', async () => {
+  it('moves focus and selection with the arrow keys and wrapping', async () => {
     let current = 'a';
     function Harness(): React.ReactElement {
       const [value, setValue] = useState('a');
@@ -80,6 +80,10 @@ describe('ChoiceGroup', () => {
     await render(<Harness />);
     radio('Alpha').focus();
     await press(radio('Alpha'), 'ArrowRight');
+    expect(current).toBe('b');
+    expect(document.activeElement).toBe(radio('Bravo'));
+    expect(tabbable(host!)).toEqual([radio('Bravo')]);
+    await press(radio('Bravo'), 'ArrowRight');
     expect(current).toBe('c');
     expect(document.activeElement).toBe(radio('Charlie'));
     expect(tabbable(host!)).toEqual([radio('Charlie')]);
