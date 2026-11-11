@@ -353,10 +353,11 @@ export function SidePaneBuilderWorkbench(): React.ReactElement {
   }, []);
 
   const handleSaveMetadataFilterConfig = useCallback(async (nextConfig: MetadataFilterConfig) => {
-    ++filterLoadRef.current;
     try {
       const result = await metadataFilterSettingsRef.current?.save(nextConfig);
       if (!result) return;
+      // Only a write that succeeded outdates a load still in flight; after a failed write that load still applies.
+      ++filterLoadRef.current;
       applyFilterResult(result);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to save metadata filter settings.';
@@ -366,10 +367,11 @@ export function SidePaneBuilderWorkbench(): React.ReactElement {
   }, [applyFilterResult]);
 
   const handleResetMetadataFilterConfig = useCallback(async () => {
-    ++filterLoadRef.current;
     try {
       const result = await metadataFilterSettingsRef.current?.reset();
       if (!result) return;
+      // Only a write that succeeded outdates a load still in flight; after a failed write that load still applies.
+      ++filterLoadRef.current;
       applyFilterResult(result);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to reset metadata filter settings.';

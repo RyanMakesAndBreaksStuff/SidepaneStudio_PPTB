@@ -306,9 +306,13 @@ describe('SidePaneBuilderWorkbench', () => {
     expect(workbenchShellState.props?.onRetryMetadataFilterLoad).toBeUndefined();
   });
 
-  it('a load that resolves after a save does not replace the saved filters', async () => {
-    const configA: MetadataFilterConfig = { denyPrefixes: ['aaa_'], denyExact: [], allowedStandardTables: [] };
-    const configB: MetadataFilterConfig = { denyPrefixes: ['bbb_'], denyExact: ['account'], allowedStandardTables: ['contact'] };
+  const filterConfigA: MetadataFilterConfig = { denyPrefixes: ['aaa_'], denyExact: [], allowedStandardTables: [] };
+  const filterConfigB: MetadataFilterConfig = { denyPrefixes: ['bbb_'], denyExact: ['account'], allowedStandardTables: ['contact'] };
+  const writeFilters = (action: 'save' | 'reset'): Promise<void> => action === 'save'
+    ? (workbenchShellState.props?.onSaveMetadataFilterConfig as (config: MetadataFilterConfig) => Promise<void>)(filterConfigB)
+    : (workbenchShellState.props?.onResetMetadataFilterConfig as () => Promise<void>)();
+
+  it.each(['save', 'reset'] as const)('a load that resolves after a %s does not replace its result', async (action) => {
     const load = deferred<Record<string, unknown>>();
     vi.stubGlobal('toolboxAPI', {
       connections: { getActiveConnection: vi.fn().mockResolvedValue({ id: 'conn-1' }) },
@@ -322,18 +326,73 @@ describe('SidePaneBuilderWorkbench', () => {
     await render(<SidePaneBuilderWorkbench />);
     await act(async () => { await Promise.resolve(); });
 
-    await act(async () => {
-      const save = workbenchShellState.props?.onSaveMetadataFilterConfig as (config: MetadataFilterConfig) => Promise<void>;
-      await save(configB);
-    });
-    expect(workbenchShellState.props?.metadataFilterConfig).toEqual(configB);
+    await act(async () => { await writeFilters(action); });
+    const written = workbenchShellState.props?.metadataFilterConfig;
+    expect(written).not.toEqual(filterConfigA);
+    if (action === 'save') expect(written).toEqual(filterConfigB);
 
     await act(async () => {
-      load.resolve({ metadataFilters: configA });
+      load.resolve({ metadataFilters: filterConfigA });
       await Promise.resolve();
     });
     await act(async () => { await Promise.resolve(); });
-    expect(workbenchShellState.props?.metadataFilterConfig).toEqual(configB);
+    expect(workbenchShellState.props?.metadataFilterConfig).toEqual(written);
+  });
+
+  it.each(['save', 'reset'] as const)('a Retry started during a pending %s does not replace its result', async (action) => {
+    const retryLoad = deferred<Record<string, unknown>>();
+    const write = deferred<void>();
+    const getAll = vi.fn().mockRejectedValueOnce(new Error('settings backend offline')).mockImplementation(() => retryLoad.promise);
+    vi.stubGlobal('toolboxAPI', {
+      connections: { getActiveConnection: vi.fn().mockResolvedValue({ id: 'conn-1' }) },
+      events: { on: vi.fn(), off: vi.fn() },
+      settings: { get: vi.fn().mockResolvedValue(null), set: vi.fn(() => write.promise), getAll },
+    });
+    await render(<SidePaneBuilderWorkbench />);
+    await act(async () => { await Promise.resolve(); });
+    await act(async () => { await Promise.resolve(); });
+    const retry = workbenchShellState.props?.onRetryMetadataFilterLoad as () => void;
+    expect(retry).toBeTypeOf('function');
+
+    let pending: Promise<void> | undefined;
+    await act(async () => { pending = writeFilters(action); retry(); await Promise.resolve(); });
+    await act(async () => { write.resolve(); await pending; });
+    const written = workbenchShellState.props?.metadataFilterConfig;
+    expect(workbenchShellState.props?.metadataFilterError).toBeNull();
+
+    await act(async () => {
+      retryLoad.resolve({ metadataFilters: filterConfigA });
+      await Promise.resolve();
+    });
+    await act(async () => { await Promise.resolve(); });
+    expect(workbenchShellState.props?.metadataFilterConfig).toEqual(written);
+    expect(written).not.toEqual(filterConfigA);
+  });
+
+  it.each(['save', 'reset'] as const)('a %s that fails during the first load still lets that load apply', async (action) => {
+    const load = deferred<Record<string, unknown>>();
+    vi.stubGlobal('toolboxAPI', {
+      connections: { getActiveConnection: vi.fn().mockResolvedValue({ id: 'conn-1' }) },
+      events: { on: vi.fn(), off: vi.fn() },
+      settings: {
+        get: vi.fn().mockResolvedValue(null),
+        set: vi.fn().mockRejectedValue(new Error(`${action} rejected`)),
+        getAll: vi.fn(() => load.promise),
+      },
+    });
+    await render(<SidePaneBuilderWorkbench />);
+    await act(async () => { await Promise.resolve(); });
+
+    await act(async () => { await writeFilters(action); });
+    expect(workbenchShellState.props?.metadataFilterError).toBe(`${action} rejected`);
+
+    await act(async () => {
+      load.resolve({ metadataFilters: filterConfigA });
+      await Promise.resolve();
+    });
+    await act(async () => { await Promise.resolve(); });
+    expect(workbenchShellState.props?.metadataFilterConfig).toEqual(filterConfigA);
+    expect(workbenchShellState.props?.metadataFilterPersistenceAvailable).toBe(true);
   });
 
   it('surfaces a failed settings write instead of dropping it', async () => {
