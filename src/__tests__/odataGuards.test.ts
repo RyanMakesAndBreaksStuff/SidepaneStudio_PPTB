@@ -44,4 +44,8 @@ describe('OData path builders', () => {
       expect(buildViewsForEntityPath('account', viewType)).toBe(
         `${collection}?$select=name,${viewType}id,fetchxml,layoutxml&$filter=returnedtypecode eq 'account' and querytype eq 0 and statecode eq 0&$orderby=name asc`);
     });
+
+  it('buildEntityDefinitionsPath requests no column the tool does not read (r2 PR-001)', () => {
+    expect(buildEntityDefinitionsPath()).not.toContain('ObjectTypeCode');
+  });
 });

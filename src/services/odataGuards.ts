@@ -29,7 +29,7 @@ export function buildSystemFormXmlPath(formId: string): string | null {
 export function buildEntityDefinitionsPath(): string {
   return (
     'EntityDefinitions' +
-    '?$select=LogicalName,SchemaName,DisplayName,EntitySetName,ObjectTypeCode,' +
+    '?$select=LogicalName,SchemaName,DisplayName,EntitySetName,' +
     'IsCustomEntity,IsActivity,IsIntersect,IsPrivate,OwnershipType,' +
     'CanCreateForms,CanModifyAdditionalSettings,IsCustomizable' +
     '&$filter=IsValidForAdvancedFind eq true and IsIntersect eq false and IsPrivate eq false'

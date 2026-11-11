@@ -11,9 +11,9 @@ type TableListResult =
   | { status: 'ok'; tables: TableInfo[] }
   | { status: 'error'; reason: string };
 
-const accountTable: TableInfo = { logicalName: 'account', displayName: 'Account', objectTypeCode: 1, isCustomEntity: false };
-const contactTable: TableInfo = { logicalName: 'contact', displayName: 'Contact', objectTypeCode: 2, isCustomEntity: false };
-const widgetTable: TableInfo = { logicalName: 'new_widget', displayName: 'Widget', objectTypeCode: 100, isCustomEntity: true };
+const accountTable: TableInfo = { logicalName: 'account', displayName: 'Account', isCustomEntity: false };
+const contactTable: TableInfo = { logicalName: 'contact', displayName: 'Contact', isCustomEntity: false };
+const widgetTable: TableInfo = { logicalName: 'new_widget', displayName: 'Widget', isCustomEntity: true };
 
 function makeService(result: Promise<TableListResult>) {
   return {
@@ -105,8 +105,8 @@ describe('TablePicker', () => {
     const service = makeService(Promise.resolve({
       status: 'ok',
       tables: [
-        { logicalName: 'account', displayName: 'Account', objectTypeCode: 1 },
-        { logicalName: 'contact', displayName: 'Contact', objectTypeCode: 2 },
+        { logicalName: 'account', displayName: 'Account' },
+        { logicalName: 'contact', displayName: 'Contact' },
       ],
     }));
 
@@ -130,7 +130,7 @@ describe('TablePicker', () => {
         .mockResolvedValueOnce({ status: 'error', reason: 'metadata unavailable' })
         .mockResolvedValueOnce({
           status: 'ok',
-          tables: [{ logicalName: 'account', displayName: 'Account', objectTypeCode: 1 }],
+          tables: [{ logicalName: 'account', displayName: 'Account' }],
         }),
       invalidate: vi.fn(),
       subscribeTables: vi.fn(() => () => undefined),
@@ -157,7 +157,7 @@ describe('TablePicker', () => {
   it('keeps a saved inaccessible table visible', async () => {
     const service = makeService(Promise.resolve({
       status: 'ok',
-      tables: [{ logicalName: 'contact', displayName: 'Contact', objectTypeCode: 2 }],
+      tables: [{ logicalName: 'contact', displayName: 'Contact' }],
     }));
 
     await render(<TablePicker value="account" onChange={() => { /* noop */ }} metadataService={service} />);

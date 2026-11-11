@@ -61,7 +61,7 @@ const GENERATOR_COL_MIN_W = '360px';
 const COLLAPSED_RAIL_WIDTH = '44px';
 
 describe('WorkbenchShell — accessible tables', () => {
-  const table = (logicalName: string, isCustomEntity: boolean) => ({ logicalName, displayName: logicalName, objectTypeCode: 1, isCustomEntity });
+  const table = (logicalName: string, isCustomEntity: boolean) => ({ logicalName, displayName: logicalName, isCustomEntity });
   const listOf = (...tables: Array<ReturnType<typeof table>>) => ({ status: 'ok', tables });
   const withTable = (entityName: string) => cfg({ target: { pageType: 'entitylist', entityName, viewId: '', viewType: '' } });
   const warned = () => host?.querySelector('[data-testid="table-warning"]')?.textContent;

@@ -18,8 +18,8 @@ let host: HTMLDivElement | undefined;
 function makeMetadataService(): MetadataService {
   return {
     listAccessibleTables: vi.fn().mockResolvedValue({ status: 'ok', tables: [
-      { logicalName: 'account', displayName: 'Account', objectTypeCode: 1 },
-      { logicalName: 'contact', displayName: 'Contact', objectTypeCode: 2 },
+      { logicalName: 'account', displayName: 'Account' },
+      { logicalName: 'contact', displayName: 'Contact' },
     ] }),
     listAccessibleDashboards: vi.fn().mockResolvedValue({ status: 'ok', dashboards: [] }),
     listViewsForEntity: vi.fn().mockResolvedValue({ status: 'ok', views: [] }),

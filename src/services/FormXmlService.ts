@@ -18,7 +18,6 @@ export interface FormModel {
 export interface FormTab {
   name: string;
   label: string;
-  expanded: boolean;
   sections: FormSection[];
 }
 
@@ -207,7 +206,6 @@ export class FormXmlService {
         tabs.push({
           name: tabEl.getAttribute('name') ?? '',
           label: firstLabel(tabEl),
-          expanded: tabEl.getAttribute('expanded') !== 'false',
           sections,
         });
       }

@@ -13,9 +13,9 @@ let host: HTMLDivElement | undefined;
 const originalScroll = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollIntoView');
 
 const tables: TableInfo[] = [
-  { logicalName: 'account', displayName: 'Account', objectTypeCode: 1, isCustomEntity: false },
-  { logicalName: 'new_widget', displayName: 'Widget', objectTypeCode: 100, isCustomEntity: true },
-  { logicalName: 'new_widewidget', displayName: 'Wide Widget', objectTypeCode: 101, isCustomEntity: true },
+  { logicalName: 'account', displayName: 'Account', isCustomEntity: false },
+  { logicalName: 'new_widget', displayName: 'Widget', isCustomEntity: true },
+  { logicalName: 'new_widewidget', displayName: 'Wide Widget', isCustomEntity: true },
 ];
 
 async function render(element: React.ReactElement) {

@@ -13,9 +13,9 @@ import { DEFAULT_CONFIG, PaneDefinitionConfig } from '../types/PaneDefinitionCon
 import { chooseOption, xrmStub } from './testHelpers';
 
 const tables = [
-  { logicalName: 'account', displayName: 'Account', objectTypeCode: 1, isCustomEntity: false },
-  { logicalName: 'new_event', displayName: 'Event', objectTypeCode: 10001, isCustomEntity: true },
-  { logicalName: 'new_unknown', displayName: 'Unknown', objectTypeCode: 10002 },
+  { logicalName: 'account', displayName: 'Account', isCustomEntity: false },
+  { logicalName: 'new_event', displayName: 'Event', isCustomEntity: true },
+  { logicalName: 'new_unknown', displayName: 'Unknown' },
 ];
 const validation = { isValid: true, errors: [], warnings: [] };
 const originalScroll = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollIntoView');

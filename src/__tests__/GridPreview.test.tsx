@@ -229,7 +229,7 @@ describe('grid preview', () => {
     const listAccessibleTables = vi.fn().mockResolvedValue({ status: 'ok', tables: [] });
     const service = { ...metadata(), listAccessibleTables } as unknown as MetadataService;
     listAccessibleTables.mockResolvedValue({ status: 'ok', tables: [
-      { logicalName: 'account', displayName: 'Account', objectTypeCode: 1 },
+      { logicalName: 'account', displayName: 'Account' },
     ] });
     const fetchXmlQuery = vi.fn();
     setFetch(fetchXmlQuery);
@@ -512,8 +512,8 @@ describe('related-record cross-component transitions', () => {
     const service = {
       ...metadata(),
       listAccessibleTables: vi.fn().mockResolvedValue({ status: 'ok', tables: [
-        { logicalName: 'account', displayName: 'Account', objectTypeCode: 1, isCustomEntity: false },
-        { logicalName: 'new_event', displayName: 'Event', objectTypeCode: 10001, isCustomEntity: true },
+        { logicalName: 'account', displayName: 'Account', isCustomEntity: false },
+        { logicalName: 'new_event', displayName: 'Event', isCustomEntity: true },
       ] }),
     } as unknown as MetadataService;
     await render(<GridPreview config={relatedConfig} validation={validation} metadataService={service} xrm={xrm} />);
@@ -530,8 +530,8 @@ describe('related-record cross-component transitions', () => {
 
 
   const tables = [
-    { logicalName: 'account', displayName: 'Account', objectTypeCode: 1 },
-    { logicalName: 'contact', displayName: 'Contact', objectTypeCode: 2 },
+    { logicalName: 'account', displayName: 'Account' },
+    { logicalName: 'contact', displayName: 'Contact' },
   ];
   const accountView = {
     id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',

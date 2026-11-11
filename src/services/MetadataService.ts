@@ -19,7 +19,6 @@ import {
 export interface TableInfo {
   logicalName: string;
   displayName: string;
-  objectTypeCode: number;
   isCustomEntity?: boolean;
 }
 
@@ -68,7 +67,6 @@ interface RawEntityMetadata {
   SchemaName: string;
   DisplayName?: { UserLocalizedLabel?: { Label: string } | null } | null;
   EntitySetName?: string | null;
-  ObjectTypeCode?: number | null;
   IsCustomEntity?: boolean;
   IsActivity?: boolean;
   IsIntersect?: boolean;
@@ -189,7 +187,6 @@ export class MetadataService {
           .map(e => ({
             logicalName: e.LogicalName,
             displayName: displayLabel(e),
-            objectTypeCode: e.ObjectTypeCode ?? 0,
             isCustomEntity: e.IsCustomEntity === true,
           }))
           .sort((a, b) => a.displayName.localeCompare(b.displayName));

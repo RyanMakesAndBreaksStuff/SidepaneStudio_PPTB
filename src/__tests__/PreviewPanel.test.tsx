@@ -184,7 +184,7 @@ describe('PreviewPanel', () => {
     const metadataService = {
       ...mockMetadataService,
       listAccessibleTables: vi.fn().mockResolvedValue({ status: 'ok', tables: [
-        { logicalName: 'account', displayName: 'Account', objectTypeCode: 1 },
+        { logicalName: 'account', displayName: 'Account' },
       ] }),
     } as unknown as MetadataService;
     const xrm = { ...xrmStub(), webApiGet: vi.fn().mockResolvedValue([]) };
@@ -324,8 +324,8 @@ describe('PreviewPanel — lookup-source Grid source controls', () => {
     const metadataService = {
       ...mockMetadataService,
       listAccessibleTables: vi.fn().mockResolvedValue({ status: 'ok', tables: [
-        { logicalName: 'account', displayName: 'Account', objectTypeCode: 1 },
-        { logicalName: 'contact', displayName: 'Contact', objectTypeCode: 2 },
+        { logicalName: 'account', displayName: 'Account' },
+        { logicalName: 'contact', displayName: 'Contact' },
       ] }),
       listViewsForEntity: vi.fn().mockResolvedValue({ status: 'ok', views: [] }),
       listLookupAttributes: vi.fn().mockResolvedValue([]),
@@ -368,8 +368,8 @@ describe('PreviewPanel — lookup-source Grid source controls', () => {
     const metadataService = {
       ...mockMetadataService,
       listAccessibleTables: vi.fn().mockResolvedValue({ status: 'ok', tables: [
-        { logicalName: 'account', displayName: 'Account', objectTypeCode: 1 },
-        { logicalName: 'contact', displayName: 'Contact', objectTypeCode: 2 },
+        { logicalName: 'account', displayName: 'Account' },
+        { logicalName: 'contact', displayName: 'Contact' },
       ] }),
       listViewsForEntity,
       listLookupAttributes,
@@ -441,8 +441,8 @@ describe('PreviewPanel — lookup-source Grid source controls', () => {
     const metadataService = {
       ...mockMetadataService,
       listAccessibleTables: vi.fn().mockResolvedValue({ status: 'ok', tables: [
-        { logicalName: 'account', displayName: 'Account', objectTypeCode: 1 },
-        { logicalName: 'contact', displayName: 'Contact', objectTypeCode: 2 },
+        { logicalName: 'account', displayName: 'Account' },
+        { logicalName: 'contact', displayName: 'Contact' },
       ] }),
       listViewsForEntity,
       listAttributeLabels: vi.fn().mockResolvedValue([
@@ -476,8 +476,8 @@ describe('PreviewPanel — lookup-source Grid source controls', () => {
     const metadataService = {
       ...mockMetadataService,
       listAccessibleTables: vi.fn().mockResolvedValue({ status: 'ok', tables: [
-        { logicalName: 'account', displayName: 'Account', objectTypeCode: 1 },
-        { logicalName: 'contact', displayName: 'Contact', objectTypeCode: 2 },
+        { logicalName: 'account', displayName: 'Account' },
+        { logicalName: 'contact', displayName: 'Contact' },
       ] }),
       listViewsForEntity: vi.fn().mockResolvedValue({ status: 'ok', views: [accountView] }),
       listLookupAttributes: vi.fn().mockResolvedValue([{ LogicalName: 'primarycontactid', Targets: ['contact'] }]),
@@ -543,8 +543,8 @@ describe('PreviewPanel — lookup-source Grid source controls', () => {
     const metadataService = {
       ...mockMetadataService,
       listAccessibleTables: vi.fn().mockResolvedValue({ status: 'ok', tables: [
-        { logicalName: 'account', displayName: 'Account', objectTypeCode: 1 },
-        { logicalName: 'contact', displayName: 'Contact', objectTypeCode: 2 },
+        { logicalName: 'account', displayName: 'Account' },
+        { logicalName: 'contact', displayName: 'Contact' },
       ] }),
       listViewsForEntity: vi.fn(async (entityName: string) => ({ status: 'ok' as const,
         views: entityName === 'account' ? accountViews : [contactView] })),

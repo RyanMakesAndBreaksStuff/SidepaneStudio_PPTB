@@ -54,10 +54,10 @@ type TableListResult =
 
 type FormLoadResult = { ok: true; forms: { id: string; name: string }[] };
 
-const accountTable: TableInfo = { logicalName: 'account', displayName: 'Account', objectTypeCode: 1, isCustomEntity: false };
-const contactTable: TableInfo = { logicalName: 'contact', displayName: 'Contact', objectTypeCode: 2, isCustomEntity: false };
-const widgetTable: TableInfo = { logicalName: 'new_widget', displayName: 'Widget', objectTypeCode: 100, isCustomEntity: true };
-const eventTable: TableInfo = { logicalName: 'new_event', displayName: 'Event', objectTypeCode: 10001, isCustomEntity: true };
+const accountTable: TableInfo = { logicalName: 'account', displayName: 'Account', isCustomEntity: false };
+const contactTable: TableInfo = { logicalName: 'contact', displayName: 'Contact', isCustomEntity: false };
+const widgetTable: TableInfo = { logicalName: 'new_widget', displayName: 'Widget', isCustomEntity: true };
+const eventTable: TableInfo = { logicalName: 'new_event', displayName: 'Event', isCustomEntity: true };
 
 function tableService(load: () => Promise<TableListResult>) {
   const listeners = new Set<() => void>();
