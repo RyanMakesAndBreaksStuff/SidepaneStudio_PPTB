@@ -183,7 +183,7 @@ Expected output: the summary strip reads “0 errors · 0 warnings”, **Basic S
 
 - Keep the pane id stable if later buttons should reuse this pane instead of creating a second one.
 - Width is stored in pixels. Values outside 300–1200 are rejected.
-- An icon path renders in the model-driven app after that web resource is published. The field hint reads `Web resource path — must be published and prefixed with WebResources/ to render`. While the field holds a path, the preview shows `Preview loads this image.` A path the script cannot emit safely is dropped, and the field warns `Not emitted: path must be relative to WebResources.`
+- An icon path renders in the model-driven app after that web resource is published. The field hint reads `Web resource path — must be published and prefixed with WebResources/ to render`. The preview cannot load web resources, so it shows a placeholder icon. A path the script cannot emit safely is dropped, and the field warns `Not emitted: path must be relative to WebResources.`
 - **Hide header bar** also hides the close button. If both **Hide header bar** and **Show close button** are on, the studio warns and the generated script emits `canClose: false`.
 
 **Verification**:

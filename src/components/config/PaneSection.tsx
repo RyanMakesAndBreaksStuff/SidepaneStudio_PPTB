@@ -45,9 +45,7 @@ export function PaneSection({ config, onChange, errors, warnings, metadataFilter
           <Input value={pane.imageSrc} placeholder="WebResources/sps_/icons/myicon.svg"
             onChange={value => patchPane('imageSrc', value)} />
         </div>
-        {warnings['pane.imageSrc']
-          ? <Callout type="warn" icon="⚠">{warnings['pane.imageSrc'].join(' ')}</Callout>
-          : pane.imageSrc.trim() !== '' && <Callout type="info" icon="ℹ">Preview loads this image.</Callout>}
+        {warnings['pane.imageSrc'] && <Callout type="warn" icon="⚠">{warnings['pane.imageSrc'].join(' ')}</Callout>}
       </Field>
       <Field label="Width" error={errors['pane.width']}
         hint={`Min ${MIN_CONFIG_WIDTH}px · Max ${MAX_CONFIG_WIDTH}px · Recommended 400–600px · Current: ${pane.width}px`}>

@@ -34,11 +34,10 @@ afterEach(async () => {
 });
 
 describe('PaneSection tab icon callout (W11)', () => {
-  it('says the preview loads an accepted relative path', async () => {
+  it('makes no claim about the preview for an accepted relative path (revie2 WR-003)', async () => {
     await renderPane('sps_/icons/pane.svg');
-    expect(host?.textContent).toContain('Preview loads this image');
+    expect(host?.textContent).not.toContain('Preview loads this image');
     expect(host?.textContent).not.toContain('Not emitted');
-    expect(host?.textContent).not.toContain('placeholder');
   });
 
   it('says a rejected absolute path is not emitted', async () => {
