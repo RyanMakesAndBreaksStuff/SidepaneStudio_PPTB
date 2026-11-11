@@ -31,6 +31,7 @@ export function TabStrip<T extends string>({ label, tabs, value, onChange, idPre
   const stop = at < 0 ? 0 : at;
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
+    if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
     const to = event.key === 'ArrowRight' ? (stop + 1) % tabs.length
       : event.key === 'ArrowLeft' ? (stop - 1 + tabs.length) % tabs.length
         : event.key === 'Home' ? 0

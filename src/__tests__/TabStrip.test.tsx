@@ -29,8 +29,10 @@ async function mount(): Promise<void> {
 
 const tab = (label: string) => Array.from(host!.querySelectorAll<HTMLButtonElement>('[role="tab"]')).find(t => t.textContent === label)!;
 const selected = () => host!.querySelector('[role="tab"][aria-selected="true"]')?.textContent;
-async function press(element: HTMLElement, key: string): Promise<void> {
-  await act(async () => { element.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true })); });
+async function press(element: HTMLElement, key: string, init: KeyboardEventInit = {}): Promise<KeyboardEvent> {
+  const event = new KeyboardEvent('keydown', { ...init, key, bubbles: true, cancelable: true });
+  await act(async () => { element.dispatchEvent(event); });
+  return event;
 }
 
 afterEach(async () => {
@@ -70,6 +72,19 @@ describe('TabStrip (r2 WR-011)', () => {
     await press(tab('Charlie'), 'Home');
     expect(selected()).toBe('Alpha');
     expect(document.activeElement).toBe(tab('Alpha'));
+  });
+
+  it('leaves modified keys to the browser', async () => {
+    await mount();
+    await act(async () => { tab('Bravo').click(); });
+    const cases: [KeyboardEventInit, string][] = [
+      [{ altKey: true }, 'ArrowLeft'], [{ ctrlKey: true }, 'Home'], [{ metaKey: true }, 'ArrowRight'], [{ shiftKey: true }, 'End'],
+    ];
+    for (const [init, key] of cases) {
+      const event = await press(tab('Bravo'), key, init);
+      expect(selected()).toBe('Bravo');
+      expect(event.defaultPrevented).toBe(false);
+    }
   });
 
   it('selects a tab on click', async () => {
