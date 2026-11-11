@@ -77,6 +77,21 @@ describe('PaneOverlay', () => {
     expect(host?.querySelector('img')).toBeNull();
   });
 
+  it('falls back to the placeholder glyph when the icon cannot load (revie2 WR-003)', async () => {
+    await render(
+      <PaneOverlay
+        pane={{ ...DEFAULT_CONFIG.pane, imageSrc: 'sps_/icons/pane.svg' }}
+        target={DEFAULT_CONFIG.target}
+        validation={{ isValid: true, errors: [], warnings: [] }}
+      />
+    );
+    const image = host!.querySelector('img')!;
+    expect(image).toBeTruthy();
+    await act(async () => { image.dispatchEvent(new Event('error')); });
+    expect(host!.querySelector('img')).toBeNull();
+    expect(host!.textContent).toContain('🔲');
+  });
+
   it('labels a create-mode record target as a new record', async () => {
     await render(
       <PaneOverlay

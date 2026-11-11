@@ -217,6 +217,8 @@ export const PaneOverlay = React.memo(function PaneOverlay({
   validation,
   layout = 'inline',
 }: PaneOverlayProps): React.ReactElement | null {
+  // The tool is served from its own origin, so a web-resource path normally fails to load here.
+  const [failedImageSrc, setFailedImageSrc] = React.useState<string | null>(null);
   if (pane.isSelected === false) return null;
 
   const requestedWidth = getPreviewPaneWidth(pane.width);
@@ -267,8 +269,8 @@ export const PaneOverlay = React.memo(function PaneOverlay({
             flexShrink: 0,
           }}
         >
-          {imageSrc ? (
-            <img src={imageSrc} alt="" style={{ width: 16, height: 16 }} />
+          {imageSrc && imageSrc !== failedImageSrc ? (
+            <img src={imageSrc} alt="" onError={() => setFailedImageSrc(imageSrc)} style={{ width: 16, height: 16 }} />
           ) : (
             <span style={{ fontSize: 14 }}>🔲</span>
           )}
