@@ -58,6 +58,17 @@ afterEach(async () => {
 });
 
 describe('MetadataFilterConfigEditor', () => {
+  it('offers Retry beside the error when a retry handler is supplied (r2 WR-005)', async () => {
+    const onRetryLoad = vi.fn();
+    await render(
+      <MetadataFilterConfigEditor config={customConfig} defaultConfig={DEFAULT_METADATA_FILTER_CONFIG}
+        persistenceAvailable={true} onSave={() => {}} onReset={() => {}}
+        error="settings backend offline" onRetryLoad={onRetryLoad} />
+    );
+    await act(async () => { button('Retry')?.click(); });
+    expect(onRetryLoad).toHaveBeenCalledTimes(1);
+  });
+
   it('renders helper text for each filter type', async () => {
     await render(
       <MetadataFilterConfigEditor

@@ -93,6 +93,7 @@ export function SidePaneBuilderWorkbench(): React.ReactElement {
   );
   const [metadataFilterPersistenceAvailable, setMetadataFilterPersistenceAvailable] = useState(false);
   const [metadataFilterError, setMetadataFilterError] = useState<string | null>(null);
+  const [metadataFilterLoadFailed, setMetadataFilterLoadFailed] = useState(false);
   // Unsaved filter edits live above every remount: Section collapse, panel collapse, connection change.
   const [metadataFilterDraft, setMetadataFilterDraft] = useState<MetadataFilterDraft | null>(null);
   // W20 — org of the active connection, and a restored config's org with the selections it was restored with.
@@ -125,24 +126,33 @@ export function SidePaneBuilderWorkbench(): React.ReactElement {
     setMetadataFilterConfig(result.config);
     setMetadataFilterPersistenceAvailable(result.persistenceAvailable);
     setMetadataFilterError(null);
+    setMetadataFilterLoadFailed(false);
   }, []);
 
-  // Hydrate metadata table filters independently from pane definition config.
-  useEffect(() => {
-    let active = true;
-    metadataFilterSettingsRef.current?.load().then(result => {
-      if (!active) return;
+  // Hydrate metadata table filters independently from pane definition config; Retry runs the same load again.
+  const filterLoadRef = useRef(0);
+  const loadMetadataFilters = useCallback(() => {
+    const attempt = ++filterLoadRef.current;
+    const service = metadataFilterSettingsRef.current;
+    if (!service) return;
+    service.load().then(result => {
+      if (attempt !== filterLoadRef.current) return;
       applyFilterResult(result);
     }).catch((err: unknown) => {
-      if (!active) return;
+      if (attempt !== filterLoadRef.current) return;
       const message = err instanceof Error ? err.message : 'Failed to load metadata filter settings.';
       setMetadataFilterError(message);
+      setMetadataFilterLoadFailed(true);
       metaRef.current?.setFilterConfig(DEFAULT_METADATA_FILTER_CONFIG);
       setMetadataFilterConfig(DEFAULT_METADATA_FILTER_CONFIG);
-      setMetadataFilterPersistenceAvailable(false);
+      // r2 WR-005 — one failed read does not mean the settings API is missing; Save stays available.
+      setMetadataFilterPersistenceAvailable(service.persistenceAvailable);
     });
-    return () => { active = false; };
   }, [applyFilterResult]);
+  useEffect(() => {
+    loadMetadataFilters();
+    return () => { ++filterLoadRef.current; };
+  }, [loadMetadataFilters]);
 
   // Subscribe before the initial check; only the latest check can enable the UI.
   useEffect(() => {
@@ -407,6 +417,7 @@ export function SidePaneBuilderWorkbench(): React.ReactElement {
       metadataFilterError={metadataFilterError}
       onSaveMetadataFilterConfig={handleSaveMetadataFilterConfig}
       onResetMetadataFilterConfig={handleResetMetadataFilterConfig}
+      onRetryMetadataFilterLoad={metadataFilterLoadFailed ? loadMetadataFilters : undefined}
       metadataFilterDraft={metadataFilterDraft}
       onMetadataFilterDraftChange={setMetadataFilterDraft}
       previewEpoch={previewEpoch}

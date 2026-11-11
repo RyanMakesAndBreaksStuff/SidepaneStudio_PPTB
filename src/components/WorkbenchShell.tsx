@@ -33,6 +33,8 @@ export interface WorkbenchShellProps {
   metadataFilterError?: string | null;
   onSaveMetadataFilterConfig: (config: MetadataFilterConfig) => Promise<void> | void;
   onResetMetadataFilterConfig: () => Promise<void> | void;
+  /** Present only while the last filter-settings load failed. */
+  onRetryMetadataFilterLoad?: () => void;
   /** Unsaved filter edits, owned above this shell so its remounts keep them. */
   metadataFilterDraft?: MetadataFilterDraft | null;
   onMetadataFilterDraftChange?: (draft: MetadataFilterDraft | null) => void;
@@ -69,6 +71,7 @@ function WorkbenchShellContent({
   metadataFilterError,
   onSaveMetadataFilterConfig,
   onResetMetadataFilterConfig,
+  onRetryMetadataFilterLoad,
   metadataFilterDraft,
   onMetadataFilterDraftChange,
   orgMismatch = false,
@@ -110,6 +113,7 @@ function WorkbenchShellContent({
     metadataFilterError,
     onSaveMetadataFilterConfig,
     onResetMetadataFilterConfig,
+    onRetryMetadataFilterLoad,
     metadataFilterDraft,
     onMetadataFilterDraftChange,
     jumpRequest,

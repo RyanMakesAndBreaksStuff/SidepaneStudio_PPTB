@@ -14,11 +14,11 @@ import type { SectionSharedProps } from './TriggerSection';
 export type PaneSectionProps = SectionSharedProps & Pick<ConfigurePanelProps,
   'metadataFilterConfig' | 'defaultMetadataFilterConfig' | 'metadataFilterPersistenceAvailable' |
   'metadataFilterError' | 'onSaveMetadataFilterConfig' | 'onResetMetadataFilterConfig' |
-  'metadataFilterDraft' | 'onMetadataFilterDraftChange'>;
+  'onRetryMetadataFilterLoad' | 'metadataFilterDraft' | 'onMetadataFilterDraftChange'>;
 
 export function PaneSection({ config, onChange, errors, warnings, metadataFilterConfig,
   defaultMetadataFilterConfig, metadataFilterPersistenceAvailable = false, metadataFilterError,
-  onSaveMetadataFilterConfig, onResetMetadataFilterConfig, metadataFilterDraft,
+  onSaveMetadataFilterConfig, onResetMetadataFilterConfig, onRetryMetadataFilterLoad, metadataFilterDraft,
   onMetadataFilterDraftChange }: PaneSectionProps): React.ReactElement {
   const { isDark } = useTheme();
   const T = theme(isDark);
@@ -93,6 +93,7 @@ export function PaneSection({ config, onChange, errors, warnings, metadataFilter
           <MetadataFilterConfigEditor config={metadataFilterConfig} defaultConfig={defaultMetadataFilterConfig}
             persistenceAvailable={metadataFilterPersistenceAvailable} error={metadataFilterError}
             onSave={onSaveMetadataFilterConfig} onReset={onResetMetadataFilterConfig}
+            onRetryLoad={onRetryMetadataFilterLoad}
             draft={metadataFilterDraft} onDraftChange={onMetadataFilterDraftChange} />
         </Field>
       )}

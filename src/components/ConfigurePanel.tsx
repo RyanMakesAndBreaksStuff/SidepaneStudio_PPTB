@@ -27,6 +27,7 @@ export interface ConfigurePanelProps {
   metadataFilterError?: string | null;
   onSaveMetadataFilterConfig?: (config: MetadataFilterConfig) => Promise<void> | void;
   onResetMetadataFilterConfig?: () => Promise<void> | void;
+  onRetryMetadataFilterLoad?: () => void;
   metadataFilterDraft?: MetadataFilterDraft | null;
   onMetadataFilterDraftChange?: (draft: MetadataFilterDraft | null) => void;
   jumpRequest?: JumpRequest;
@@ -77,6 +78,7 @@ export function ConfigurePanel(props: ConfigurePanelProps): React.ReactElement {
           metadataFilterError={metadataFilterError}
           onSaveMetadataFilterConfig={onSaveMetadataFilterConfig}
           onResetMetadataFilterConfig={onResetMetadataFilterConfig}
+          onRetryMetadataFilterLoad={props.onRetryMetadataFilterLoad}
           metadataFilterDraft={metadataFilterDraft} onMetadataFilterDraftChange={onMetadataFilterDraftChange} />
       </Section>
     </div>

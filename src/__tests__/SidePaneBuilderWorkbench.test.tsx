@@ -255,6 +255,29 @@ describe('SidePaneBuilderWorkbench', () => {
     expect(workbenchShellState.props?.metadataFilterError).toBeNull();
   });
 
+  it('keeps filter Save available after a failed settings load and reloads on retry (r2 WR-005)', async () => {
+    const filters = { denyPrefixes: ['abc_'], denyExact: ['webresource'], allowedStandardTables: ['account'] };
+    const getAll = vi.fn().mockRejectedValueOnce(new Error('settings backend offline')).mockResolvedValue({ metadataFilters: filters });
+    vi.stubGlobal('toolboxAPI', {
+      connections: { getActiveConnection: vi.fn().mockResolvedValue({ id: 'conn-1' }) },
+      events: { on: vi.fn(), off: vi.fn() },
+      settings: { get: vi.fn().mockResolvedValue(null), set: vi.fn().mockResolvedValue(undefined), getAll },
+    });
+    await render(<SidePaneBuilderWorkbench />);
+    await act(async () => { await Promise.resolve(); });
+    await act(async () => { await Promise.resolve(); });
+    expect(workbenchShellState.props?.metadataFilterError).toBe('settings backend offline');
+    expect(workbenchShellState.props?.metadataFilterPersistenceAvailable).toBe(true);
+
+    const retry = workbenchShellState.props?.onRetryMetadataFilterLoad as () => void;
+    expect(retry).toBeTypeOf('function');
+    await act(async () => { retry(); await Promise.resolve(); });
+    await act(async () => { await Promise.resolve(); });
+    expect(workbenchShellState.props?.metadataFilterError).toBeNull();
+    expect(workbenchShellState.props?.metadataFilterConfig).toEqual(filters);
+    expect(workbenchShellState.props?.onRetryMetadataFilterLoad).toBeUndefined();
+  });
+
   it('surfaces a failed settings write instead of dropping it', async () => {
     const showNotification = vi.fn().mockResolvedValue(undefined);
     const settingsSet = vi.fn().mockRejectedValue(new Error('settings backend offline'));

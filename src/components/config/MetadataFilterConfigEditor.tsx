@@ -10,6 +10,7 @@ import {
 } from '../../types/MetadataFilterConfig';
 import { Callout } from '../Callout';
 import { Field } from '../Field';
+import { RetryButton } from '../RetryButton';
 
 export interface MetadataFilterConfigEditorProps {
   config: MetadataFilterConfig;
@@ -18,6 +19,8 @@ export interface MetadataFilterConfigEditorProps {
   onSave: (config: MetadataFilterConfig) => Promise<void> | void;
   onReset: () => Promise<void> | void;
   error?: string | null;
+  /** Supplied only when `error` is a failed settings load; shows Retry beside it. */
+  onRetryLoad?: () => void;
   /** Controlled draft, owned above any remount (Section collapse, connection change); omit both to keep it locally. */
   draft?: MetadataFilterDraft | null;
   onDraftChange?: (draft: MetadataFilterDraft | null) => void;
@@ -102,6 +105,7 @@ export function MetadataFilterConfigEditor({
   onSave,
   onReset,
   error,
+  onRetryLoad,
   draft: draftProp,
   onDraftChange,
 }: MetadataFilterConfigEditorProps): React.ReactElement {
@@ -169,7 +173,14 @@ export function MetadataFilterConfigEditor({
           PPTB settings unavailable. Save is disabled in local browser mode.
         </Callout>
       )}
-      {error && <Callout type="err" icon="!">{error}</Callout>}
+      {error && (
+        <Callout type="err" icon="!">
+          <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+            <span>{error}</span>
+            {onRetryLoad && <RetryButton onClick={onRetryLoad} />}
+          </span>
+        </Callout>
+      )}
 
       {METADATA_FILTER_CONFIG_KEYS.map(key => (
         <Field key={key} label={LABELS[key]} error={errors[key]}>
