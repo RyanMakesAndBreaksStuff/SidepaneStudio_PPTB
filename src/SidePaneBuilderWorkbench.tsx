@@ -353,6 +353,7 @@ export function SidePaneBuilderWorkbench(): React.ReactElement {
   }, []);
 
   const handleSaveMetadataFilterConfig = useCallback(async (nextConfig: MetadataFilterConfig) => {
+    ++filterLoadRef.current;
     try {
       const result = await metadataFilterSettingsRef.current?.save(nextConfig);
       if (!result) return;
@@ -360,10 +361,12 @@ export function SidePaneBuilderWorkbench(): React.ReactElement {
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to save metadata filter settings.';
       setMetadataFilterError(message);
+      setMetadataFilterLoadFailed(false);
     }
   }, [applyFilterResult]);
 
   const handleResetMetadataFilterConfig = useCallback(async () => {
+    ++filterLoadRef.current;
     try {
       const result = await metadataFilterSettingsRef.current?.reset();
       if (!result) return;
@@ -371,6 +374,7 @@ export function SidePaneBuilderWorkbench(): React.ReactElement {
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to reset metadata filter settings.';
       setMetadataFilterError(message);
+      setMetadataFilterLoadFailed(false);
     }
   }, [applyFilterResult]);
 

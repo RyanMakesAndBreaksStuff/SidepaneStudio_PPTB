@@ -278,6 +278,64 @@ describe('SidePaneBuilderWorkbench', () => {
     expect(workbenchShellState.props?.onRetryMetadataFilterLoad).toBeUndefined();
   });
 
+  it.each(['save', 'reset'] as const)('withdraws Retry when a %s fails after a failed load', async (action) => {
+    vi.stubGlobal('toolboxAPI', {
+      connections: { getActiveConnection: vi.fn().mockResolvedValue({ id: 'conn-1' }) },
+      events: { on: vi.fn(), off: vi.fn() },
+      settings: {
+        get: vi.fn().mockResolvedValue(null),
+        set: vi.fn().mockRejectedValue(new Error(`${action} rejected`)),
+        getAll: vi.fn().mockRejectedValue(new Error('settings backend offline')),
+      },
+    });
+    await render(<SidePaneBuilderWorkbench />);
+    await act(async () => { await Promise.resolve(); });
+    await act(async () => { await Promise.resolve(); });
+    expect(workbenchShellState.props?.onRetryMetadataFilterLoad).toBeTypeOf('function');
+
+    await act(async () => {
+      if (action === 'save') {
+        const save = workbenchShellState.props?.onSaveMetadataFilterConfig as (config: MetadataFilterConfig) => Promise<void>;
+        await save({ denyPrefixes: ['abc_'], denyExact: [], allowedStandardTables: [] });
+      } else {
+        const reset = workbenchShellState.props?.onResetMetadataFilterConfig as () => Promise<void>;
+        await reset();
+      }
+    });
+    expect(workbenchShellState.props?.metadataFilterError).toBe(`${action} rejected`);
+    expect(workbenchShellState.props?.onRetryMetadataFilterLoad).toBeUndefined();
+  });
+
+  it('a load that resolves after a save does not replace the saved filters', async () => {
+    const configA: MetadataFilterConfig = { denyPrefixes: ['aaa_'], denyExact: [], allowedStandardTables: [] };
+    const configB: MetadataFilterConfig = { denyPrefixes: ['bbb_'], denyExact: ['account'], allowedStandardTables: ['contact'] };
+    const load = deferred<Record<string, unknown>>();
+    vi.stubGlobal('toolboxAPI', {
+      connections: { getActiveConnection: vi.fn().mockResolvedValue({ id: 'conn-1' }) },
+      events: { on: vi.fn(), off: vi.fn() },
+      settings: {
+        get: vi.fn().mockResolvedValue(null),
+        set: vi.fn().mockResolvedValue(undefined),
+        getAll: vi.fn(() => load.promise),
+      },
+    });
+    await render(<SidePaneBuilderWorkbench />);
+    await act(async () => { await Promise.resolve(); });
+
+    await act(async () => {
+      const save = workbenchShellState.props?.onSaveMetadataFilterConfig as (config: MetadataFilterConfig) => Promise<void>;
+      await save(configB);
+    });
+    expect(workbenchShellState.props?.metadataFilterConfig).toEqual(configB);
+
+    await act(async () => {
+      load.resolve({ metadataFilters: configA });
+      await Promise.resolve();
+    });
+    await act(async () => { await Promise.resolve(); });
+    expect(workbenchShellState.props?.metadataFilterConfig).toEqual(configB);
+  });
+
   it('surfaces a failed settings write instead of dropping it', async () => {
     const showNotification = vi.fn().mockResolvedValue(undefined);
     const settingsSet = vi.fn().mockRejectedValue(new Error('settings backend offline'));
