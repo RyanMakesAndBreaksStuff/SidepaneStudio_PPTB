@@ -1,6 +1,7 @@
 // src/components/OutputPanel.tsx
 import * as React from 'react';
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useId } from 'react';
+import { TabStrip, tabPanelProps } from './TabStrip';
 import { useTheme } from '../contexts/ThemeContext';
 import { theme } from '../theme/tokens';
 import { PaneDefinitionConfig } from '../types/PaneDefinitionConfig';
@@ -43,6 +44,7 @@ export const OutputPanel = React.memo(function OutputPanel({ config, xrm, valida
   const T = theme(isDark);
 
   const [activeTab, setActiveTab] = useState('basic');
+  const tabsId = useId();
   const [showRaw, setShowRaw] = useState(false);
   const [runtimeExists, setRuntimeExists] = useState<boolean | null>(null);
   const [runtimeName, setRuntimeName] = useState<string | null>(null);
@@ -108,30 +110,20 @@ export const OutputPanel = React.memo(function OutputPanel({ config, xrm, valida
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       {/* Tab strip */}
-      <div style={{ display: 'flex', borderBottom: `1px solid ${T.stroke1}`, padding: '0 6px', background: T.pageBg, flexShrink: 0 }}>
-        {tabs.map(tab => (
-          <button
-            key={tab.id}
-            role="tab"
-            aria-selected={currentTab === tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 5,
-              padding: '9px 12px 8px', border: 'none', background: 'transparent',
-              fontFamily: T.font, fontSize: 12, fontWeight: 500,
-              color: currentTab === tab.id ? T.accent : T.fg3,
-              borderBottom: `2px solid ${currentTab === tab.id ? T.accent : 'transparent'}`,
-              cursor: 'pointer', whiteSpace: 'nowrap',
-              transition: 'color 80ms, border-color 80ms',
-            }}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
+      <TabStrip label="Output" idPrefix={tabsId} tabs={tabs} value={currentTab} onChange={setActiveTab}
+        style={{ display: 'flex', borderBottom: `1px solid ${T.stroke1}`, padding: '0 6px', background: T.pageBg, flexShrink: 0 }}
+        tabStyle={active => ({
+          display: 'flex', alignItems: 'center', gap: 5,
+          padding: '9px 12px 8px', border: 'none', background: 'transparent',
+          fontFamily: T.font, fontSize: 12, fontWeight: 500,
+          color: active ? T.accent : T.fg3,
+          borderBottom: `2px solid ${active ? T.accent : 'transparent'}`,
+          cursor: 'pointer', whiteSpace: 'nowrap',
+          transition: 'color 80ms, border-color 80ms',
+        })} />
 
       {/* Tab content */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div {...tabPanelProps(tabsId, currentTab)} style={{ flex: 1, overflowY: 'auto', padding: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
         {copyBlocked && (
           <Callout type="warn" icon="⚠">Copy is disabled until you confirm the environment warning with <strong>Use anyway</strong>.</Callout>
         )}

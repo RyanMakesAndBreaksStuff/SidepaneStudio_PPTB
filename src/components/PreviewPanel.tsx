@@ -12,6 +12,7 @@ import { FormXmlRenderer } from './FormXmlRenderer';
 import { GridPreview } from './GridPreview';
 import { MockMDAShell } from './MockMDAShell';
 import { NativeMdaFrame } from './NativeMdaFrame';
+import { TabStrip } from './TabStrip';
 import { PreviewSizeProvider, usePreviewSize } from './previewSize';
 import { PreviewSessionBoundary, usePreviewPane, usePreviewSessionState } from '../contexts/PreviewSessionContext';
 import { buildRelatedSampleFetchXml, getRelatedLookup, relatedRecordOf } from '../services/GridViewModel';
@@ -33,6 +34,9 @@ export interface PreviewPanelProps {
 }
 
 type PreviewMode = 'mock' | 'form' | 'grid';
+const MODE_TABS: { id: PreviewMode; label: string }[] = [
+  { id: 'mock', label: 'Mock' }, { id: 'form', label: 'Form' }, { id: 'grid', label: 'Grid' },
+];
 
 type FormState =
   | { status: 'idle' }
@@ -179,11 +183,9 @@ const PreviewPanelContent = React.memo(function PreviewPanelContent({
     >
       <PreviewSizeProvider width={containerWidth}>
         {/* Mode tab strip */}
-        <div style={{ display: 'flex', borderBottom: `1px solid ${T.stroke1}`, background: T.surface2, flexShrink: 0 }}>
-          <button style={tabStyle(mode === 'mock')} onClick={() => setMode('mock')}>Mock</button>
-          <button style={tabStyle(mode === 'form')} onClick={() => setMode('form')}>Form</button>
-          {gridEligible && <button style={tabStyle(mode === 'grid')} onClick={() => setMode('grid')}>Grid</button>}
-        </div>
+        <TabStrip label="Preview mode" tabs={gridEligible ? MODE_TABS : MODE_TABS.filter(tab => tab.id !== 'grid')}
+          value={mode} onChange={setMode} tabStyle={tabStyle}
+          style={{ display: 'flex', borderBottom: `1px solid ${T.stroke1}`, background: T.surface2, flexShrink: 0 }} />
 
         {/* Mock mode */}
         {mode === 'mock' && (

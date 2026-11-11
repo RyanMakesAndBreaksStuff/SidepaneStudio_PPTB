@@ -1,5 +1,6 @@
 import * as React from 'react';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useId, useMemo, useState } from 'react';
+import { TabStrip, tabPanelProps } from './TabStrip';
 import { useTheme } from '../contexts/ThemeContext';
 import { theme } from '../theme/tokens';
 import { PaneDefinitionConfig } from '../types/PaneDefinitionConfig';
@@ -76,6 +77,7 @@ function WorkbenchShellContent({
   const { isDark } = useTheme();
   const T = theme(isDark);
   const [narrowTab, setNarrowTab] = useState<NarrowTab>('configure');
+  const narrowTabsId = useId();
   const [configPanelOpen, setConfigPanelOpen] = useState(true);
   const [codePanelOpen, setCodePanelOpen] = useState(true);
   const [jumpRequest, setJumpRequest] = useState<JumpRequest | undefined>(undefined);
@@ -200,39 +202,15 @@ function WorkbenchShellContent({
 
       {layoutMode === 'narrow' && (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          <div
-            role="tablist"
-            style={{
-              display: 'flex',
-              borderBottom: `1px solid ${T.stroke1}`,
-              background: T.surface2,
-              flexShrink: 0,
-            }}
-          >
-            {NARROW_TABS.map(tab => (
-              <button
-                key={tab.id}
-                role="tab"
-                aria-selected={narrowTab === tab.id}
-                onClick={() => setNarrowTab(tab.id)}
-                style={{
-                  flex: 1,
-                  padding: '10px 0',
-                  border: 'none',
-                  borderBottom: narrowTab === tab.id ? `2px solid ${T.accent}` : '2px solid transparent',
-                  background: 'transparent',
-                  color: narrowTab === tab.id ? T.accent : T.fg2,
-                  fontFamily: T.font,
-                  fontSize: 13,
-                  fontWeight: narrowTab === tab.id ? 600 : 400,
-                  cursor: 'pointer',
-                }}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-          <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          <TabStrip label="Workbench panels" idPrefix={narrowTabsId} tabs={NARROW_TABS} value={narrowTab} onChange={setNarrowTab}
+            style={{ display: 'flex', borderBottom: `1px solid ${T.stroke1}`, background: T.surface2, flexShrink: 0 }}
+            tabStyle={active => ({
+              flex: 1, padding: '10px 0', border: 'none',
+              borderBottom: active ? `2px solid ${T.accent}` : '2px solid transparent',
+              background: 'transparent', color: active ? T.accent : T.fg2,
+              fontFamily: T.font, fontSize: 13, fontWeight: active ? 600 : 400, cursor: 'pointer',
+            })} />
+          <div {...tabPanelProps(narrowTabsId, narrowTab)} style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
             {narrowTab === 'configure' && <ConfigurePanel {...configurePanelProps} />}
             {narrowTab === 'preview' && previewPanel}
             {narrowTab === 'output'  && <OutputPanel {...outputPanelProps} />}

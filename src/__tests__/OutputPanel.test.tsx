@@ -132,6 +132,13 @@ describe('runtime download', () => {
 });
 
 describe('OutputPanel', () => {
+  it('puts the output tabs in a tablist tied to their panel (r2 WR-011)', async () => {
+    await render(<OutputPanel config={DEFAULT_CONFIG} xrm={xrmStub()} validation={{ isValid: true, errors: [], warnings: [] }} />);
+    const tabs = Array.from(host!.querySelectorAll<HTMLElement>('[role="tablist"] [role="tab"]'));
+    expect(tabs.map(t => t.textContent)).toEqual(['Basic Script', 'Shared Library', 'Command Steps']);
+    expect(document.getElementById(tabs[0].getAttribute('aria-controls')!)?.getAttribute('role')).toBe('tabpanel');
+  });
+
   it('summarizes the script with the configuration sentence', async () => {
     await render(<OutputPanel config={DEFAULT_CONFIG} xrm={xrmStub()} validation={{ isValid: true, errors: [], warnings: [] }} />);
     expect(host!.textContent).toContain(describeConfigText(DEFAULT_CONFIG));

@@ -595,3 +595,13 @@ describe('PreviewPanel — lookup-source Grid source controls', () => {
     expect(fetchXml).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('PreviewPanel — mode tabs (r2 WR-011)', () => {
+  it('exposes the preview modes as tabs with the selected one marked', async () => {
+    const xrm = { ...xrmStub(), webApiGet: vi.fn().mockResolvedValue([]) };
+    await render(<PreviewPanel config={cfg()} validation={{ isValid: true, errors: [], warnings: [] }}
+      metadataService={new MetadataService(xrm)} xrm={xrm} />);
+    const tabs = Array.from(host!.querySelectorAll<HTMLElement>('[role="tablist"][aria-label="Preview mode"] [role="tab"]'));
+    expect(tabs.map(t => [t.textContent, t.getAttribute('aria-selected')])).toEqual([['Mock', 'true'], ['Form', 'false']]);
+  });
+});

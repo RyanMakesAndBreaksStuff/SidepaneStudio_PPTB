@@ -225,6 +225,17 @@ describe('WorkbenchShell', () => {
     expect(button('Collapse code panel')).toBeUndefined();
   });
 
+  it('moves between narrow tabs with the arrow keys and ties the selected tab to its panel (r2 WR-011)', async () => {
+    await render(shell('narrow'));
+    const configure = tab('Configure')!;
+    configure.focus();
+    await act(async () => { configure.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true })); });
+    expect(tab('Preview')?.getAttribute('aria-selected')).toBe('true');
+    expect(document.activeElement).toBe(tab('Preview'));
+    expect(host!.textContent).toContain('Preview panel');
+    expect(document.getElementById(tab('Preview')!.getAttribute('aria-controls')!)?.getAttribute('role')).toBe('tabpanel');
+  });
+
   it('renders no in-tool theme toggle', async () => {
     await render(shell());
 
