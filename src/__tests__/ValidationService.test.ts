@@ -757,3 +757,15 @@ describe('validate — selections restored from another environment (W20)', () =
     expect(validate(formRecord).warnings.filter(w => w.message.includes('different environment'))).toEqual([]);
   });
 });
+
+describe('validate — badge value (r2 WR-015)', () => {
+  const error = { field: 'pane.badgeValue', message: 'Badge value must be a whole number, 0 or greater.' };
+
+  it.each([-5, 1.5, Number.NaN])('rejects %s', badgeValue => {
+    expect(validate(cfg({ pane: { badgeValue } })).errors).toContainEqual(error);
+  });
+
+  it.each([0, 3])('accepts %s', badgeValue => {
+    expect(fields(cfg({ pane: { badgeValue } }))).not.toContain('pane.badgeValue');
+  });
+});

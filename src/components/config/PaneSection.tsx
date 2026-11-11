@@ -84,8 +84,8 @@ export function PaneSection({ config, onChange, errors, warnings, metadataFilter
         ? 'Navigate the existing pane to the new page, then select it'
         : 'Close and recreate the pane when it is already open'}
         checked={behavior.reuseExistingPane} onChange={value => patchBehavior('reuseExistingPane', value)} />
-      <Field label="Initial badge value" hint="0 = no badge shown">
-        <Input type="number" value={pane.badgeValue}
+      <Field label="Initial badge value" hint="0 = no badge shown" error={errors['pane.badgeValue']}>
+        <Input type="number" value={pane.badgeValue} error={!!errors['pane.badgeValue']}
           onChange={value => patchPane('badgeValue', +value)} />
       </Field>
       {metadataFilterConfig && defaultMetadataFilterConfig && onSaveMetadataFilterConfig && onResetMetadataFilterConfig && (

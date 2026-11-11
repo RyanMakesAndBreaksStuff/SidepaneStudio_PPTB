@@ -11,8 +11,8 @@ let root: Root | undefined;
 let host: HTMLDivElement | undefined;
 
 /** Renders the section with the warnings validation reports for the same config, as ConfigurePanel does. */
-async function renderPane(imageSrc: string): Promise<void> {
-  const config = cfg({ pane: { imageSrc } });
+async function renderPane(imageSrc: string, badgeValue = 0): Promise<void> {
+  const config = cfg({ pane: { imageSrc, badgeValue } });
   const { errors, warnings } = validate(config);
   host = document.createElement('div');
   document.body.appendChild(host);
@@ -52,5 +52,12 @@ describe('PaneSection tab icon callout (W11)', () => {
     await renderPane('');
     expect(host?.textContent).not.toContain('Preview loads this image');
     expect(host?.textContent).not.toContain('Not emitted');
+  });
+});
+
+describe('PaneSection badge value (r2 WR-015)', () => {
+  it('shows the validation error beside the badge input', async () => {
+    await renderPane('', -5);
+    expect(host?.textContent).toContain('Badge value must be a whole number, 0 or greater.');
   });
 });

@@ -56,6 +56,7 @@ export function validate(config: PaneDefinitionConfig, accessibleTables?: Set<st
   // Pane
   if (!pane.paneId?.trim()) errors.push({ field: 'pane.paneId', message: 'Pane ID is required.' });
   if (!isConfigWidthValid(pane.width)) errors.push({ field: 'pane.width', message: `Pane width must be between ${MIN_CONFIG_WIDTH} and ${MAX_CONFIG_WIDTH} pixels.` });
+  if (!Number.isInteger(pane.badgeValue) || pane.badgeValue < 0) errors.push({ field: 'pane.badgeValue', message: 'Badge value must be a whole number, 0 or greater.' });
   // W11 — the generators drop a path they cannot emit safely; say so instead of silently omitting the icon.
   if (pane.imageSrc.trim() && !normalizeImageSrc(pane.imageSrc)) warnings.push({ field: 'pane.imageSrc', message: 'Not emitted: path must be relative to WebResources.' });
 
