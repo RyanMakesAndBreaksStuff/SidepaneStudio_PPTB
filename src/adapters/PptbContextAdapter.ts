@@ -34,13 +34,28 @@ export class DataverseError extends Error {
 /** Electron prefixes every rejected IPC call: `Error invoking remote method '<channel>': Error: <message>`. */
 const HOST_ERROR_PREFIX = /^Error invoking remote method '[^']*':\s*(?:Error:\s*)?/;
 const HTTP_STATUS = /\bHTTP (\d{3})\b/;
+const DATAVERSE_CODE = /\b0x[0-9a-f]{8}\b/i;
+/** When the response body is a Dataverse JSON error the host sends `<code>: <message>` and drops the HTTP status. */
+const DATAVERSE_CODE_STATUS: Record<string, number> = {
+  '0x80040217': 404, // ObjectDoesNotExist
+  '0x80072322': 429, // service protection: number of requests
+  '0x80072321': 429, // service protection: execution time
+  '0x80072326': 429, // service protection: concurrent requests
+};
+
+function statusOf(message: string): number | undefined {
+  const http = HTTP_STATUS.exec(message);
+  if (http) return Number(http[1]);
+  const code = DATAVERSE_CODE.exec(message)?.[0].toLowerCase();
+  return code ? DATAVERSE_CODE_STATUS[code] : undefined;
+}
 
 /** The host rejects with a plain Error and never sets `.status`; recover it from the message. */
 function fromHostError(error: Error): Error {
   const message = error.message.replace(HOST_ERROR_PREFIX, '');
-  const match = HTTP_STATUS.exec(message);
-  if (message === error.message && !match) return error;
-  return new DataverseError(message, match ? Number(match[1]) : undefined);
+  const status = statusOf(message);
+  if (message === error.message && status === undefined) return error;
+  return new DataverseError(message, status);
 }
 
 function toError(reason: unknown): Error {

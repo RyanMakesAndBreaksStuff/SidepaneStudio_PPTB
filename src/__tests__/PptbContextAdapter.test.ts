@@ -174,5 +174,17 @@ describe('PptbContextAdapter', () => {
       expect(err.message).toBe('queryData failed: 0x80040220: Principal user is missing privilege');
       expect(err.status).toBeUndefined();
     });
+
+    it.each([
+      ['0x80040217', 404], ['0x80072322', 429], ['0x80072321', 429], ['0x80072326', 429], ['0X80040217', 404],
+    ])('reads the status from Dataverse error code %s when the host sends no HTTP code (revie2 WR-005)', async (code, status) => {
+      const api = makeMockDataverseAPI();
+      api.queryData.mockRejectedValue(new Error(
+        `Error invoking remote method 'dataverse.queryData': Error: queryData failed: ${code}: systemform does not exist`));
+      vi.stubGlobal('dataverseAPI', api);
+      const err = await calls[0][1](new PptbContextAdapter()).catch((e: unknown) => e) as DataverseError;
+      expect(err.message).toBe(`queryData failed: ${code}: systemform does not exist`);
+      expect(err.status).toBe(status);
+    });
   });
 });
