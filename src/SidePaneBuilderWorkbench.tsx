@@ -104,6 +104,7 @@ export function SidePaneBuilderWorkbench(): React.ReactElement {
   const savedOrgKey = restoredOrg?.orgKey ?? null;
   const orgMismatch = savedOrgKey !== null && activeOrgKey !== null && savedOrgKey !== activeOrgKey;
   const configDirtyRef = useRef(false);
+  const pendingSaveRef = useRef<(() => void) | null>(null);
   const restoreAttemptRef = useRef(0);
   const refreshConnectionRef = useRef<(() => Promise<void>) | null>(null);
 
@@ -168,7 +169,10 @@ export function SidePaneBuilderWorkbench(): React.ReactElement {
           if (connectedOrg !== null && connectedOrg !== org) {
             setPreviewEpoch(value => value + 1);
             metaRef.current?.invalidate();
-            configDirtyRef.current = true;
+            // r2 WR-001 — the previous org's pending edit is written under its own key, and the cleared copy is
+            // not saved over it until the user edits here.
+            pendingSaveRef.current?.();
+            configDirtyRef.current = false;
             setConfig(clearOrgSelections);
             setRestoredOrg(null);
             notify(
@@ -268,7 +272,6 @@ export function SidePaneBuilderWorkbench(): React.ReactElement {
   // Persist config to PPTB settings, debounced 500ms. An unconfirmed restore keeps the org it was saved for;
   // an unknown active org saves no key, like a legacy payload.
   const persistOrgKey = activeOrgKey === null ? null : savedOrgKey ?? activeOrgKey;
-  const pendingSaveRef = useRef<(() => void) | null>(null);
   useEffect(() => {
     pendingSaveRef.current = null;
     const toolbox = window.toolboxAPI;

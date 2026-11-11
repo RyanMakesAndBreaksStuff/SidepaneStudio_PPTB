@@ -248,4 +248,21 @@ describe('switching the active connection (M19)', () => {
     expect(host?.querySelector('[data-testid="formId"]')?.textContent).toBe('');
     expect(showNotification).toHaveBeenCalledWith(expect.objectContaining({ title: 'Environment changed', type: 'warning' }));
   });
+
+  it('leaves the previous environment\'s saved configuration in place after a switch (r2 WR-001)', async () => {
+    stored = JSON.stringify({ ...SAVED, orgKey: 'orga.crm.dynamics.com' });
+    stubToolbox(ORG_A);
+    await mount();
+    await click('Edit title');
+    await activate(ORG_B);
+    await flushSave();
+    expect(JSON.parse(stored!)).toMatchObject({
+      orgKey: 'orga.crm.dynamics.com', pane: { title: 'Edited' }, target: { formId: SAVED_FORM_ID },
+    });
+
+    // An edit made in the new environment is saved for it.
+    await click('Edit title');
+    await flushSave();
+    expect(JSON.parse(stored!)).toMatchObject({ orgKey: 'orgb.crm.dynamics.com', target: { formId: '' } });
+  });
 });
