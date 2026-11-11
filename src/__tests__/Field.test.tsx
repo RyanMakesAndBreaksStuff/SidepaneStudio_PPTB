@@ -6,6 +6,8 @@ import { Field } from '../components/Field';
 import { Input } from '../components/Input';
 import { JsonDataField } from '../components/JsonDataField';
 import { Callout } from '../components/Callout';
+import { TableComboBox } from '../components/TableComboBox';
+import { ChoiceGroup } from '../components/ChoiceGroup';
 import { ConfigurePanel } from '../components/ConfigurePanel';
 import { ThemeProvider } from '../contexts/ThemeContext';
 import { DEFAULT_METADATA_FILTER_CONFIG } from '../types/MetadataFilterConfig';
@@ -162,5 +164,28 @@ describe('Field — configure panel controls resolve by label', () => {
         `${control.outerHTML.slice(0, 80)} in "${fieldLabel}"`).toBe(true);
     }
     expect(checked).toBeGreaterThan(3);
+  });
+});
+
+describe('Field — composite controls (r2 WR-010)', () => {
+  const labelFor = (text: string) => Array.from(host!.querySelectorAll('label')).find(label => label.textContent === text)!;
+
+  it('ties a combobox picker to its label, error and validity', async () => {
+    await render(<Field label="Lookup controls" required error="Select at least one lookup control.">
+      <TableComboBox ariaLabel="Add lookup control" items={[]} value="" onChange={vi.fn()} />
+    </Field>);
+    const control = document.getElementById(labelFor('Lookup controls *').htmlFor)!;
+    expect(control.getAttribute('role')).toBe('combobox');
+    expect(control.getAttribute('aria-invalid')).toBe('true');
+    expect(describedText(control)).toBe('Select at least one lookup control.');
+  });
+
+  it('ties a choice group to its label and hint', async () => {
+    await render(<Field label="Record source" hint="Set by the trigger.">
+      <ChoiceGroup label="Record source" options={[{ value: 'a', label: 'A' }]} value="a" onChange={vi.fn()} />
+    </Field>);
+    const group = host!.querySelector<HTMLElement>('[role="radiogroup"]')!;
+    expect(group.id).toBe(labelFor('Record source').htmlFor);
+    expect(describedText(group)).toBe('Set by the trigger.');
   });
 });

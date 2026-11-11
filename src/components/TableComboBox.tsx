@@ -7,6 +7,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { theme } from '../theme/tokens';
 import { type ComboItem, filterTables } from './previewHelpers';
 import { TableComboDropdown } from './TableComboDropdown';
+import { useFieldControl } from './Field';
 
 export interface TableComboBoxProps {
   /** Selected item logical name (or '' for none). */
@@ -54,6 +55,8 @@ export function TableComboBox({
   const T = theme(isDark);
   const id = React.useId().replace(/:/g, '');
   const listboxId = `${id}-listbox`;
+  // An enclosing Field supplies the id its label points at and the hint or error that describes this input.
+  const control = useFieldControl();
 
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -179,6 +182,8 @@ export function TableComboBox({
         </svg>
         <input
           ref={inputRef}
+          id={control.id}
+          aria-describedby={control['aria-describedby']}
           type="text"
           value={isOpen ? query : displayValue}
           placeholder={value ? '' : (placeholder ?? `Select a ${singular}…`)}
@@ -187,7 +192,7 @@ export function TableComboBox({
           onBlur={() => setFocused(false)}
           onKeyDown={handleKeyDown}
           aria-label={ariaLabel}
-          aria-invalid={Boolean(error || invalid) || undefined}
+          aria-invalid={Boolean(error || invalid || control['aria-invalid']) || undefined}
           aria-autocomplete="list"
           aria-expanded={isOpen}
           aria-controls={listboxId}

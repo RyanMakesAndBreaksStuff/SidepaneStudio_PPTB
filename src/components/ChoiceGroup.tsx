@@ -2,6 +2,7 @@
 import * as React from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 import { theme } from '../theme/tokens';
+import { useFieldControl } from './Field';
 
 export interface ChoiceGroupOption {
   value: string;
@@ -28,6 +29,7 @@ export interface ChoiceGroupProps {
 export function ChoiceGroup({ label, options, value, onChange }: ChoiceGroupProps): React.ReactElement {
   const { isDark } = useTheme();
   const T = theme(isDark);
+  const control = useFieldControl();
 
   const selected = options.find(o => o.value === value);
   const enabled = options.filter(o => !o.disabled);
@@ -47,7 +49,8 @@ export function ChoiceGroup({ label, options, value, onChange }: ChoiceGroupProp
   };
 
   return (
-    <div role="radiogroup" aria-label={label} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+    <div role="radiogroup" id={control.id} aria-label={label} aria-describedby={control['aria-describedby']}
+      aria-invalid={control['aria-invalid']} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
         {options.map(opt => {
           const sel = value === opt.value;
