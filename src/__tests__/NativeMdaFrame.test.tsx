@@ -176,6 +176,16 @@ describe('NativeMdaFrame rendered output', () => {
     }
   );
 
+  it.each([['light', false], ['dark', true]] as const)(
+    'draws the simulation strip from theme tokens in the %s theme (r2 WR-013)', async (_, isDark) => {
+      await render(<ThemeContext.Provider value={{ isDark }}>{gridFrame()}</ThemeContext.Provider>);
+      const spans = Array.from(host!.querySelectorAll<HTMLElement>('span'));
+      const label = spans.find(span => span.textContent === 'Preview Simulation')!;
+      const divider = spans.find(span => span.textContent === '│')!;
+      expect(label.parentElement!.style.color).toBe(rgb(theme(isDark).fg2));
+      expect(divider.style.color).toBe(rgb(theme(isDark).stroke1));
+    });
+
   it('stacks the selected pane beneath the host content at compact width', async () => {
     await render(atWidth(400, mockFrame()));
 

@@ -408,7 +408,7 @@ export function NativeMdaFrame({ pane, paneTarget, validation, variant, children
           padding: '2px 8px',
           fontFamily: FL.font,
           fontSize: 10,
-          color: FL.fgMuted,
+          color: T.fg2,
           minWidth: 0,
         }}
       >
@@ -436,7 +436,7 @@ export function NativeMdaFrame({ pane, paneTarget, validation, variant, children
         </span>
         {caption && (
           <>
-            <span style={{ color: FL.stroke, flexShrink: 0 }}>│</span>
+            <span style={{ color: T.stroke1, flexShrink: 0 }}>│</span>
             <span
               style={{
                 minWidth: 0,

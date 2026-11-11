@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { FL } from '../components/flTokens';
 import { theme } from '../theme/tokens';
 
 function lum(hex: string): number {
@@ -41,4 +42,16 @@ describe.each([['light', false], ['dark', true]] as const)('Newsprint %s tokens'
   });
   it.each([['strokeAcc', 'pageBg'], ['strokeAcc', 'surface1'], ['strokeAcc', 'surface2'], ['surface1', 'strokeAcc']] as const)(
     'control %s on %s ≥ 3:1', (fg, bg) => { expect(ratio(T[fg], T[bg])).toBeGreaterThanOrEqual(3); });
+});
+
+// FL.fgSubtle (3.2 to 3.5:1) is left out: it draws only empty-value dashes and a decorative chevron.
+describe('mock host (FL) palette', () => {
+  it.each([
+    ['fg', 'surface'], ['fg', 'appBg'], ['fg', 'navBg'], ['fg', 'fieldBg'],
+    ['fg2', 'surface'], ['fg2', 'appBg'], ['fg2', 'fieldBg'],
+    ['fgMuted', 'surface'], ['fgMuted', 'appBg'], ['fgMuted', 'navBg'], ['fgMuted', 'fieldBg'],
+    ['tabFg', 'surface'], ['brand', 'surface'],
+  ] as const)('text %s on %s ≥ 4.5:1', (fg, bg) => {
+    expect(ratio(FL[fg], FL[bg])).toBeGreaterThanOrEqual(4.5);
+  });
 });
