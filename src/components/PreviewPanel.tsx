@@ -18,6 +18,7 @@ import { buildRelatedSampleFetchXml, getRelatedLookup, relatedRecordOf } from '.
 import type { PreviewRecord } from '../services/GridViewModel';
 import { TRIGGER_CAPABILITIES } from '../services/triggerCapabilities';
 import { changeHostTable } from '../services/relatedRecordConfig';
+import { dataverseFailureHint, describeDataverseError } from '../services/dataverseErrorText';
 
 export interface PreviewPanelProps {
   config: PaneDefinitionConfig;
@@ -50,6 +51,8 @@ function formLoadFailureReason(error: FormServiceError): string {
   if (error.code !== 'query-failed') return error.message;
   const status = (error.cause as { status?: unknown } | null | undefined)?.status;
   if (status === 404) return 'Form not found in this environment.';
+  const hint = dataverseFailureHint(error.cause);
+  if (hint) return `Could not load form layout. ${hint}`;
   if (typeof status === 'number' && status !== 0) return `Could not load form layout (HTTP ${status}).`;
   if (error.cause instanceof DataverseError && status === undefined) return `Could not load form layout: ${error.cause.message}`;
   return 'Could not load form layout. Check your connection.';
@@ -153,7 +156,7 @@ const PreviewPanelContent = React.memo(function PreviewPanelContent({
     } catch (error) {
       if (!mountedRef.current || sampleRequestRef.current !== requestId) return;
       setSample({ key: sampleKey, state: { status: 'error',
-        reason: error instanceof Error ? error.message : 'Could not load a sample record.' } });
+        reason: describeDataverseError(error, 'Could not load a sample record.') } });
     }
   };
 

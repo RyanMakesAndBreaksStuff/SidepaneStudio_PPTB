@@ -3,6 +3,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 import { theme } from '../theme/tokens';
 import { FormXmlService, FormMeta } from '../services/FormXmlService';
+import { dataverseFailureHint } from '../services/dataverseErrorText';
 import { TableComboBox } from './TableComboBox';
 import { usePreviewSessionState } from '../contexts/PreviewSessionContext';
 import { useAccessibleTables, type AccessibleTablesService } from './useAccessibleTables';
@@ -114,7 +115,7 @@ export function FormSelector({
         console.error('FormSelector: could not load forms', result.error.cause ?? result.error);
         setForms([]);
         setLoading(false);
-        setError('Could not load main forms.');
+        setError(['Could not load main forms.', dataverseFailureHint(result.error.cause)].filter(Boolean).join(' '));
         return;
       }
 

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { MetadataService, TableInfo } from '../services/MetadataService';
+import { describeDataverseError } from '../services/dataverseErrorText';
 
 export type AccessibleTablesService = Pick<
   MetadataService,
@@ -37,10 +38,7 @@ export function useAccessibleTables(metadataService: AccessibleTablesService): A
       }
     }).catch(err => {
       if (cancelled) return;
-      setLoadState({
-        status: 'error',
-        reason: err instanceof Error ? err.message : 'Unable to load table list.',
-      });
+      setLoadState({ status: 'error', reason: describeDataverseError(err, 'Unable to load table list.') });
     });
 
     return () => { cancelled = true; };

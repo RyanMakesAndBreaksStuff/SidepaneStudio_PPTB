@@ -295,13 +295,14 @@ describe('PreviewPanel — form layout load failures', () => {
     await act(async () => { await Promise.resolve(); });
   }
 
+  const DENIED = 'Could not load form layout. You do not have permission to read this in the connected environment. Ask an administrator to add it to your security role.';
   it.each([
     ['a 404 response', () => Promise.reject(new DataverseError('Not Found', 404, 'Not Found')), 'Form not found in this environment.'],
     ['unreadable FormXML', () => Promise.resolve({ formxml: 'NOT_XML<<<' }), 'Form layout could not be read.'],
-    ['a 403 response', () => Promise.reject(new DataverseError('Forbidden', 403, 'Forbidden')), 'Could not load form layout (HTTP 403).'],
+    ['a 403 response', () => Promise.reject(new DataverseError('Forbidden', 403, 'Forbidden')), DENIED],
     ['a network failure', () => Promise.reject(new TypeError('Failed to fetch')), 'Could not load form layout. Check your connection.'],
     ['a status 0 response', () => Promise.reject(new DataverseError('Network Error', 0)), 'Could not load form layout. Check your connection.'],
-    ['a host rejection without an HTTP status', () => Promise.reject(new DataverseError('queryData failed: 0x80040220: Principal user is missing privilege')), 'Could not load form layout: queryData failed: 0x80040220: Principal user is missing privilege'],
+    ['a host rejection without an HTTP status', () => Promise.reject(new DataverseError('queryData failed: 0x80040220: Principal user is missing privilege')), DENIED],
   ])('explains %s with its own message', async (_label, respond, message) => {
     await loadForm(vi.fn(respond) as IXrmContext['webApiGetEntity']);
     const error = Array.from(host!.querySelectorAll('div')).find(el => el.textContent === message);
@@ -313,7 +314,7 @@ describe('PreviewPanel — form layout load failures', () => {
       "Error invoking remote method 'dataverse.queryData': Error: queryData failed: HTTP 403 Forbidden")) });
     const adapter = new PptbContextAdapter();
     await loadForm(adapter.webApiGetEntity.bind(adapter));
-    const message = 'Could not load form layout (HTTP 403).';
+    const message = DENIED;
     expect(Array.from(host!.querySelectorAll('div')).find(el => el.textContent === message), message).toBeTruthy();
   });
 });

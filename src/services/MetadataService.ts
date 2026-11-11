@@ -1,5 +1,6 @@
 // src/services/MetadataService.ts
 import type { IXrmContext } from '../adapters/PptbContextAdapter';
+import { describeDataverseError } from './dataverseErrorText';
 import {
   DEFAULT_METADATA_FILTER_CONFIG,
   MetadataFilterConfig,
@@ -187,8 +188,7 @@ export class MetadataService {
       if (generation !== this._connectionGeneration) return this.listAccessibleTables();
       return { status: 'ok', tables };
     } catch (err) {
-      const reason = err instanceof Error ? err.message : 'Unknown error loading table list.';
-      return { status: 'error', reason };
+      return { status: 'error', reason: describeDataverseError(err, 'Unknown error loading table list.') };
     }
   }
 
@@ -215,8 +215,7 @@ export class MetadataService {
       this._dashboardCache = { dashboards, expiresAt: Date.now() + CACHE_TTL_MS };
       return { status: 'ok', dashboards };
     } catch (err) {
-      const reason = err instanceof Error ? err.message : 'Unknown error loading dashboards.';
-      return { status: 'error', reason };
+      return { status: 'error', reason: describeDataverseError(err, 'Unknown error loading dashboards.') };
     }
   }
 
@@ -240,7 +239,7 @@ export class MetadataService {
       });
       return { status: 'ok', views };
     } catch (error) {
-      return { status: 'error', reason: error instanceof Error ? error.message : String(error) };
+      return { status: 'error', reason: describeDataverseError(error, String(error)) };
     }
   }
 

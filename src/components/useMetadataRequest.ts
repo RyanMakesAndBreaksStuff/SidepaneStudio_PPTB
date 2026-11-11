@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { describeDataverseError } from '../services/dataverseErrorText';
 
 /** Lifecycle of one metadata request: nothing to load, in flight, settled with data, or failed. */
 export type MetadataStatus = 'idle' | 'loading' | 'loaded' | 'error';
@@ -47,10 +48,7 @@ export function useMetadataRequest<T>(
     };
     loader().then(
       data => settle({ status: 'loaded', data }),
-      (err: unknown) => settle({
-        status: 'error',
-        error: err instanceof Error ? err.message : 'Could not load metadata.',
-      }),
+      (err: unknown) => settle({ status: 'error', error: describeDataverseError(err, 'Could not load metadata.') }),
     );
     return () => { cancelled = true; };
     // The caller's deps describe the request; the loader closure is recreated every render.

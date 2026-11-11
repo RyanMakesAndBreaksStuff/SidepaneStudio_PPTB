@@ -19,6 +19,7 @@ import { usePreviewPane, usePreviewSessionState } from '../contexts/PreviewSessi
 import { applyLookup, changeHostTable } from '../services/relatedRecordConfig';
 import type { LookupAttributeInfo } from '../services/MetadataService';
 import { isValidLogicalName } from '../services/odataGuards';
+import { describeDataverseError } from '../services/dataverseErrorText';
 
 interface Props {
   config: PaneDefinitionConfig;
@@ -190,7 +191,7 @@ function GridData({ config, validation, metadataService, xrm, entityName, viewId
       setState(loaded);
     } catch (error) {
       if (id !== request.current) return;
-      setState({ status: 'error', reason: error instanceof Error ? error.message : 'Could not load grid rows.' });
+      setState({ status: 'error', reason: describeDataverseError(error, 'Could not load grid rows.') });
     }
   };
   const relatedResolution = activeRow !== null ? resolveRow(activeRow) : null;
