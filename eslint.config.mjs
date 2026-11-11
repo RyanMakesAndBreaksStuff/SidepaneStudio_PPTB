@@ -12,6 +12,7 @@ export default [
       "**/dist/**", "tasks/**",
       "coverage/**", "docs/**",
       ".claude/**", ".worktrees/**", ".superpowers/**",
+      ".agents/**", "full-review/**",
       "eslint.config.mjs", "vite.config.ts",
       "vitest.config.ts", "src/runtime/sidePaneHelper.d.ts",
     ],
