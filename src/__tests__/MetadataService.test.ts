@@ -726,3 +726,30 @@ describe('view metadata', () => {
     expect(await failed.listViewsForEntity('account')).toEqual({ status: 'error', reason: 'Access denied' });
   });
 });
+
+describe('untrusted host rows (r2 WR-014)', () => {
+  it('drops table rows without a logical name and says how many', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      const webApiGet = vi.fn().mockResolvedValue([ENTITY_ACCOUNT, { ...ENTITY_CUSTOM, LogicalName: undefined }, null]);
+      const result = await new MetadataService({ webApiGet }).listAccessibleTables();
+      expect(result).toMatchObject({ status: 'ok', tables: [{ logicalName: 'account' }] });
+      expect(warn).toHaveBeenCalledWith('MetadataService: ignored 2 table row(s) without LogicalName.');
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('drops a view row without a name instead of failing the list', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      const webApiGet = vi.fn()
+        .mockResolvedValueOnce([{ savedqueryid: 'v1', name: 'Active accounts', fetchxml: null, layoutxml: null }, { savedqueryid: 'v2' }])
+        .mockResolvedValueOnce([]);
+      const result = await new MetadataService({ webApiGet }).listViewsForEntity('account');
+      expect(result).toMatchObject({ status: 'ok', views: [{ id: 'v1', name: 'Active accounts' }] });
+    } finally {
+      warn.mockRestore();
+    }
+  });
+});

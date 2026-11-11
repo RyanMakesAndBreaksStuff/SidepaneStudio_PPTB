@@ -113,6 +113,15 @@ function keepEntity(
   return false;
 }
 
+/** r2 WR-014 — host rows are untrusted: a row without its key strings is dropped here, not left to throw in a picker. */
+function rowsWith<T extends object>(rows: T[], keys: readonly (keyof T & string)[], what: string): T[] {
+  const kept = rows.filter(row => typeof row === 'object' && row !== null && keys.every(key => typeof row[key] === 'string'));
+  if (kept.length !== rows.length) {
+    console.warn(`MetadataService: ignored ${rows.length - kept.length} ${what} row(s) without ${keys.join(', ')}.`);
+  }
+  return kept;
+}
+
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
 /** One shared request per key until it expires; a rejected request is dropped so the next call retries. */
@@ -175,7 +184,7 @@ export class MetadataService {
         const response = await this.xrm.webApiGet<RawEntityMetadata[]>(
           buildEntityDefinitionsPath()
         );
-        return response
+        return rowsWith(response, ['LogicalName'], 'table')
           .filter(e => keepEntity(e, this._filterConfig, this._denyExact, this._allowedStandardTables))
           .map(e => ({
             logicalName: e.LogicalName,
@@ -209,8 +218,8 @@ export class MetadataService {
       ]);
       if (generation !== this._connectionGeneration) return this.listAccessibleDashboards();
       const dashboards: DashboardInfo[] = [
-        ...sysResult.map(d => ({ id: d.formid, name: d.name, isPersonal: false })),
-        ...userResult.map(d => ({ id: d.userformid, name: d.name, isPersonal: true })),
+        ...rowsWith(sysResult, ['formid', 'name'], 'system dashboard').map(d => ({ id: d.formid, name: d.name, isPersonal: false })),
+        ...rowsWith(userResult, ['userformid', 'name'], 'personal dashboard').map(d => ({ id: d.userformid, name: d.name, isPersonal: true })),
       ].sort((a, b) => a.name.localeCompare(b.name));
       this._dashboardCache = { dashboards, expiresAt: Date.now() + CACHE_TTL_MS };
       return { status: 'ok', dashboards };
@@ -232,8 +241,8 @@ export class MetadataService {
           this.xrm.webApiGet<{ userqueryid: string; name: string; fetchxml: string | null; layoutxml: string | null }[]>(personalPath),
         ]);
         const merged: ViewInfo[] = [
-          ...system.map(v => ({ id: v.savedqueryid, name: v.name, viewType: 'savedquery' as const, fetchXml: v.fetchxml ?? '', layoutXml: v.layoutxml ?? '' })),
-          ...personal.map(v => ({ id: v.userqueryid, name: v.name, viewType: 'userquery' as const, fetchXml: v.fetchxml ?? '', layoutXml: v.layoutxml ?? '' })),
+          ...rowsWith(system, ['savedqueryid', 'name'], 'system view').map(v => ({ id: v.savedqueryid, name: v.name, viewType: 'savedquery' as const, fetchXml: v.fetchxml ?? '', layoutXml: v.layoutxml ?? '' })),
+          ...rowsWith(personal, ['userqueryid', 'name'], 'personal view').map(v => ({ id: v.userqueryid, name: v.name, viewType: 'userquery' as const, fetchXml: v.fetchxml ?? '', layoutXml: v.layoutxml ?? '' })),
         ];
         return merged.sort((a, b) => a.name.localeCompare(b.name));
       });
@@ -248,7 +257,8 @@ export class MetadataService {
   ): Promise<AttributeLabel[]> {
     const path = buildAttributeLabelsPath(entityLogicalName);
     if (!path) throw new Error('Invalid table logical name.');
-    return this._attributeLabels.get(entityLogicalName, () => this.xrm.webApiGet<AttributeLabel[]>(path));
+    return this._attributeLabels.get(entityLogicalName,
+      async () => rowsWith(await this.xrm.webApiGet<AttributeLabel[]>(path), ['LogicalName'], 'column'));
   }
 
   /** Lookup, customer, and owner columns — the columns whose value names a related record. */
@@ -259,7 +269,7 @@ export class MetadataService {
     if (!path) throw new Error('Invalid table logical name.');
     return this._lookupAttributes.get(entityLogicalName, async () => {
       const lookups = await this.xrm.webApiGet<LookupAttributeInfo[]>(path);
-      return lookups.map(lookup => ({
+      return rowsWith(lookups, ['LogicalName'], 'lookup column').map(lookup => ({
         ...lookup,
         ...(Array.isArray(lookup.Targets)
           ? { Targets: lookup.Targets.filter(isValidLogicalName) }
