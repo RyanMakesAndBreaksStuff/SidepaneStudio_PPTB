@@ -213,7 +213,6 @@ export function parseStoredConfig(raw: unknown): PaneDefinitionConfig | null {
       hideHeader: booleanOr(pane.hideHeader, DEFAULT_CONFIG.pane.hideHeader),
       isSelected: booleanOr(pane.isSelected, DEFAULT_CONFIG.pane.isSelected),
       width: normalizeConfigWidth(pane.width),
-      hidden: booleanOr(pane.hidden, DEFAULT_CONFIG.pane.hidden),
       alwaysRender: booleanOr(pane.alwaysRender, DEFAULT_CONFIG.pane.alwaysRender),
       keepBadgeOnSelect: booleanOr(pane.keepBadgeOnSelect, DEFAULT_CONFIG.pane.keepBadgeOnSelect),
       badgeValue: finiteNumberOr(pane.badgeValue, DEFAULT_CONFIG.pane.badgeValue),

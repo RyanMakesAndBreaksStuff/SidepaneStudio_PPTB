@@ -31,8 +31,6 @@ export interface PaneConfig {
   hideHeader: boolean;
   isSelected: boolean;
   width: number;
-  /** @deprecated Valid createPane option, deliberately unsupported: a hidden pane has no tab, so users cannot reach it. Kept so stored configs load; never emitted. */
-  hidden: boolean;
   alwaysRender: boolean;
   keepBadgeOnSelect: boolean;
   badgeValue: number;
@@ -113,7 +111,6 @@ export const DEFAULT_CONFIG: PaneDefinitionConfig = {
     hideHeader: false,
     isSelected: true,
     width: 480,
-    hidden: false,
     alwaysRender: false,
     keepBadgeOnSelect: false,
     badgeValue: 0,
