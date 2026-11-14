@@ -62,19 +62,14 @@ export type FormModelResult =
   | { ok: true; model: FormModel }
   | { ok: false; error: FormServiceError };
 
-// Partial classId prefix (first 8 hex chars, lower) → field type
-// Stable GUIDs across all Dynamics 365 environments
+// Partial classId prefix (first 8 hex chars, lower) → field type.
+// Only the shapes the renderer draws differently are listed; every other control draws as a text input.
 const CLASSID_FIELD_TYPE: Record<string, FormCell['fieldType']> = {
-  '4273edbd': 'text',      // SingleLine.Text
-  'c3efe0c3': 'memo',      // MultiLine.Text
-  '67fac785': 'lookup',    // Lookup
-  '5d68b988': 'datetime',  // DateTime
-  'b0c6723a': 'boolean',   // TwoOptions
-  '3ef39988': 'picklist',  // OptionSet
-  'aa987274': 'number',    // Integer
-  'c6d124ca': 'number',    // Decimal / Float
-  '060f0b88': 'lookup',    // Customer
-  '71716b6c': 'currency',  // Money / Currency
+  '4273edbd': 'text',      // Single line of text
+  'e0dece4b': 'memo',      // Multiple lines of text
+  '67fac785': 'boolean',   // Two options
+  '3ef39988': 'picklist',  // Choice
+  '5d68b988': 'picklist',  // Status reason
 };
 
 function classIdToFieldType(classId: string): FormCell['fieldType'] {

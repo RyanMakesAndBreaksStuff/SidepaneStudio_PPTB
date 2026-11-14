@@ -113,6 +113,14 @@ describe('MetadataService', () => {
       expect(service.userLanguageCode).toBe(1036);
     });
 
+    it('forgets the language when the connection changes (pp-review3 WR-001)', async () => {
+      const xrm = makeXrm([{ ...ENTITY_ACCOUNT, DisplayName: { UserLocalizedLabel: { Label: 'Compte', LanguageCode: 1036 } } }]);
+      const service = new MetadataService(xrm);
+      await service.listAccessibleTables();
+      service.invalidate();
+      expect(service.userLanguageCode).toBeNull();
+    });
+
     it('accepts unwrapped collection arrays from webApiGet', async () => {
       const xrm: MetaXrm = {
         webApiGet: vi.fn().mockResolvedValue([ENTITY_ACCOUNT]),

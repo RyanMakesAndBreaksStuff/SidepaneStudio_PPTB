@@ -117,6 +117,20 @@ it('replaces org A table choices after a connection update', async () => {
   expect(on).toHaveBeenCalledTimes(1);
 });
 
+it('reloads metadata and keeps selections for another connection to the same environment (pp-review3 WR-005)', async () => {
+  const url = 'https://contoso.crm.dynamics.com';
+  getActiveConnection.mockResolvedValue({ id: 'a', url });
+  storeTargetTable('new_a');
+  await mount();
+  await openTablePicker();
+  const before = tableRequests();
+  getActiveConnection.mockResolvedValue({ id: 'a2', url });
+  await emit('connection:updated');
+  await openTablePicker();
+  expect(tableRequests()).toBeGreaterThan(before);
+  expect(host.querySelector('[data-testid="host"]')?.textContent).toBe('new_a');
+});
+
 function storeTargetTable(entityName: string) {
   const settings = (window.toolboxAPI as unknown as { settings: { get: ReturnType<typeof vi.fn> } }).settings;
   settings.get.mockImplementation(async (key: string) => key === 'lastConfig' ? JSON.stringify({

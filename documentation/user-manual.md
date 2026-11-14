@@ -49,7 +49,7 @@ Expected output: the workbench is interactive. The center preview is on the **Mo
 
 ## Step 3: Confirm the default pane
 
-Work in the ToolBox window with Side Pane Studio open. On a wide window you get three columns: **Configure** (left), **Preview** (center), and **Output** (right). Below 900 pixels, use the **Configure**, **Preview**, and **Output** tabs instead. The steps use the same fields either way.
+Work in the ToolBox window with Side Pane Studio open. On a wide window you get three columns: **Configure** (left), **Preview** (center), and **Output** (right). Below 1040 pixels, use the **Configure**, **Preview**, and **Output** tabs instead. The steps use the same fields either way.
 
 The studio writes the current configuration to ToolBox settings and restores it the next time you open the tool. **Reset**, at the right end of the summary strip above all three panels (in the wide and the tabbed layout alike), asks you to confirm `Reset all configuration? This cannot be undone.` and then restores the defaults below.
 
@@ -350,11 +350,7 @@ Related messages from the same screen:
 toolboxAPI unavailable — open inside PPTB.
 ```
 
-```text
-Connection removed. Reconnect in PPTB.
-```
-
-Cause: ToolBox has no selected connection, the connection check failed, or the active connection was deleted while the studio was open.
+Cause: ToolBox has no selected connection, the connection check failed, or the active connection was deleted while the studio was open. A deleted or deselected connection shows the same **Connection unavailable** screen above.
 
 Solution:
 
@@ -362,7 +358,7 @@ Solution:
 2. Select the environment, or click **Add Connection** and finish **Microsoft Login Prompt** sign-in.
 3. Launch Side Pane Studio again.
 
-Verify the fix: the workbench replaces **Connection unavailable**. If you had deleted the connection, the studio stays on `Connection removed. Reconnect in PPTB.` until a connection exists again.
+Verify the fix: the workbench replaces **Connection unavailable**. If you had deleted the connection, the studio stays on this **Connection unavailable** screen until a connection exists again, and then recovers on its own.
 
 **Error 3: Custom page name is required**
 
@@ -620,7 +616,7 @@ Recommended resources:
 | Package                     | `@ryanmakes/side-pane-studio`                                                        |
 | Version                     | 1.4.0                                                                                |
 | Shared runtime web resource | `spstudio_/scripts/sidepane.runtime.js`                                              |
-| Wide layout                 | Window width ≥ 900 px                                                                |
+| Wide layout                 | Window width ≥ 1040 px                                                               |
 | Pane width                  | 300–1200 px, default 480                                                             |
 | Saved configuration         | ToolBox settings key `lastConfig`                                                    |
 
@@ -678,7 +674,7 @@ spstudio_/scripts/sidepane.runtime.js
 | ------------------------------------------------------------------- | ---------------------------------- | ------------------------------------------------------------------- |
 | Dataverse API + Toolbox API unavailable                             | Opened outside ToolBox             | Launch from Installed Tools                                         |
 | No active Dataverse connection                                      | Nothing selected in Connections    | Add or select a connection                                          |
-| Connection removed. Reconnect in PPTB.                              | Active connection deleted          | Connect again, reopen the studio                                    |
+| No active Dataverse connection                                      | Nothing selected in Connections, or it was deleted | Add or select a connection; the studio recovers on its own |
 | This configuration was saved for a different environment; …         | Restored from another environment's save | Check the selections, then click **Use anyway**             |
 | Custom page name is required.                                       | Blank custom page                  | Fill `YOUR_CUSTOM_PAGE`                                             |
 | Pane ID is required.                                                | Blank pane id                      | Set `YOUR_PANE_ID`                                                  |

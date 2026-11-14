@@ -86,7 +86,7 @@ See [Change-Log.md](Change-Log.md) for the `v1.4.0` change summary.
 ## Requirements
 
 - Node.js 20.19.0 or newer for local development, as declared in `package.json`
-- PPTB with host API 1.2.0 or newer and an active Dataverse connection
+- PPTB with host API 1.2.7 or newer and an active Dataverse connection
 - Access to a Dynamics 365 or Power Apps model-driven app environment
 
 ## Local Development

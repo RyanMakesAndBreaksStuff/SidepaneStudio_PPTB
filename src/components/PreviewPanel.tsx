@@ -12,6 +12,7 @@ import { FormXmlRenderer } from './FormXmlRenderer';
 import { GridPreview } from './GridPreview';
 import { MockMDAShell } from './MockMDAShell';
 import { NativeMdaFrame } from './NativeMdaFrame';
+import { RetryButton } from './RetryButton';
 import { TabStrip } from './TabStrip';
 import { PreviewSizeProvider, usePreviewSize } from './previewSize';
 import { PreviewSessionBoundary, usePreviewPane, usePreviewSessionState } from '../contexts/PreviewSessionContext';
@@ -112,6 +113,7 @@ const PreviewPanelContent = React.memo(function PreviewPanelContent({
     return () => ro.disconnect();
   }, []);
 
+  const lastFormSelectionRef = useRef<FormSelection | null>(null);
   const formXmlSvcRef = useRef<FormXmlService | null>(null);
   if (!formXmlSvcRef.current) formXmlSvcRef.current = new FormXmlService(xrm, () => metadataService.userLanguageCode);
 
@@ -126,12 +128,16 @@ const PreviewPanelContent = React.memo(function PreviewPanelContent({
   const handleFormSelected = useCallback(async (selection: FormSelection | null) => {
     const requestId = formRequestIdRef.current + 1;
     formRequestIdRef.current = requestId;
+    lastFormSelectionRef.current = selection;
 
     if (!selection) {
       setFormState({ status: 'idle' });
       return;
     }
     setFormState({ status: 'loading' });
+    // The table list carries the user's language code; labels parsed before it arrives use the form's first language.
+    await metadataService.listAccessibleTables();
+    if (!mountedRef.current || formRequestIdRef.current !== requestId) return;
     const result = await formXmlSvcRef.current!.getFormModelResult(selection.formId);
     if (!mountedRef.current || formRequestIdRef.current !== requestId) return;
 
@@ -140,7 +146,7 @@ const PreviewPanelContent = React.memo(function PreviewPanelContent({
     } else {
       setFormState({ status: 'loaded', model: result.model });
     }
-  }, []);
+  }, [metadataService]);
 
   useEffect(() => {
     if (!hostBound) return;
@@ -252,8 +258,8 @@ const PreviewPanelContent = React.memo(function PreviewPanelContent({
               )}
 
               {formState.status === 'error' && (
-                <div style={{ color: T.error, fontFamily: T.font, fontSize: 13, textAlign: 'center', padding: 24 }}>
-                  {formState.reason}
+                <div role="alert" style={{ color: T.error, fontFamily: T.font, fontSize: 13, textAlign: 'center', padding: 24 }}>
+                  {formState.reason} <RetryButton onClick={() => void handleFormSelected(lastFormSelectionRef.current)} />
                 </div>
               )}
 

@@ -18,11 +18,11 @@ const MINIMAL_FORM_XML = `
                 <row>
                   <cell showlabel="true" colspan="1">
                     <labels><label description="Name"/></labels>
-                    <control datafieldname="name" classid="{4273EDBD-AC1D-4784-AC51-54A6FBFF39F7}" disabled="false"/>
+                    <control datafieldname="name" classid="{4273EDBD-AC1D-40D3-9FB2-095C621B552D}" disabled="false"/>
                   </cell>
                   <cell showlabel="true" colspan="1">
                     <labels><label description="Phone"/></labels>
-                    <control datafieldname="telephone1" classid="{4273EDBD-AC1D-4784-AC51-54A6FBFF39F7}" disabled="false"/>
+                    <control datafieldname="telephone1" classid="{4273EDBD-AC1D-40D3-9FB2-095C621B552D}" disabled="false"/>
                   </cell>
                 </row>
               </rows>
@@ -160,6 +160,21 @@ describe('FormXmlService', () => {
     expect(webApiGet).toHaveBeenCalledTimes(1);
     expect(webApiGetEntity).toHaveBeenCalledTimes(1);
     expect(queryData).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['{4273EDBD-AC1D-40D3-9FB2-095C621B552D}', 'text'],
+    ['{E0DECE4B-6FC8-4A8F-A065-082708572369}', 'memo'],
+    ['{67FAC785-CD58-4F9F-ABB3-4B7DDC6ED5ED}', 'boolean'],
+    ['{3EF39988-22BB-4F0B-BBBE-64B5A3748AEE}', 'picklist'],
+    ['{5D68B988-0661-4DB2-BC3E-17598AD3BE6C}', 'picklist'],
+    ['{C3EFE0C3-0EC6-42BE-8349-CBD9079DFD8E}', 'unknown'],
+    ['{270BD3DB-D9AF-4782-9025-509E298DEC0A}', 'unknown'],
+  ])('maps control classid %s to %s (pp-review3 WR-003)', async (classId, fieldType) => {
+    const svc = new FormXmlService(makeXrm([], MINIMAL_FORM_XML.replace('{4273EDBD-AC1D-40D3-9FB2-095C621B552D}', classId)));
+    const result = await svc.getFormModelResult('11111111-1111-1111-1111-111111111111');
+    if (!result.ok) throw new Error(result.error.message);
+    expect(result.model.tabs[0].sections[0].rows[0].cells[0].fieldType).toBe(fieldType);
   });
 
   describe('label language (revie2 WR-007)', () => {

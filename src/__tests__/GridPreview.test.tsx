@@ -188,6 +188,20 @@ describe('grid preview', () => {
       expect(host!.textContent).not.toContain('SelectedRow:');
     });
 
+    it('closes a pane opened without a row once the script starts reading the selection (pp-review3 WR-004)', async () => {
+      setFetch(vi.fn().mockResolvedValue(rows));
+      const service = metadata();
+      const element = (kind: 'none' | 'selectedRow') => <GridPreview config={{ ...config, context: { ...config.context, source: { kind } } }}
+        validation={validation} metadataService={service} xrm={xrm} />;
+      await render(element('none'));
+      await click('Generate grid preview');
+      await click('Preview command');
+      expect(host!.textContent).toContain(config.pane.title);
+      await render(element('selectedRow'));
+      expect(command().disabled).toBe(true);
+      expect(host!.textContent).not.toContain(config.pane.title);
+    });
+
     it('needs a ticked row and uses the first one when the script reads the selection', async () => {
       await open({ context: { ...config.context, source: { kind: 'selectedRow' } } });
       expect(command().disabled).toBe(true);

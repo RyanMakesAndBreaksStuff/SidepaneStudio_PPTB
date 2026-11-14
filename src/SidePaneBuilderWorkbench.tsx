@@ -170,6 +170,7 @@ export function SidePaneBuilderWorkbench(): React.ReactElement {
     // Last connected org (its org key, or the connection id when the URL is unusable);
     // kept through disconnects so A → none → B still counts as a switch.
     let connectedOrg: string | null = null;
+    let connectedId: string | null = null;
 
     // Rechecks in place: the shell stays mounted, and only a switch resets the preview, caches and selections.
     const refreshConnection = async () => {
@@ -193,8 +194,14 @@ export function SidePaneBuilderWorkbench(): React.ReactElement {
               'Table, form, view and page selections from the previous environment were cleared.',
               'warning',
             );
+          } else if (connectedId !== null && connectedId !== conn.id) {
+            // Another connection to the same environment can be another user: personal views, dashboards and the
+            // role-filtered table list are reloaded, and the selections stay.
+            setPreviewEpoch(value => value + 1);
+            metaRef.current?.invalidate();
           }
           connectedOrg = org;
+          connectedId = conn.id;
           setActiveOrgKey(orgKeyOf(conn));
         }
         setConnectionState(conn ? { status: 'ready' } : {

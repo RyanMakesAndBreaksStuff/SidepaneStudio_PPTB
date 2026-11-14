@@ -37,3 +37,8 @@ secrets/
 /full-review
 /.omo
 /.playwright-mcp
+/.worktrees
+/.omc
+/probes
+/11-10-2026-live-test-automation.md
+/documentation/config-redesign-concepts.md

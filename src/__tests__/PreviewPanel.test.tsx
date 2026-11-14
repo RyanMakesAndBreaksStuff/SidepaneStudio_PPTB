@@ -295,6 +295,7 @@ describe('PreviewPanel — form layout load failures', () => {
     await act(async () => { await Promise.resolve(); });
   }
 
+  const alertText = () => host!.querySelector('[role="alert"]')?.textContent;
   const DENIED = 'Could not load form layout. You do not have permission to read this in the connected environment. Ask an administrator to add it to your security role.';
   it.each([
     ['a 404 response', () => Promise.reject(new DataverseError('Not Found', 404, 'Not Found')), 'Form not found in this environment.'],
@@ -305,8 +306,36 @@ describe('PreviewPanel — form layout load failures', () => {
     ['a host rejection without an HTTP status', () => Promise.reject(new DataverseError('queryData failed: 0x80040220: Principal user is missing privilege')), DENIED],
   ])('explains %s with its own message', async (_label, respond, message) => {
     await loadForm(vi.fn(respond) as IXrmContext['webApiGetEntity']);
-    const error = Array.from(host!.querySelectorAll('div')).find(el => el.textContent === message);
-    expect(error, message).toBeTruthy();
+    expect(alertText(), message).toBe(`${message} Retry`);
+  });
+
+  it('loads the form again from Retry after a failed load (pp-review3 WR-002)', async () => {
+    const webApiGetEntity = vi.fn()
+      .mockRejectedValueOnce(new DataverseError('Too Many Requests', 429))
+      .mockResolvedValue({ formxml: '<form><tabs><tab name="t"><labels><label description="General"/></labels></tab></tabs></form>' });
+    await loadForm(webApiGetEntity as IXrmContext['webApiGetEntity']);
+    const retry = host!.querySelector<HTMLButtonElement>('[role="alert"] button')!;
+    expect(retry.textContent).toBe('Retry');
+    await act(async () => { retry.click(); });
+    await act(async () => { await Promise.resolve(); });
+    expect(webApiGetEntity).toHaveBeenCalledTimes(2);
+    expect(host!.querySelector('[role="alert"]')).toBeNull();
+  });
+
+  it('waits for the user language before reading a restored form (pp-review3 WR-001)', async () => {
+    const formxml = '<form><tabs><tab name="t"><labels><label description="General" languagecode="1033"/></labels><columns><column><sections>'
+      + '<section name="s" showlabel="true" columns="1"><labels><label description="Details" languagecode="1033"/>'
+      + '<label description="Renseignements" languagecode="1036"/></labels><rows/></section></sections></column></columns></tab></tabs></form>';
+    const tables = [{ formid: formId, name: 'Account', LogicalName: 'account',
+      DisplayName: { UserLocalizedLabel: { Label: 'Compte', LanguageCode: 1036 } } }];
+    const xrm = { ...xrmStub(), webApiGet: vi.fn().mockResolvedValue(tables), webApiGetEntity: vi.fn().mockResolvedValue({ formxml }) };
+    await render(<PreviewPanel config={cfg({ host: { entityName: 'account', formId } })}
+      validation={{ isValid: true, errors: [], warnings: [] }} metadataService={new MetadataService(xrm)} xrm={xrm} />);
+    const formTab = Array.from(host!.querySelectorAll('button')).find(b => b.textContent === 'Form')!;
+    await act(async () => { formTab.click(); });
+    await act(async () => { await Promise.resolve(); });
+    expect(host!.textContent).toContain('Renseignements');
+    expect(host!.textContent).not.toContain('Details');
   });
 
   it('shows the HTTP status of a real host rejection that went through the adapter', async () => {
@@ -314,8 +343,7 @@ describe('PreviewPanel — form layout load failures', () => {
       "Error invoking remote method 'dataverse.queryData': Error: queryData failed: HTTP 403 Forbidden")) });
     const adapter = new PptbContextAdapter();
     await loadForm(adapter.webApiGetEntity.bind(adapter));
-    const message = DENIED;
-    expect(Array.from(host!.querySelectorAll('div')).find(el => el.textContent === message), message).toBeTruthy();
+    expect(alertText()).toBe(`${DENIED} Retry`);
   });
 });
 

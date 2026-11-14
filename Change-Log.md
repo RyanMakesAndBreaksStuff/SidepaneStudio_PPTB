@@ -102,6 +102,11 @@
   unused `connectionTarget` parameter.
 - Bumped `@pptb/types` to 1.2.7.
 
+## v1.1.2
+
+- Package-only release: version bump and manifest formatting, no feature
+  changes. This is the version currently available in the Tools Marketplace.
+
 ## v1.1.1
 
 ### Added

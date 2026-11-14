@@ -189,8 +189,11 @@ export class MetadataService {
           buildEntityDefinitionsPath()
         );
         const rows = rowsWith(response, ['LogicalName'], 'table');
-        this._languageCode = rows.map(e => e.DisplayName?.UserLocalizedLabel?.LanguageCode)
-          .find((code): code is number => typeof code === 'number') ?? this._languageCode;
+        // A response that outlived its connection must not set the next connection's language.
+        if (generation === this._connectionGeneration) {
+          this._languageCode = rows.map(e => e.DisplayName?.UserLocalizedLabel?.LanguageCode)
+            .find((code): code is number => typeof code === 'number') ?? null;
+        }
         return rows
           .filter(e => keepEntity(e, this._filterConfig, this._denyExact, this._allowedStandardTables))
           .map(e => ({
@@ -279,6 +282,7 @@ export class MetadataService {
 
   invalidate(): void {
     this._connectionGeneration += 1;
+    this._languageCode = null;
     this._tables.clear();
     this._dashboards.clear();
     this._views.clear();

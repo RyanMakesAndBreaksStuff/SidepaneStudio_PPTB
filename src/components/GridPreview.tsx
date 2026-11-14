@@ -209,7 +209,7 @@ function GridData({ config, validation, metadataService, xrm, entityName, viewId
   };
   const relatedResolution = activeRow !== null ? resolveRow(activeRow) : null;
   const related = relatedResolution?.status === 'resolved' ? relatedResolution.record : null;
-  const paneOpen = rowlessOpen || (activeRow !== null && (relatedLookup === '' || relatedResolution?.status === 'resolved'));
+  const paneOpen = (rowlessOpen && !needsRow) || (activeRow !== null && (relatedLookup === '' || relatedResolution?.status === 'resolved'));
   return <>
     <p style={{ color: T.accent, fontFamily: T.font, fontSize: 12 }}>Reads up to 10 rows from the selected view. Preview only.</p>
     <button

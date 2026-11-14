@@ -6,7 +6,7 @@ This guide covers local development and the installation guidance moved out of t
 
 - Install Git so you can clone the repository.
 - Install Node.js and npm from [Node.js downloads](https://nodejs.org/). The project declares Node.js `>=20.19.0`; use Node.js 22.13 or newer in the 22.x line, or Node.js 24.x, to satisfy the checked-in toolchain's Vite and ESLint requirements as well.
-- Use Power Platform ToolBox with host API 1.2.0 or newer and a Dataverse connection for connected testing. See [ToolBox setup](#toolbox-setup) below if needed.
+- Use Power Platform ToolBox with host API 1.2.7 or newer and a Dataverse connection for connected testing. See [ToolBox setup](#toolbox-setup) below if needed.
 
 On Windows or macOS, use the Node.js installer for your operating system. On Linux, follow the installation instructions linked from the Node.js download page. Open a new terminal after installation and verify the tools:
 
@@ -175,7 +175,7 @@ Use an environment where you can read the tables your pane will show, and where 
 
 1. In ToolBox, click **Tools Marketplace**.
 2. Search for `Side Pane Studio`.
-3. Open the tool whose package is `@ryanmakes/side-pane-studio`, author Ryan Rettinger, version **1.3.1**.
+3. Open the tool whose package is `@ryanmakes/side-pane-studio`, author Ryan Rettinger, version **1.4.0**.
 4. Click **Install**.
 5. If ToolBox asks for permission consent, read the request and accept it only if it matches a side-pane builder that reads Dataverse metadata. Declining consent prevents the tool from loading.
 6. Open **Installed Tools** and click **Side Pane Studio**.
