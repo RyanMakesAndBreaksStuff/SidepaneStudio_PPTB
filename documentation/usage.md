@@ -28,6 +28,8 @@ view or page again also confirms it, as does **Reset**.
 Open **Trigger & source** in the Configure panel. Choose **Trigger type** first;
 every other choice on the panel is limited to what that trigger can do.
 
+![The Configure panel's Trigger & source section — trigger type, trigger table, form, function name, and namespace](images/configure-trigger-source.png)
+
 - **Form on load** - opens the pane when a record form loads.
 - **Form button** - wires the pane to a form command bar button.
 - **Field change** - registers a column change handler.
@@ -61,6 +63,8 @@ calls `preventDefault()` synchronously and reads the clicked tag with
 ## 3. Choose what opens and which record
 
 Open **Destination**. Choose the **Content type**:
+
+![The Configure panel's Destination section — content type, custom page name, record source, and variable name](images/configure-destination.png)
 
 - **Custom page** - opens a custom page from the current solution.
 - **Generative page** - opens a page built by the app agent, by page ID.
@@ -107,6 +111,8 @@ ID** is reported as missing until you enter one.
 
 Open **Pane & behaviour**:
 
+![The Configure panel's Pane & behaviour section — pane ID, title, icon, width, header options, and the Advanced behaviour controls](images/configure-pane-behaviour.png)
+
 - **Unique pane ID**, **Pane title**, **Tab icon**, and **Width**
 - **Show close button** and **Hide header bar**
 - **Advanced**: **Open in foreground (isSelected)**, **Keep loaded when
@@ -139,6 +145,10 @@ code.
 
 Use the preview area before copying code:
 
+![Mock preview — the pane title, header, and width against a fixed Account sample](images/preview-mock.png)
+
+![Form preview — a form layout driven by the configured trigger table](images/preview-form.png)
+
 1. Open the mock preview to check pane layout, title, width, and behavior.
 2. Use the form preview when connected metadata and form XML are available.
 3. Adjust configuration until the pane looks correct for the target app.
@@ -153,12 +163,16 @@ code in the target model-driven app before shipping.
 
 ## 7. Generate and Deploy Code
 
+![Basic Script output — the generated JavaScript in the Output panel](images/output-basic-script.png)
+
 1. Open the Output panel.
 2. Review validation messages and fix required fields.
 3. Copy the generated JavaScript.
 4. Add the code to the appropriate web resource or command action.
 5. Publish the solution customizations.
 6. Test the trigger in the model-driven app.
+
+![Command Steps output — the function name and the Command Designer wiring checklist](images/command-steps.png)
 
 For quick experiments, use the **Console** trigger and paste the
 generated code into the browser developer console while the model-driven app is

@@ -94,6 +94,8 @@ Expected output: the summary strip reads “2 errors · 0 warnings”, and **Bas
 
 **Objective**: the script is shaped for a form command-bar button on the table you are designing for.
 
+![Trigger & source — trigger type, trigger table, form, function name, and namespace](images/configure-trigger-source.png)
+
 **Actions**:
 
 1. In **Configure**, open **Trigger & source**.
@@ -132,6 +134,8 @@ Expected output: the summary strip reads “1 error · 0 warnings”, and the **
 
 **Objective**: the custom page opens, and it receives the record that is open on the form.
 
+![Destination — content type, custom page name, record source, and variable name](images/configure-destination.png)
+
 **Actions**:
 
 1. Open **Destination**.
@@ -169,6 +173,8 @@ Expected output: the summary strip reads “0 errors · 0 warnings”, **Basic S
 ## Step 6: Set the pane title, icon, and width
 
 **Objective**: the pane’s label and size match the app you are designing.
+
+![Pane & behaviour — pane ID, title, icon, width, and the Advanced behaviour controls](images/configure-pane-behaviour.png)
 
 **Actions**:
 
@@ -223,6 +229,10 @@ Expected output: zero validation errors on the Output panel. Warnings, if you tu
 ## Step 8: Preview the pane
 
 **Objective**: the preview matches the title and width you set.
+
+![Mock preview — pane title, header, and width against a fixed Account sample](images/preview-mock.png)
+
+![Form preview — a form layout driven by the configured trigger table](images/preview-form.png)
 
 **Actions**:
 

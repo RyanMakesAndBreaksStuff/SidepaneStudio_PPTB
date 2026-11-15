@@ -6,6 +6,8 @@ lets makers configure a pane without hand-writing JavaScript, previews the
 result, and generates the code needed to open the pane from a form, grid,
 command bar button, field change, or manual script.
 
+![Side Pane Studio workbench — the Configure panel (left), the Mock preview of a 480 px "Related Records" pane (center), and the generated Basic Script output (right)](documentation/images/workbench-overview.png)
+
 ## What It Builds
 
 Side panes can target:
@@ -43,6 +45,13 @@ tag, lookup record, specific record, or no record.
   the runtime from the Output panel, publish it as
   `spstudio_/scripts/sidepane.runtime.js`, and load it before the handler.
 - **Command Steps** provides deployment and trigger-wiring instructions.
+
+The generated **Basic Script** is self-contained JavaScript. The **Command
+Steps** tab lists the trigger-wiring checklist for your current trigger.
+
+![Basic Script output — the "What this script does" summary and the generated JavaScript](documentation/images/output-basic-script.png)
+
+![Command Steps output — the function name and the Command Designer wiring checklist](documentation/images/command-steps.png)
 
 The Configure panel reads the configuration as a sentence above **Trigger &
 source**, **Destination**, and **Pane & behaviour**. It offers seven triggers:
