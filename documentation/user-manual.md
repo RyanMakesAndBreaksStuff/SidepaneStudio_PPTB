@@ -2,7 +2,7 @@
 
 This manual assumes Power Platform ToolBox and Side Pane Studio are already installed. Start by selecting your Dataverse connection, then configure, preview, and deploy a side pane. The steps cover Side Pane Studio 1.4.0.
 
-For installation and local development, see [How-To-Build.md](../How-To-Build.md). A shorter workflow is in [usage.md](usage.md).
+For installation and local development, see [How-To-Build.md](https://github.com/RyanMakesAndBreaksStuff/SidepaneStudio_PPTB/blob/main/How-To-Build.md). A shorter workflow is in [usage.md](https://github.com/RyanMakesAndBreaksStuff/SidepaneStudio_PPTB/blob/main/documentation/usage.md).
 
 ## Step 1: Confirm ToolBox and the active connection
 
@@ -39,7 +39,7 @@ Expected output: the environment name you chose is selected, and opening Side Pa
 
 - The first launch can ask for permission consent. That consent is stored for this tool until a later version asks for more.
 - A loading state reads **Connecting to Dataverse…** while the connection check runs.
-- If the saved configuration was made in a different environment, a warning bar above the panels reads “This configuration was saved for a different environment; table, form, view and page selections are unverified.” **Copy** stays disabled until you click **Use anyway** (see [Error 9](#error-9-configuration-saved-for-a-different-environment)).
+- If the saved configuration was made in a different environment, a warning bar above the panels reads “This configuration was saved for a different environment; table, form, view and page selections are unverified.” **Copy** stays disabled until you click **Use anyway** (see [Error 9](https://github.com/RyanMakesAndBreaksStuff/SidepaneStudio_PPTB/blob/main/documentation/user-manual.md#error-9-configuration-saved-for-a-different-environment)).
 
 **Verification**:
 
@@ -82,7 +82,7 @@ Two required fields start empty, so on a fresh default **Basic Script** shows a 
 - **Custom page** opens a canvas page that already lives in the solution. The name is the page logical name, not the display name.
 - The mock host is a fixed Account sample. It shows the pane title, width, and header so you can judge the layout. It does not load your custom page.
 
-![Side Pane Studio workbench — summary sentence, Configure sections, mock preview, and Basic Script](images/workbench-overview.png)
+![Side Pane Studio workbench — summary sentence, Configure sections, mock preview, and Basic Script](https://raw.githubusercontent.com/RyanMakesAndBreaksStuff/SidepaneStudio_PPTB/main/documentation/images/workbench-overview.png)
 
 **Verification**:
 
@@ -94,7 +94,7 @@ Expected output: the summary strip reads “2 errors · 0 warnings”, and **Bas
 
 **Objective**: the script is shaped for a form command-bar button on the table you are designing for.
 
-![Trigger & source — trigger type, trigger table, form, function name, and namespace](images/configure-trigger-source.png)
+![Trigger & source — trigger type, trigger table, form, function name, and namespace](https://raw.githubusercontent.com/RyanMakesAndBreaksStuff/SidepaneStudio_PPTB/main/documentation/images/configure-trigger-source.png)
 
 **Actions**:
 
@@ -134,7 +134,7 @@ Expected output: the summary strip reads “1 error · 0 warnings”, and the **
 
 **Objective**: the custom page opens, and it receives the record that is open on the form.
 
-![Destination — content type, custom page name, record source, and variable name](images/configure-destination.png)
+![Destination — content type, custom page name, record source, and variable name](https://raw.githubusercontent.com/RyanMakesAndBreaksStuff/SidepaneStudio_PPTB/main/documentation/images/configure-destination.png)
 
 **Actions**:
 
@@ -174,7 +174,7 @@ Expected output: the summary strip reads “0 errors · 0 warnings”, **Basic S
 
 **Objective**: the pane’s label and size match the app you are designing.
 
-![Pane & behaviour — pane ID, title, icon, width, and the Advanced behaviour controls](images/configure-pane-behaviour.png)
+![Pane & behaviour — pane ID, title, icon, width, and the Advanced behaviour controls](https://raw.githubusercontent.com/RyanMakesAndBreaksStuff/SidepaneStudio_PPTB/main/documentation/images/configure-pane-behaviour.png)
 
 **Actions**:
 
@@ -230,9 +230,9 @@ Expected output: zero validation errors on the Output panel. Warnings, if you tu
 
 **Objective**: the preview matches the title and width you set.
 
-![Mock preview — pane title, header, and width against a fixed Account sample](images/preview-mock.png)
+![Mock preview — pane title, header, and width against a fixed Account sample](https://raw.githubusercontent.com/RyanMakesAndBreaksStuff/SidepaneStudio_PPTB/main/documentation/images/preview-mock.png)
 
-![Form preview — a form layout driven by the configured trigger table](images/preview-form.png)
+![Form preview — a form layout driven by the configured trigger table](https://raw.githubusercontent.com/RyanMakesAndBreaksStuff/SidepaneStudio_PPTB/main/documentation/images/preview-form.png)
 
 **Actions**:
 
@@ -276,7 +276,7 @@ Expected output: the summary strip sentence and the preview agree, and the Outpu
   3. Add the web resource to your solution and publish all customizations.
   4. Wire the function in **Command Designer**. In Action parameters, add `primaryControl` (Primary Control type) as the first argument.
 
-![Command Steps tab with the function name and Command Designer wiring steps](images/command-steps.png)
+![Command Steps tab with the function name and Command Designer wiring steps](https://raw.githubusercontent.com/RyanMakesAndBreaksStuff/SidepaneStudio_PPTB/main/documentation/images/command-steps.png)
 
 **Verification**:
 
@@ -530,7 +530,7 @@ Verify the fix: the warning bar disappears, the `different environment` warnings
 
 Recommended resources:
 
-- This manual, [Error 8](#error-8-shared-runtime-is-not-in-the-environment) (documentation)
+- This manual, [Error 8](https://github.com/RyanMakesAndBreaksStuff/SidepaneStudio_PPTB/blob/main/documentation/user-manual.md#error-8-shared-runtime-is-not-in-the-environment) (documentation)
 - [Power Platform ToolBox tool installation](https://docs.powerplatformtoolbox.com/tool-installation) (documentation)
 
 **Direction 2: Lookup tag click** | Difficulty: Intermediate
@@ -559,7 +559,7 @@ The function removes the handler before adding it, so another OnLoad run does no
 
 Recommended resources:
 
-- [FormContext.getControl](https://learn.microsoft.com/en-us/power-apps/developer/model-driven-apps/clientapi/reference/formcontext/getcontrol) (documentation)
+- [FormContext.getControl](https://learn.microsoft.com/en-us/power-apps/developer/model-driven-apps/clientapi/reference/controls/getcontrol) (documentation)
 - [addOnLookupTagClick](https://learn.microsoft.com/en-us/power-apps/developer/model-driven-apps/clientapi/reference/controls/addonlookuptagclick) (documentation)
 
 **Direction 3: Grid commands and row select** | Difficulty: Intermediate
@@ -590,7 +590,7 @@ Recommended resources:
 Recommended resources:
 
 - [navigateTo pageInput](https://learn.microsoft.com/en-us/power-apps/developer/model-driven-apps/clientapi/reference/xrm-navigation/navigateto) (documentation)
-- [sidePanes](https://learn.microsoft.com/en-us/power-apps/developer/model-driven-apps/clientapi/reference/xrm-app/sidepanes) (documentation)
+- [sidePanes](https://learn.microsoft.com/en-us/power-apps/developer/model-driven-apps/clientapi/reference/xrm-app-sidepanes) (documentation)
 
 **Direction 5: Metadata table filters** | Difficulty: Advanced
 
@@ -718,10 +718,10 @@ spstudio_/scripts/sidepane.runtime.js
 
 ### Reference links
 
-- [Side Pane Studio basic usage](usage.md)
+- [Side Pane Studio basic usage](https://github.com/RyanMakesAndBreaksStuff/SidepaneStudio_PPTB/blob/main/documentation/usage.md)
 - [Power Platform ToolBox quick start](https://docs.powerplatformtoolbox.com/quickstart)
 - [ToolBox authentication](https://docs.powerplatformtoolbox.com/authentication)
-- [Xrm.App.sidePanes](https://learn.microsoft.com/en-us/power-apps/developer/model-driven-apps/clientapi/reference/xrm-app/sidepanes)
+- [Xrm.App.sidePanes](https://learn.microsoft.com/en-us/power-apps/developer/model-driven-apps/clientapi/reference/xrm-app-sidepanes)
 - [navigateTo](https://learn.microsoft.com/en-us/power-apps/developer/model-driven-apps/clientapi/reference/xrm-navigation/navigateto)
 - [Command designer](https://learn.microsoft.com/en-us/power-apps/maker/model-driven-apps/command-designer-overview)
 - [addOnLookupTagClick](https://learn.microsoft.com/en-us/power-apps/developer/model-driven-apps/clientapi/reference/controls/addonlookuptagclick)

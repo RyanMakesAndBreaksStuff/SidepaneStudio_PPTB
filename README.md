@@ -6,7 +6,7 @@ lets makers configure a pane without hand-writing JavaScript, previews the
 result, and generates the code needed to open the pane from a form, grid,
 command bar button, field change, or manual script.
 
-![Side Pane Studio workbench — the Configure panel (left), the Mock preview of a 480 px "Related Records" pane (center), and the generated Basic Script output (right)](documentation/images/workbench-overview.png)
+![Side Pane Studio workbench — the Configure panel (left), the Mock preview of a 480 px "Related Records" pane (center), and the generated Basic Script output (right)](https://raw.githubusercontent.com/RyanMakesAndBreaksStuff/SidepaneStudio_PPTB/main/documentation/images/workbench-overview.png)
 
 ## What It Builds
 
@@ -49,9 +49,9 @@ tag, lookup record, specific record, or no record.
 The generated **Basic Script** is self-contained JavaScript. The **Command
 Steps** tab lists the trigger-wiring checklist for your current trigger.
 
-![Basic Script output — the "What this script does" summary and the generated JavaScript](documentation/images/output-basic-script.png)
+![Basic Script output — the "What this script does" summary and the generated JavaScript](https://raw.githubusercontent.com/RyanMakesAndBreaksStuff/SidepaneStudio_PPTB/main/documentation/images/output-basic-script.png)
 
-![Command Steps output — the function name and the Command Designer wiring checklist](documentation/images/command-steps.png)
+![Command Steps output — the function name and the Command Designer wiring checklist](https://raw.githubusercontent.com/RyanMakesAndBreaksStuff/SidepaneStudio_PPTB/main/documentation/images/command-steps.png)
 
 The Configure panel reads the configuration as a sentence above **Trigger &
 source**, **Destination**, and **Pane & behaviour**. It offers seven triggers:
@@ -82,15 +82,15 @@ Side Pane Studio generates side-pane scripts only. It does not generate
 
 ## Usage Guide
 
-Start with the [basic usage guide](documentation/usage.md) for the end-to-end
+Start with the [basic usage guide](https://github.com/RyanMakesAndBreaksStuff/SidepaneStudio_PPTB/blob/main/documentation/usage.md) for the end-to-end
 workflow: connect PPTB, configure a target, preview the pane, generate code,
 and deploy the result into a model-driven app.
 
-The [user instruction manual](documentation/user-manual.md) starts with an
+The [user instruction manual](https://github.com/RyanMakesAndBreaksStuff/SidepaneStudio_PPTB/blob/main/documentation/user-manual.md) starts with an
 installed tool and covers configuration, deployment, and troubleshooting.
-For installation and source builds, see [How-To-Build.md](How-To-Build.md).
+For installation and source builds, see [How-To-Build.md](https://github.com/RyanMakesAndBreaksStuff/SidepaneStudio_PPTB/blob/main/How-To-Build.md).
 
-See [Change-Log.md](Change-Log.md) for the `v1.4.0` change summary.
+See [Change-Log.md](https://github.com/RyanMakesAndBreaksStuff/SidepaneStudio_PPTB/blob/main/Change-Log.md) for the `v1.4.0` change summary.
 
 ## Requirements
 

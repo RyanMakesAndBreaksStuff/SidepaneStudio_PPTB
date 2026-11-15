@@ -1,12 +1,12 @@
 # How to Build Side Pane Studio
 
-This guide covers local development and the installation guidance moved out of the [user manual](documentation/user-manual.md). If Power Platform ToolBox and Side Pane Studio are already installed and you want to configure a pane, start at [Step 1 of the manual](documentation/user-manual.md#step-1-confirm-toolbox-and-the-active-connection).
+This guide covers local development and the installation guidance moved out of the [user manual](https://github.com/RyanMakesAndBreaksStuff/SidepaneStudio_PPTB/blob/main/documentation/user-manual.md). If Power Platform ToolBox and Side Pane Studio are already installed and you want to configure a pane, start at [Step 1 of the manual](https://github.com/RyanMakesAndBreaksStuff/SidepaneStudio_PPTB/blob/main/documentation/user-manual.md#step-1-confirm-toolbox-and-the-active-connection).
 
 ## 1. Prepare the development tools
 
 - Install Git so you can clone the repository.
 - Install Node.js and npm from [Node.js downloads](https://nodejs.org/). The project declares Node.js `>=20.19.0`; use Node.js 22.13 or newer in the 22.x line, or Node.js 24.x, to satisfy the checked-in toolchain's Vite and ESLint requirements as well.
-- Use Power Platform ToolBox with host API 1.2.7 or newer and a Dataverse connection for connected testing. See [ToolBox setup](#toolbox-setup) below if needed.
+- Use Power Platform ToolBox with host API 1.2.7 or newer and a Dataverse connection for connected testing. See [ToolBox setup](https://github.com/RyanMakesAndBreaksStuff/SidepaneStudio_PPTB/blob/main/How-To-Build.md#toolbox-setup) below if needed.
 
 On Windows or macOS, use the Node.js installer for your operating system. On Linux, follow the installation instructions linked from the Node.js download page. Open a new terminal after installation and verify the tools:
 
@@ -84,7 +84,7 @@ For **Shared Library** output, upload the runtime as a JavaScript web resource n
 
 Enable **Show Debug Setting** in ToolBox settings, then use **Load Tool** for the local built project. Follow the host's [tool installation guidance](https://docs.powerplatformtoolbox.com/tool-installation) for the local-folder loading flow.
 
-Select an active Dataverse connection and open the loaded Side Pane Studio tool. Verify that the workbench appears and metadata pickers load from that environment. Continue with [the user manual](documentation/user-manual.md) to configure and test a generated pane in a model-driven app.
+Select an active Dataverse connection and open the loaded Side Pane Studio tool. Verify that the workbench appears and metadata pickers load from that environment. Continue with [the user manual](https://github.com/RyanMakesAndBreaksStuff/SidepaneStudio_PPTB/blob/main/documentation/user-manual.md) to configure and test a generated pane in a model-driven app.
 
 For development build updates, run either command as needed:
 
