@@ -1,6 +1,6 @@
 # Side Pane Studio User Instruction Manual
 
-This manual assumes Power Platform ToolBox and Side Pane Studio are already installed. Start by selecting your Dataverse connection, then configure, preview, and deploy a side pane. The steps cover Side Pane Studio 1.1.1.
+This manual assumes Power Platform ToolBox and Side Pane Studio are already installed. Start by selecting your Dataverse connection, then configure, preview, and deploy a side pane. The steps cover Side Pane Studio 1.4.0.
 
 For installation and local development, see [How-To-Build.md](../How-To-Build.md). A shorter workflow is in [usage.md](usage.md).
 
@@ -33,44 +33,48 @@ Expected output: the environment name you chose is selected, and opening Side Pa
 
 1. Click **Tools** or **Installed Tools**.
 2. Click **Side Pane Studio**.
-3. Wait until the header and the three panels (or the three tabs) appear.
+3. Wait until the three panels (or the three tabs) appear.
 
 **Explanation**:
 
 - The first launch can ask for permission consent. That consent is stored for this tool until a later version asks for more.
 - A loading state reads **Connecting to Dataverse…** while the connection check runs.
+- If the saved configuration was made in a different environment, a warning bar above the panels reads “This configuration was saved for a different environment; table, form, view and page selections are unverified.” **Copy** stays disabled until you click **Use anyway** (see [Error 9](#error-9-configuration-saved-for-a-different-environment)).
 
 **Verification**:
 
-The header shows **Side Pane Studio** and a **Reset** button.
+The summary strip above the three panels shows **Reset** on its right, after the status text. On a fresh default the status reads “2 errors · 0 warnings”. The ToolBox tab carries the tool name.
 
 Expected output: the workbench is interactive. The center preview is on the **Mock** tab.
 
 ## Step 3: Confirm the default pane
 
-Work in the ToolBox window with Side Pane Studio open. On a wide window you get three columns: **Configure** (left), **Preview** (center), and **Output** (right). Below 900 pixels, use the **Configure**, **Preview**, and **Output** tabs instead. The steps use the same fields either way.
+Work in the ToolBox window with Side Pane Studio open. On a wide window you get three columns: **Configure** (left), **Preview** (center), and **Output** (right). Below 1040 pixels, use the **Configure**, **Preview**, and **Output** tabs instead. The steps use the same fields either way.
 
-The studio writes the current configuration to ToolBox settings and restores it the next time you open the tool. **Reset** in the header asks you to confirm `Reset all configuration? This cannot be undone.` and then restores the defaults below.
+The studio writes the current configuration to ToolBox settings and restores it the next time you open the tool. **Reset**, at the right end of the summary strip above all three panels (in the wide and the tabbed layout alike), asks you to confirm `Reset all configuration? This cannot be undone.` and then restores the defaults below.
 
 | Setting             | Default                                |
 | ------------------- | -------------------------------------- |
 | Content type        | Custom page                            |
-| Custom page name    | `sps_SidePaneBuilderPage`              |
+| Custom page name    | empty (the field shows the placeholder `sps_SidePaneBuilderPage`) |
 | Pane title          | Related Records                        |
 | Pane ID             | `relatedRecordsPane`                   |
 | Width               | 480 (allowed range 300–1200)           |
-| Trigger             | Command bar button (form)              |
-| Function            | `YourNamespace.openRelatedRecordsPane` |
-| Context             | Current record (from trigger)          |
+| Trigger             | Form button                            |
+| Function name       | `openRelatedRecordsPane`               |
+| Namespace           | empty (the field shows the placeholder `Contoso`) |
+| Record source       | The record on this form                |
 | Reuse open pane     | On                                     |
 | Expand pane on open | On                                     |
+
+Two required fields start empty, so on a fresh default **Basic Script** shows a red callout instead of the script until you fill them in during Steps 4 and 5.
 
 **Objective**: you can see the default custom-page pane in the preview before you change anything.
 
 **Actions**:
 
-1. In **Configure**, open **What opens in the pane**.
-2. Confirm **Custom page** is selected and **Custom page name** is `sps_SidePaneBuilderPage`.
+1. In **Configure**, open **Destination**.
+2. Confirm **Custom page** is selected and **Custom page name** is empty. The field shows the placeholder `sps_SidePaneBuilderPage`; that is a hint, not a value.
 3. Look at the center **Mock** preview.
 
 **Explanation**:
@@ -78,154 +82,175 @@ The studio writes the current configuration to ToolBox settings and restores it 
 - **Custom page** opens a canvas page that already lives in the solution. The name is the page logical name, not the display name.
 - The mock host is a fixed Account sample. It shows the pane title, width, and header so you can judge the layout. It does not load your custom page.
 
-![Side Pane Studio workbench with content type, mock preview, and Basic Script](images/workbench-overview.png)
+![Side Pane Studio workbench — summary sentence, Configure sections, mock preview, and Basic Script](images/workbench-overview.png)
 
 **Verification**:
 
-The mock pane title is **Related Records**. The Output panel **Basic Script** tab shows a summary that starts with “Opens a side pane showing **Related Records**” and a **Copy** control on the script.
+The mock pane title is **Related Records**. The Output panel **Basic Script** tab shows **What this script does** with a summary that starts with “When a user clicks a form command button on the (table) form, open custom page (name)”. A red callout reads “Fix 2 validation errors before using this code: Custom page name is required.” and the script block is withheld.
 
-Expected output: no red validation callout on **Basic Script**. The script block is visible.
+Expected output: the summary strip reads “2 errors · 0 warnings”, and **Basic Script** shows the red callout instead of the script block. Steps 4 and 5 clear both errors.
 
-## Step 4: Point the pane at your custom page
+## Step 4: Choose the trigger and its table
 
-**Objective**: the generated script targets a custom page in your solution.
+**Objective**: the script is shaped for a form command-bar button on the table you are designing for.
 
-**Actions**:
-
-1. Stay on **What opens in the pane**.
-2. Leave **Content type** on **Custom page**.
-3. Replace the custom page name with your page logical name, `YOUR_CUSTOM_PAGE`.
-
-**Explanation**:
-
-- `YOUR_CUSTOM_PAGE` is the logical name from the solution, for example `contoso_relatedrecords`. An empty name cannot generate a usable script.
-- Other content types replace these fields. Use them when the pane should show Dataverse data or another host page:
-  - **Table record** — a record form. Optional form id, tab name, and a JSON object in **Form data**.
-  - **Table list** — a view. Optional view and view type (`savedquery` or `userquery`).
-  - **Web resource** — an HTML or JavaScript web resource. The page inside the pane cannot use `Xrm` or `parent.Xrm`.
-  - **Dashboard** — a system or personal dashboard you pick from the environment.
-  - **Search** — global search, with optional search text. The studio warns that search is not a documented `navigateTo` page type.
-
-**Verification**:
-
-**Custom page name** shows `YOUR_CUSTOM_PAGE`. **Basic Script** still shows the code block.
-
-Expected output: the summary still describes the pane title, and there is no callout that says `Custom page name is required.`
-
-## Step 5: Set the pane title, icon, and width
-
-**Objective**: the pane’s label and size match the app you are designing.
+![Trigger & source — trigger type, trigger table, form, function name, and namespace](images/configure-trigger-source.png)
 
 **Actions**:
 
-1. Open **Pane Appearance**.
-2. Set **Pane title** to the label users should see, for example `Related Records`.
-3. Leave **Tab icon** empty, or set a published web-resource path such as `WebResources/YOUR_PUBLISHER_/icons/YOUR_ICON.svg`.
-4. Set **Width** between 300 and 1200. The field hint recommends 400–600. The default 480 is a solid start.
-5. Leave **Show close button** on and **Hide header bar** off for this first pane.
-
-**Explanation**:
-
-- Width is stored in pixels. Values outside 300–1200 are rejected.
-- An icon path renders in the model-driven app after that web resource is published. The preview keeps a placeholder and says: `Icon will render in the live app once the web resource is published. Showing placeholder in preview.`
-- **Hide header bar** also hides the close button. If both **Hide header bar** and **Show close button** are on, the studio warns and the generated script emits `canClose: false`.
-
-**Verification**:
-
-The mock pane shows your title, and the width hint shows the pixel value you set.
-
-Expected output: **Output** does not report `Pane width must be between 300 and 1200 pixels.`
-
-## Step 6: Choose how makers launch the pane
-
-**Objective**: the script is shaped for a form command-bar button, with a stable pane id and a function name you can select in Command Designer.
-
-**Actions**:
-
-1. Open **How makers launch this pane**.
-2. Set **Trigger type** to **Command bar button (form)**.
-3. Set **Unique pane ID** to a stable key, `YOUR_PANE_ID`. Use letters, numbers, and no quotes. Example: `relatedRecordsPane`.
-4. Set **Function name** to `YOUR_FUNCTION_NAME`, for example `openRelatedRecordsPane`.
-5. Set **Namespace** to `YOUR_NAMESPACE`, for example `Contoso`.
+1. In **Configure**, open **Trigger & source**.
+2. Set **Trigger type** to **Form button**.
+3. Set **Trigger table** to the logical name of the form’s table, `YOUR_TABLE_LOGICAL_NAME`, for example `account`.
+4. Optionally pick the **Form** the previews should use.
+5. Set **Function name** to `YOUR_FUNCTION_NAME`, for example `openRelatedRecordsPane`.
+6. Set **Namespace** to `YOUR_NAMESPACE`, for example `Contoso`.
 
 **Explanation**:
 
 - The function makers wire up is `YOUR_NAMESPACE.YOUR_FUNCTION_NAME`. The field hint shows that full name while you type.
-- Keep the pane id stable if later buttons should reuse this pane instead of creating a second one.
+- Every choice below this point depends on the trigger. Changing **Trigger type** snaps **Record source** and **Content type** to values that trigger can use, so the panel never offers an illegal combination.
+- On a form trigger you can leave **Trigger table** empty. The script then reads the table from the form at runtime (`getEntityName()`). Set it when you want the **Form** preview or a table-specific picker.
 - The other triggers change the script shape and the deploy steps:
 
-| On-screen trigger            | When it runs                                  | Extra field             |
-| ---------------------------- | --------------------------------------------- | ----------------------- |
-| Form on load                 | The record form loads                         | —                       |
-| Command bar button (form)    | A form command-bar button                     | —                       |
-| Command bar button (grid)    | A main-grid command                           | —                       |
-| Command bar button (subgrid) | A subgrid command                             | —                       |
-| Row select (grid)            | One row is selected in the main grid          | Power Apps grid control |
-| Row select (subgrid)         | One row is selected in a subgrid              | Power Apps grid control |
-| Console / Manual             | You paste the script into the browser console | No namespace field      |
-| Field on change              | A form field changes                          | **Field name**          |
-| Lookup tag click             | A lookup tag is clicked                       | **Lookup control name** |
+| On-screen trigger | When it runs                                  | Extra fields                                               |
+| ----------------- | --------------------------------------------- | ---------------------------------------------------------- |
+| Form on load      | The record form loads                         | **Form**                                                   |
+| Form button       | A form command-bar button                     | **Form**                                                   |
+| Field change      | A form column changes                         | **Column**                                                 |
+| Lookup tag click  | A lookup tag is clicked                       | **Lookup controls**                                        |
+| Grid button       | A command-bar button on a grid                | **Main grid / Subgrid**, **View**                          |
+| Grid row select   | One row is selected                           | **Main grid / Subgrid**, **View**, Power Apps grid control |
+| Console           | You paste the script into the browser console | No trigger table or form. **Function name** and **Namespace** are required |
+
+**Console** uses the same **Function name** and **Namespace** fields as every other trigger. The pasted script defines `YOUR_NAMESPACE.YOUR_FUNCTION_NAME` and calls it once, so pasting it opens the pane. Paste it again to reopen the pane.
 
 **Verification**:
 
-The function hint reads `YOUR_NAMESPACE.YOUR_FUNCTION_NAME`.
+The **Function name** hint reads `Full call: YOUR_NAMESPACE.YOUR_FUNCTION_NAME`. The summary strip at the top of the workbench begins “When a user clicks a form command button on the account form”.
 
-Expected output: **Basic Script** is still visible, and there is no `Pane ID is required.` error.
+Expected output: the summary strip reads “1 error · 0 warnings”, and the **Basic Script** callout reads “Fix 1 validation error before using this code: Custom page name is required.” The namespace error is gone.
 
-## Step 7: Set record context
+## Step 5: Choose what opens and which record
 
-**Objective**: the custom page receives the record that is open on the form.
+**Objective**: the custom page opens, and it receives the record that is open on the form.
+
+![Destination — content type, custom page name, record source, and variable name](images/configure-destination.png)
 
 **Actions**:
 
-1. Open **Record context**.
-2. Set **Context mode** to **Current record (from trigger)**.
-3. Set **Table name** to the logical name of the form’s table, `YOUR_TABLE_LOGICAL_NAME`, for example `account`.
-4. Leave **Reuse open pane** on.
+1. Open **Destination**.
+2. Leave **Content type** on **Custom page**.
+3. Replace the custom page name with your page logical name, `YOUR_CUSTOM_PAGE`.
+4. Set **Record source** to **The record on this form**.
+5. Leave **Variable name** at `recordId`.
 
 **Explanation**:
 
-- **Current record (from trigger)** uses the form record when the trigger is a form load, form button, field change, or similar form event.
-- For a custom page or web resource, an empty **Table name** omits record context. The pane still opens, with no record. The studio says: `Without a table name the generated script omits record context entirely — the pane opens with no record.`
-- **Selected row (subgrid)** is valid for main-grid and subgrid triggers. On any other trigger the studio blocks generation with: `Selected row context is only available from a main grid or subgrid. Choose a different context mode or trigger.`
-- **Static record ID** embeds a GUID. That GUID belongs to one environment. Reconfigure it after you import the setup somewhere else.
-- **None — pane opens independently** sends no record.
-- **Reuse open pane** navigates the existing pane to the new page and then selects it. Turning it off closes and recreates the pane when it is already open.
-- **Lookup tag click** is special: for a custom page or table record, the clicked tag supplies `entityType` and `id` at runtime. The context mode you picked stays selected in the form, and the tag identity wins when the script runs.
+- `YOUR_CUSTOM_PAGE` is the logical name from the solution, for example `contoso_relatedrecords`. An empty name cannot generate a usable script.
+- **Record source** says where the record ID comes from. The list only contains sources the trigger allows:
+  - **The record on this form** — the form record. Form triggers. On a form that has not been saved yet there is no record ID, so the script stops without opening a pane: a form button shows "Save the record before opening this pane.", and form load or field change handlers write the same message to the browser console.
+  - **The selected row** — the first selected row. Grid triggers.
+  - **The clicked tag record** — the record behind the clicked lookup tag. Lookup tag click, where it is the only source.
+  - **A record in a lookup** — pick the **Lookup column** on the trigger table; the record it points to opens. When the lookup is empty at runtime, the script returns without opening a pane.
+  - **A specific record** — enter the **Record ID** (GUID). For content types other than Table record, also pick the **Record table**. That GUID belongs to one environment. Reconfigure it after you import the setup somewhere else.
+  - **No record** — the pane opens independently.
+- With the form record or selected row as the source, the script reads the record’s table at runtime, so no table name is required for a custom page or web resource.
+- **Variable name** is the variable in the generated script that holds the resolved record ID.
+- Other content types replace these fields. Use them when the pane should show Dataverse data or another host page:
+  - **Table record** — a record form. Choose **Open existing record** (the **Record source** supplies the record) or **Create new record** (a blank form; **Form data** pre-fills its columns, and a form-record or selected-row source also pre-fills from that record). Pick the **Destination table** when you create a record or use a specific record; otherwise it is shown as `Destination table: <name>`. Optional **Form** and **Tab name**.
+  - **Table list** — a view. Pick the **Destination table** and an optional **View**.
+  - **Web resource** — an HTML or JavaScript web resource. The page inside the pane cannot use `Xrm` or `parent.Xrm`. It receives the clicked lookup tag as URL `data`.
+  - **Dashboard** — a system or personal dashboard you pick from the environment.
+  - **Search** — global search, with optional search text. The studio warns that search is not a documented `navigateTo` page type.
+  - **Generative page** — a page the app agent built in the app designer. Paste its **Page ID**: in the app designer, select the page; the properties pane shows the ID in the **Generative page** field. Optional **Page data** is a JSON object. The page receives `entityName`, `recordId`, and `data` only if its prompt sets it up to accept input parameters; **Output → Page prompt** writes that wording. To show the form’s own record, you can instead add the generative page to the form as a component, which passes `recordId` automatically. Microsoft does not say whether the page ID stays the same after a solution import, so check it after you import.
 
 **Verification**:
 
-**Table name** shows `YOUR_TABLE_LOGICAL_NAME`. The info callout about a missing table name is gone.
+**Custom page name** shows `YOUR_CUSTOM_PAGE`. The sentence now reads “…open custom page YOUR_CUSTOM_PAGE from the form record…”.
 
-Expected output: **Basic Script** remains available. Context errors, if any, name the field to change.
+Expected output: the summary strip reads “0 errors · 0 warnings”, **Basic Script** now shows the code block for the first time, and there is no callout that says `Custom page name is required.`
 
-## Step 8: Check behavior, then preview
+## Step 6: Set the pane title, icon, and width
 
-**Objective**: the pane opens in the foreground, and the preview matches the title and width you set.
+**Objective**: the pane’s label and size match the app you are designing.
+
+![Pane & behaviour — pane ID, title, icon, width, and the Advanced behaviour controls](images/configure-pane-behaviour.png)
 
 **Actions**:
 
-1. Open **Advanced options**.
+1. Open **Pane & behaviour**.
+2. Set **Unique pane ID** to a stable key, `YOUR_PANE_ID`. Use letters, numbers, and no quotes. Example: `relatedRecordsPane`.
+3. Set **Pane title** to the label users should see, for example `Related Records`.
+4. Leave **Tab icon** empty, or set a published web-resource path such as `WebResources/YOUR_PUBLISHER_/icons/YOUR_ICON.svg`.
+5. Set **Width** between 300 and 1200. The field hint recommends 400–600. The default 480 is a solid start.
+6. Leave **Show close button** on and **Hide header bar** off for this first pane.
+
+**Explanation**:
+
+- Keep the pane id stable if later buttons should reuse this pane instead of creating a second one.
+- Width is stored in pixels. Values outside 300–1200 are rejected.
+- An icon path renders in the model-driven app after that web resource is published. The field hint reads `Web resource path — must be published and prefixed with WebResources/ to render`. The preview cannot load web resources, so it shows a placeholder icon. A path the script cannot emit safely is dropped, and the field warns `Not emitted: path must be relative to WebResources.`
+- **Hide header bar** also hides the close button. If both **Hide header bar** and **Show close button** are on, the studio warns and the generated script emits `canClose: false`.
+
+**Verification**:
+
+The mock pane shows your title, and the width hint shows the pixel value you set. The sentence ends with the width and title, for example “in a 480px pane titled “Related Records””.
+
+Expected output: **Output** does not report `Pane ID is required.` or `Pane width must be between 300 and 1200 pixels.`
+
+## Step 7: Check the behaviour options
+
+**Objective**: the pane opens in the foreground and is reused on the next click.
+
+**Actions**:
+
+1. Stay in **Pane & behaviour** and scroll to **Advanced**.
 2. Leave **Open in foreground (isSelected)** on.
 3. Leave **Expand pane on open** on.
-4. Leave **Close other side panes** off for this first pane.
-5. Leave **Initial badge value** at `0`.
-6. Return to the center preview. Stay on **Mock**.
-7. If you configured a table, you can also open **Form** to preview with environment metadata. **Grid** appears when the target is a table list.
+4. Leave **Reuse open pane** on.
+5. Leave **Close other side panes** off for this first pane.
+6. Leave **Close if already open** off. Turn it on when a command bar button should also close the pane it opened.
+7. Leave **Initial badge value** at `0`.
 
 **Explanation**:
 
-- **Expand pane on open** expands the side-pane rail after a command-bar trigger creates the pane.
+- **Reuse open pane** navigates the existing pane to the new page and then selects it. Turning it off closes and recreates the pane when it is already open.
+- **Expand pane on open** expands the side-pane rail after a command-bar trigger (form button or grid button) creates the pane. The other triggers (form on load, field change, lookup tag click, grid row select, console) leave the rail as it is, in both Basic Script and Shared Library output.
 - **Close other side panes** closes every other open pane after this one opens. The Output panel then shows: `closeOthers is active: The generated script closes all other side panes after opening this one.`
+- **Close if already open** works only for command bar buttons. On any other trigger the studio blocks generation with: `Close if already open works only for command bar buttons. Any other trigger would close its own pane when it fires again.`
 - **Keep loaded when inactive** (`alwaysRender`) keeps the pane in memory when the user switches away. The studio warns about that memory cost. Leave it off unless you have measured a need.
-- **Form** preview uses a host form picker that is independent of the form id on a table-record target. **Mock** metadata can show a configured list `viewId` or a record `formId` and tab name. Neither preview is a live navigation test.
+
+**Verification**:
+
+**Basic Script** shows the code block.
+
+Expected output: zero validation errors on the Output panel. Warnings, if you turned any on, appear as amber callouts and the script remains copyable.
+
+## Step 8: Preview the pane
+
+**Objective**: the preview matches the title and width you set.
+
+![Mock preview — pane title, header, and width against a fixed Account sample](images/preview-mock.png)
+
+![Form preview — a form layout driven by the configured trigger table](images/preview-form.png)
+
+**Actions**:
+
+1. Return to the center preview. Stay on **Mock**.
+2. If you set a **Trigger table**, open **Form** to preview with environment metadata. The preview uses the configured trigger table and form.
+3. For a grid trigger, **Grid** previews the configured table and **View**; changes you make in the grid preview update the configuration.
+
+**Explanation**:
+
+- **Form** and **Grid** previews are driven by the configuration in **Trigger & source**. Choosing a table, form, or view in the preview updates the configuration too.
+- **Mock** metadata can show a configured list `viewId` or a record `formId` and tab name. Neither preview is a live navigation test.
 - Warnings do not block copy. Errors do. While any error exists, the script block is hidden and the panel says `Fix N validation error(s) before using this code:` followed by the first error.
 
 **Verification**:
 
 The mock pane title and width match Configure. **Basic Script** shows the code block.
 
-Expected output: zero validation errors on the Output panel. Warnings, if you turned any on, appear as amber callouts and the script remains copyable.
+Expected output: the summary strip sentence and the preview agree, and the Output panel reports zero validation errors.
 
 ## Step 9: Copy the Basic Script and read the deploy steps
 
@@ -245,7 +270,7 @@ Expected output: zero validation errors on the Output panel. Warnings, if you tu
 - **Shared Library** is a shorter script that calls a deployed helper. Skip it until the advanced section.
 - **Command Steps** repeats the deploy list and shows the function name with its own **Copy** control.
 - **Advanced — Raw Config** is the saved configuration as JSON for diagnostics. Copy it only when you are debugging the configuration, not when you are wiring the button.
-- For **Command bar button (form)** the deploy steps in the product are:
+- For **Form button** the deploy steps in the product are:
   1. If you are using Shared Library output, download the runtime, upload it as `spstudio_/scripts/sidepane.runtime.js`, publish it, and load that library before the handler. Basic Script does not need that file.
   2. Paste the function into a new JavaScript web resource and publish it.
   3. Add the web resource to your solution and publish all customizations.
@@ -277,7 +302,7 @@ Expected output: the clipboard holds the full Basic Script, and Command Steps sh
 **Explanation**:
 
 - `primaryControl` is how the generated form-button function receives the form. Command Designer must pass it. The generated function is `function(primaryControl)`.
-- Play the app in the same environment ToolBox used, unless you intentionally reconfigured static ids for another environment.
+- Play the app in the same environment ToolBox used, unless you intentionally reconfigured a specific-record ID for another environment.
 - The pane id `YOUR_PANE_ID` is what the script reuses on the next click when **Reuse open pane** is on.
 
 **Verification**:
@@ -285,6 +310,15 @@ Expected output: the clipboard holds the full Basic Script, and Command Steps sh
 Click the new command. The side pane opens with your title and your custom page.
 
 Expected output: one pane, about the width you set, titled with your pane title. A second click reuses that pane. If the button does nothing, compare the published function name with Command Steps before you change the script.
+
+## Not supported by design
+
+Side Pane Studio generates side-pane scripts only. It does not generate `Xrm.Navigation.navigateTo` dialog or inline navigation.
+
+- The `createPane` option `hidden`: a hidden pane has no tab, so users cannot reach it. Stored configurations keep the value; scripts never emit it.
+- Collapsing the side pane rail. Scripts only expand it when they open a pane.
+- The `entityrecord` page inputs `relationship`, `processId`, `processInstanceId`, `selectedStageId`, `isCrossEntityNavigate`, and `isOfflineSyncError`. **Create new record** with **Pre-fill from current record** covers `createFromEntity`.
+- Clients without side panes. Side panes run in the web browser only and not on-premises. There, generated scripts exit: command bar buttons show `Side panes are not available in this client.`, and other triggers log it to the console.
 
 ## Troubleshooting
 
@@ -309,7 +343,7 @@ Solution:
 2. Start Power Platform ToolBox.
 3. Launch **Side Pane Studio** from **Installed Tools**.
 
-Verify the fix: the header **Side Pane Studio** and the **Mock** preview appear.
+Verify the fix: the **Configure**, **Preview**, and **Output** panels appear, and the **Mock** preview is visible.
 
 **Error 2: No active Dataverse connection**
 
@@ -326,11 +360,7 @@ Related messages from the same screen:
 toolboxAPI unavailable — open inside PPTB.
 ```
 
-```text
-Connection removed. Reconnect in PPTB.
-```
-
-Cause: ToolBox has no selected connection, the connection check failed, or the active connection was deleted while the studio was open.
+Cause: ToolBox has no selected connection, the connection check failed, or the active connection was deleted while the studio was open. A deleted or deselected connection shows the same **Connection unavailable** screen above.
 
 Solution:
 
@@ -338,7 +368,7 @@ Solution:
 2. Select the environment, or click **Add Connection** and finish **Microsoft Login Prompt** sign-in.
 3. Launch Side Pane Studio again.
 
-Verify the fix: the workbench replaces **Connection unavailable**. If you had deleted the connection, the studio stays on `Connection removed. Reconnect in PPTB.` until a connection exists again.
+Verify the fix: the workbench replaces **Connection unavailable**. If you had deleted the connection, the studio stays on this **Connection unavailable** screen until a connection exists again, and then recovers on its own.
 
 **Error 3: Custom page name is required**
 
@@ -352,7 +382,7 @@ Cause: **Content type** is **Custom page** and **Custom page name** is blank. Th
 
 Solution:
 
-1. Open **What opens in the pane**.
+1. Open **Destination**.
 2. Enter `YOUR_CUSTOM_PAGE`, or switch to the content type you actually want and fill its required field.
 3. Return to **Basic Script**.
 
@@ -374,60 +404,54 @@ Cause: **Unique pane ID** is empty, or **Width** is below 300 or above 1200.
 
 Solution:
 
-1. Open **How makers launch this pane** and set **Unique pane ID** to `YOUR_PANE_ID`.
-2. Open **Pane Appearance** and set **Width** between 300 and 1200.
+1. Open **Pane & behaviour** and set **Unique pane ID** to `YOUR_PANE_ID`.
+2. In the same section, set **Width** between 300 and 1200.
 
 Verify the fix: **Basic Script** shows the code block, and the width hint shows the new pixel value.
 
-**Error 5: Selected row context is only available from a grid**
+**Error 5: This record choice is not available**
 
 Full error message:
 
 ```text
-Selected row context is only available from a main grid or subgrid. Choose a different context mode or trigger.
+This record choice is not available for the selected trigger and content. Choose another record.
 ```
 
-Cause: **Context mode** is **Selected row (subgrid)** while the trigger is a form, field, lookup, or console action. Those triggers have no grid selection.
+Cause: **Record source** holds a source the current **Trigger type** or **Content type** cannot supply, for example **The selected row** on a **Form button**. The panel offers legal sources only, so this is rare.
 
 Solution:
 
-1. For a form button, set **Context mode** back to **Current record (from trigger)**.
-2. Or change **Trigger type** to **Command bar button (grid)**, **Command bar button (subgrid)**, **Row select (grid)**, or **Row select (subgrid)**.
+1. Open **Destination** and pick another **Record source**.
+2. Or change **Trigger type** to one that supplies that source: **Grid button** or **Grid row select** for **The selected row**, **Lookup tag click** for **The clicked tag record**.
 
-Verify the fix: the context error disappears from **Basic Script**.
+Verify the fix: the record error disappears from **Basic Script**.
 
-**Error 6: Console / Manual has no current record**
+**Error 6: Console has no form or grid record**
 
-Full error message:
-
-```text
-Console / Manual scripts run outside a form or grid, so there is no current record. Use Static record ID or None.
-```
-
-Cause: **Trigger type** is **Console / Manual** and **Context mode** is still **Current record (from trigger)**.
+Cause: **Trigger type** is **Console**. A console script runs outside a form or grid, so only **A specific record** and **No record** are offered under **Record source**. **Content type** values that never take a record (Table list, Dashboard, Search) only offer **No record**.
 
 Solution:
 
-1. Set **Context mode** to **None — pane opens independently** when the page does not need a record.
-2. Or set **Context mode** to **Static record ID**, choose the table, and paste the record GUID from that environment.
+1. Set **Record source** to **No record** when the page does not need a record.
+2. Or set it to **A specific record**, enter the record GUID from that environment, and for content types other than Table record pick the **Record table**.
 
-Verify the fix: **Basic Script** shows an `async function` you can paste into the console. Command Steps then says to open the model-driven app, press F12, and paste into the Console tab.
+Verify the fix: **Basic Script** shows a script that defines `YOUR_NAMESPACE.YOUR_FUNCTION_NAME` and calls it, so pasting it into the console opens the pane. Command Steps then says to open the model-driven app, press F12, and paste into the Console tab.
 
-**Error 7: A valid record ID (GUID) is required**
+**Error 7: Enter the full GUID of the record to open**
 
 Full error message:
 
 ```text
-A valid record ID (GUID) is required — this trigger and context supply no record at runtime.
+Enter the full GUID of the record to open.
 ```
 
-Cause: the target is **Table record**, and the trigger or context does not supply a record. That happens for **Static record ID**, **None**, or **Console / Manual** when **Record ID** is empty or is not a GUID. **Lookup tag click** is the exception: the tag carries the id.
+Cause: **Record source** is **A specific record** and **Record ID** is empty or is not a GUID. Related messages are `Select the record's table.` (a specific record with a content type other than Table record) and `Table name is required.` (**Destination table** for a created or specific record).
 
 Solution:
 
 1. Paste a GUID into **Record ID**, including the hyphens, from the environment you will test.
-2. Or switch **Context mode** to **Current record (from trigger)** and use a form trigger.
-3. Or switch the target to **Custom page** or **Table list** if you do not need one record.
+2. Or switch **Record source** to **The record on this form** and use a form trigger.
+3. Or switch **Record source** to **No record**, or the content to **Custom page** or **Table list**, if you do not need one record.
 
 Related field errors use the same fix path:
 
@@ -447,14 +471,14 @@ Form data must be a JSON object.
 Select a view type when a view ID is set.
 ```
 
-Verify the fix: **Basic Script** shows the code block. For a static id, expect the warning `Static record IDs are environment-specific. You must reconfigure this field after deploying to another environment.`
+Verify the fix: **Basic Script** shows the code block. For a specific record, expect the warning `A fixed record ID is environment-specific. Reconfigure it after deploying to another environment.`
 
 ### Error 8: Shared runtime is not in the environment
 
 Full error message:
 
 ```text
-Prerequisite not detected: The shared runtime library (spstudio_/scripts/sidepane.runtime.js) is not deployed in this environment. Deploy it before using this output.
+Prerequisite not detected: No web resource ending in /scripts/sidepane.runtime.js was found in this environment. Deploy the shared runtime (recommended name: spstudio_/scripts/sidepane.runtime.js) before using this output.
 ```
 
 Cause: you opened **Shared Library**, and the web resource `spstudio_/scripts/sidepane.runtime.js` is not in the active environment. **Basic Script** does not need this file.
@@ -465,9 +489,38 @@ Solution:
 2. If you do want the shared library, stay on **Shared Library**, click **Download runtime**, and upload that file as the web resource `spstudio_/scripts/sidepane.runtime.js`.
 3. Publish it, then add it as a library that loads before the generated handler.
 
-Verify the fix: reopen **Shared Library**. The callout changes to `Shared runtime library detected in this environment.`
+Verify the fix: reopen **Shared Library**. The callout changes to `Shared runtime library detected in this environment` followed by the web resource name in parentheses.
 
 A failed check says `Could not verify prerequisite:` plus the Dataverse error. Reconnect the environment and open the tab again. A failed save says `Could not download runtime:` plus the reason. Retry **Download runtime**. Inside ToolBox the button uses the ToolBox save dialog. The button label is **Saving runtime...** while the save is in progress.
+
+### Error 9: Configuration saved for a different environment
+
+Full error message:
+
+```text
+This configuration was saved for a different environment; table, form, view and page selections are unverified.
+```
+
+Related messages:
+
+```text
+Copy is disabled until you confirm the environment warning with Use anyway.
+```
+
+```text
+This table was picked in a different environment. Confirm it exists here.
+```
+
+The last message reads `form`, `view` or `page` in place of `table` for those selections.
+
+Cause: ToolBox restored a configuration that was last saved while a different environment was active, and it holds a table, form, view or page picked there. Those selections may not exist in the active environment. Until you confirm them, the warning bar stays above the panels and **Copy** is disabled on every code block.
+
+Solution:
+
+1. Check that the table, form, view or page exists in the active environment.
+2. Click **Use anyway** in the warning bar. Picking the table, form, view or page again also confirms it, as does **Reset**.
+
+Verify the fix: the warning bar disappears, the `different environment` warnings leave the warning count in the summary strip, and **Copy** works again.
 
 ## Advanced Topics
 
@@ -482,15 +535,27 @@ Recommended resources:
 
 **Direction 2: Lookup tag click** | Difficulty: Intermediate
 
-**Lookup tag click** cancels the lookup’s default navigation and opens the pane for the tag that was clicked. Set **Lookup control name** to the control logical name, such as `parentaccountid`. Put the generated script in a web resource, then register it from the form **OnLoad** handler. The generated script includes the registration line:
+**Lookup tag click** cancels the lookup’s default navigation and opens the pane for the tag that was clicked. Under **Trigger & source**, add one or more lookup controls from **Lookup controls**, such as `parentaccountid` and `primarycontactid`. The script adds a registration function named `register` plus the function name with its first letter capitalized:
 
 ```javascript
-formContext
-  .getControl("parentaccountid")
-  .addOnLookupTagClick(Contoso.openRelatedRecordsPane);
+Contoso.registerOpenRelatedRecordsPane = function(executionContext) {
+  var formContext = executionContext.getFormContext();
+  ["parentaccountid","primarycontactid"].forEach(function(name) {
+    var control = formContext.getControl(name);
+    if (!control) { console.warn("Contoso.registerOpenRelatedRecordsPane: no lookup control " + name); return; }
+    control.removeOnLookupTagClick(Contoso.openRelatedRecordsPane);
+    control.addOnLookupTagClick(Contoso.openRelatedRecordsPane);
+  });
+};
 ```
 
-Use `getControl`, not `getAttribute`. The lookup event passes execution context. The handler calls `preventDefault()` and reads the tag with `getTagValue()`. For a custom page or table record, the tag’s type and id override **Current record**, **Static record ID**, and **None** when the script runs. An empty control name produces `Lookup control name is required for LookupTagClick triggers.`
+Wire it on the form:
+
+1. Add the script web resource under **Form libraries**. With Shared Library output, add the runtime library to the same form too.
+2. In **Events → OnLoad**, add the registration function, keep it enabled, and turn on **Pass execution context as first parameter**.
+3. In the classic form editor, add each lookup column on that handler’s **Dependencies** tab. The new form designer lists column dependencies for On Save events only, so skip this step there.
+
+The function removes the handler before adding it, so another OnLoad run does not register it twice. A control that is not on the form logs a warning and is skipped. The handler calls `preventDefault()` and reads the tag with `getTagValue()`. For a custom page, table record, or generative page, the tag’s type and id are the record source (**The clicked tag record**), and a web resource receives the tag as URL `data`. An empty list produces `Select at least one lookup control.`
 
 Recommended resources:
 
@@ -499,9 +564,9 @@ Recommended resources:
 
 **Direction 3: Grid commands and row select** | Difficulty: Intermediate
 
-**Command bar button (grid)** and **Command bar button (subgrid)** pass `primaryControl` and read the first selected row. With no selection, the generated script returns without opening a pane. Extra selected rows are ignored. **Row select (grid)** and **Row select (subgrid)** require the **Power Apps grid control**. After you enable it, the control shows an **Events** tab. Add the web resource, add an **OnRecordSelect** handler, pass execution context, and select `YOUR_NAMESPACE.YOUR_FUNCTION_NAME`.
+**Grid button** and **Grid row select** each have a **Main grid / Subgrid** choice and a **View**. **Grid button** needs **SelectedControl** as the first Action parameter in Command Designer (it is the grid on both main grids and subgrids) and reads the first selected row from it. Without it the script shows `This command needs the grid. In Command Designer, add SelectedControl as the first Action parameter.` When the **Record source** is **The selected row** or **A record in a lookup**, the script returns without opening a pane if no row is selected, and ignores extra selected rows. With any other record source the pane opens whether or not a row is selected. **Grid row select** requires the **Power Apps grid control**. After you enable it, the control shows an **Events** tab. Add the web resource, add an **OnRecordSelect** handler, pass execution context, and select `YOUR_NAMESPACE.YOUR_FUNCTION_NAME`.
 
-**Selected row (subgrid)** on a subgrid button warns: `The generated script uses the first selected row. It exits without opening a pane when no row is selected, and ignores rows beyond the first.` A main-grid button aimed at a **Table record** warns with the same first-row behavior.
+**The selected row** as the **Record source** warns: `The generated script uses the first selected row. It exits without opening a pane when no row is selected, and ignores rows beyond the first.` The **Grid** preview shows the same behavior with checkbox selection and **Preview command**.
 
 Recommended resources:
 
@@ -529,7 +594,7 @@ Recommended resources:
 
 **Direction 5: Metadata table filters** | Difficulty: Advanced
 
-**Advanced options → Metadata table filters** limits which tables the pickers load. Saving uses ToolBox settings when that API is available. If settings cannot be saved, the field shows the save error. Reset restores the default filter. A table that drops out of the accessible set produces a warning, not a hard stop: `Table "YOUR_TABLE_LOGICAL_NAME" is no longer accessible in this app or for the current user.`
+**Pane & behaviour → Metadata table filters** limits which tables the pickers load. Saving uses ToolBox settings when that API is available. If settings cannot be saved, the field shows the save error. Reset restores the default filter. For a **Table record** or **Table list** target, a table that is not in the accessible set produces a warning, not a hard stop, and is counted in the summary strip: `Table "YOUR_TABLE_LOGICAL_NAME" is not in the current table list for this environment.`
 
 Recommended resources:
 
@@ -537,18 +602,18 @@ Recommended resources:
 
 ### Hands-on projects
 
-1. **Related records button** — A form command on Account opens your custom page at 480 pixels with **Reuse open pane** on. Uses custom page, form button, current record, and Command Designer.
-2. **Contact list for the open account** — Change the target to **Table list**, table `contact`, and pass the current account through context. Uses table list, view id, and current-record context.
-3. **Lookup tag opens the account** — On a contact form, **Lookup tag click** for `parentcustomerid` opens that account as a **Table record**. Uses lookup registration from OnLoad and tag identity.
+1. **Related records button** — A form command on Account opens your custom page at 480 pixels with **Reuse open pane** on. Uses custom page, Form button, the form record as the source, and Command Designer.
+2. **Contact list from an account form** — Change the target to **Table list**, table `contact`, and optionally a **View**. A table list takes no record, so **Record source** is **No record**. Uses table list and view id.
+3. **Lookup tag opens the account** — On a contact form, **Lookup tag click** for `parentcustomerid` opens that account as a **Table record**. Uses lookup registration from OnLoad and **The clicked tag record**.
 
 ### Best practices
 
 - Publish and click the real button in the model-driven app. The mock, form, and grid previews do not create a side pane. The studio cannot create panes inside ToolBox.
-- Treat warnings as design notes. `alwaysRender`, a hidden header, static GUIDs, and the search target all generate script and all need a deliberate choice.
+- Treat warnings as design notes. `alwaysRender`, a hidden header, specific-record GUIDs, and the search target all generate script and all need a deliberate choice.
 - Keep pane ids stable and unique inside the app. Reuse depends on that id.
 - Prefer **Basic Script** for a single pane. Add `spstudio_/scripts/sidepane.runtime.js` only when several handlers share it, and load it first.
 - Give users read access to the tables the pane shows. The studio can only list tables and dashboards the signed-in user can read.
-- Reconfigure **Static record ID** after every environment move. Do not look up a production GUID in a sandbox and leave it in the script.
+- Reconfigure **A specific record** after every environment move. Do not look up a production GUID in a sandbox and leave it in the script.
 - Keep **Hide header bar** off unless you have another way for the user to dismiss the pane. The generated script turns `canClose` off when the header is hidden.
 
 ## Cheatsheet
@@ -559,9 +624,9 @@ Recommended resources:
 | --------------------------- | ------------------------------------------------------------------------------------ |
 | Marketplace name            | Side Pane Studio                                                                     |
 | Package                     | `@ryanmakes/side-pane-studio`                                                        |
-| Version                     | 1.1.1                                                                                |
+| Version                     | 1.4.0                                                                                |
 | Shared runtime web resource | `spstudio_/scripts/sidepane.runtime.js`                                              |
-| Wide layout                 | Window width ≥ 900 px                                                                |
+| Wide layout                 | Window width ≥ 1040 px                                                               |
 | Pane width                  | 300–1200 px, default 480                                                             |
 | Saved configuration         | ToolBox settings key `lastConfig`                                                    |
 
@@ -570,12 +635,12 @@ Recommended resources:
 | Action           | Where                                                  | Description                      |
 | ---------------- | ------------------------------------------------------ | -------------------------------- |
 | Open the studio  | ToolBox → Installed Tools → Side Pane Studio           | Needs an active connection       |
-| Restore defaults | Header → **Reset** → confirm                           | Clears `lastConfig`              |
+| Restore defaults | Summary strip → **Reset** → confirm                    | Clears `lastConfig`              |
 | Copy the script  | Output → **Basic Script** → **Copy**                   | Self-contained handler           |
 | Deploy steps     | Output → **Command Steps**                             | Function name plus wiring        |
 | Download helper  | Output → **Shared Library** → **Download runtime**     | Only for the shared-library path |
 | Raw JSON         | Output → **Advanced — Raw Config**                     | Diagnostics                      |
-| Console test     | Trigger **Console / Manual**, then F12                 | Paste the whole block            |
+| Console test     | Trigger **Console**, then F12                          | Paste the whole block            |
 
 ### Common Code Snippets
 
@@ -591,12 +656,11 @@ Command Designer first action parameter:
 primaryControl    Primary Control
 ```
 
-Lookup tag registration, placed on the form OnLoad handler. Replace the control name and the function:
+Lookup tag registration: add the generated `register…` function to form OnLoad with execution context. For each listed control it runs:
 
 ```javascript
-formContext
-  .getControl("parentaccountid")
-  .addOnLookupTagClick(Contoso.openRelatedRecordsPane);
+control.removeOnLookupTagClick(Contoso.openRelatedRecordsPane);
+control.addOnLookupTagClick(Contoso.openRelatedRecordsPane);
 ```
 
 Form data for a **Table record** target. One JSON object:
@@ -620,17 +684,18 @@ spstudio_/scripts/sidepane.runtime.js
 | ------------------------------------------------------------------- | ---------------------------------- | ------------------------------------------------------------------- |
 | Dataverse API + Toolbox API unavailable                             | Opened outside ToolBox             | Launch from Installed Tools                                         |
 | No active Dataverse connection                                      | Nothing selected in Connections    | Add or select a connection                                          |
-| Connection removed. Reconnect in PPTB.                              | Active connection deleted          | Connect again, reopen the studio                                    |
+| No active Dataverse connection                                      | Nothing selected in Connections, or it was deleted | Add or select a connection; the studio recovers on its own |
+| This configuration was saved for a different environment; …         | Restored from another environment's save | Check the selections, then click **Use anyway**             |
 | Custom page name is required.                                       | Blank custom page                  | Fill `YOUR_CUSTOM_PAGE`                                             |
 | Pane ID is required.                                                | Blank pane id                      | Set `YOUR_PANE_ID`                                                  |
 | Pane width must be between 300 and 1200 pixels.                     | Width out of range                 | Set 300–1200                                                        |
-| Selected row context is only available from a main grid or subgrid. | Selected row on a form trigger     | Use Current record, or switch to a grid trigger                     |
-| Console / Manual scripts run outside a form or grid…                | Manual trigger plus current record | Use None or a static GUID                                           |
-| A valid record ID (GUID) is required…                               | Table record with no runtime id    | Paste a GUID or use a form trigger                                  |
+| This record choice is not available for the selected trigger and content. | Record source the trigger cannot supply | Pick another Record source, or change the trigger |
+| Enter the full GUID of the record to open.                          | Specific record without a GUID     | Paste a GUID, or use another Record source                          |
+| Select at least one lookup control.                                 | Lookup tag click with no controls  | Add a control under Lookup controls                                 |
 | Prerequisite not detected: `spstudio_/scripts/sidepane.runtime.js`  | Shared Library without the helper  | Use Basic Script, or upload the runtime                             |
 | Clipboard access blocked.                                           | Browser clipboard permission       | Select the text and copy with Ctrl+C or Cmd+C                       |
 | Could not load dashboards                                           | Metadata call failed               | Check the connection and dashboard privilege                        |
-| Button does nothing in the app                                      | Function or parameter mismatch     | Match `YOUR_NAMESPACE.YOUR_FUNCTION_NAME` and pass `primaryControl` |
+| Button does nothing in the app                                      | Function or parameter mismatch     | Match `YOUR_NAMESPACE.YOUR_FUNCTION_NAME` and pass `primaryControl` (`SelectedControl` for a grid button) |
 
 ## Appendix
 
@@ -640,13 +705,13 @@ spstudio_/scripts/sidepane.runtime.js
 | ---------------------- | ----------------------------------------------------------------------------------------------------------- |
 | Basic Script           | Self-contained JavaScript on the Output panel. Does not need the shared runtime.                            |
 | Command Designer       | Model-driven app designer where a command runs a JavaScript function.                                       |
-| Context mode           | Where the record id comes from: current form record, selected grid row, a fixed GUID, or nowhere.           |
+| Record source          | Where the record id comes from: the form record, the selected grid row, the clicked tag, a record in a lookup, a specific record, or nowhere. |
 | Custom page            | Canvas page in a solution, opened by its logical name.                                                      |
 | Dataverse              | The environment that holds tables, pages, dashboards, and web resources.                                    |
 | Logical name           | The schema name of a table, column, or control, such as `account` or `parentaccountid`.                     |
 | Pane ID                | Stable key the script uses to find or reuse one side pane.                                                  |
 | Power Platform ToolBox | Desktop host that connects to Dataverse and runs Side Pane Studio.                                          |
-| primaryControl         | First argument Command Designer passes into a command-bar function so the script can read the form or grid. |
+| primaryControl         | First argument Command Designer passes into a command-bar function so the script can read the form. A grid button receives **SelectedControl** (the grid) instead. |
 | Shared Library         | Shorter generated handler that calls `SidePaneHelper` in the runtime web resource.                          |
 | Side pane              | Panel docked beside a model-driven app page.                                                                |
 | Web resource           | A file stored in Dataverse. JavaScript web resources hold the generated handler.                            |

@@ -10,6 +10,7 @@ import {
 } from '../../types/MetadataFilterConfig';
 import { Callout } from '../Callout';
 import { Field } from '../Field';
+import { RetryButton } from '../RetryButton';
 
 export interface MetadataFilterConfigEditorProps {
   config: MetadataFilterConfig;
@@ -18,6 +19,17 @@ export interface MetadataFilterConfigEditorProps {
   onSave: (config: MetadataFilterConfig) => Promise<void> | void;
   onReset: () => Promise<void> | void;
   error?: string | null;
+  /** Supplied only when `error` is a failed settings load; shows Retry beside it and, when persistence is available, a warning that saving replaces the unread saved filters. */
+  onRetryLoad?: () => void;
+  /** Controlled draft, owned above any remount (Section collapse, connection change); omit both to keep it locally. */
+  draft?: MetadataFilterDraft | null;
+  onDraftChange?: (draft: MetadataFilterDraft | null) => void;
+}
+
+/** Unsaved editor text and the saved config it was typed against. */
+export interface MetadataFilterDraft {
+  base: MetadataFilterConfig;
+  texts: Record<MetadataFilterConfigKey, string>;
 }
 
 const LABELS: Record<MetadataFilterConfigKey, string> = {
@@ -93,24 +105,30 @@ export function MetadataFilterConfigEditor({
   onSave,
   onReset,
   error,
+  onRetryLoad,
+  draft: draftProp,
+  onDraftChange,
 }: MetadataFilterConfigEditorProps): React.ReactElement {
   const { isDark } = useTheme();
   const T = theme(isDark);
   const cleanTexts = useMemo(() => formatConfig(config), [config]);
-  const [texts, setTexts] = useState<Record<MetadataFilterConfigKey, string>>(cleanTexts);
+  const localDraft = useState<MetadataFilterDraft | null>(null);
+  const [draft, setDraft] = onDraftChange ? [draftProp ?? null, onDraftChange] as const : localDraft;
+  // A draft typed against an older config is discarded once save, reset or reload replaces the config.
+  const texts = draft?.base === config ? draft.texts : cleanTexts;
   const [errors, setErrors] = useState<Partial<Record<MetadataFilterConfigKey, string>>>({});
   const [saving, setSaving] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [focusedKey, setFocusedKey] = useState<MetadataFilterConfigKey | null>(null);
 
   useEffect(() => {
-    setTexts(cleanTexts);
     setErrors({});
   }, [cleanTexts]);
 
   const dirty = METADATA_FILTER_CONFIG_KEYS.some(key => texts[key] !== cleanTexts[key]);
 
   const updateText = (key: MetadataFilterConfigKey, value: string) => {
-    setTexts(prev => ({ ...prev, [key]: value }));
+    setDraft({ base: config, texts: { ...texts, [key]: value } });
     setErrors(prev => ({ ...prev, [key]: undefined }));
   };
 
@@ -133,7 +151,7 @@ export function MetadataFilterConfigEditor({
   };
 
   const reset = async () => {
-    setTexts(formatConfig(defaultConfig));
+    setDraft({ base: config, texts: formatConfig(defaultConfig) });
     setErrors({});
     setResetting(true);
     try {
@@ -155,18 +173,34 @@ export function MetadataFilterConfigEditor({
           PPTB settings unavailable. Save is disabled in local browser mode.
         </Callout>
       )}
-      {error && <Callout type="err" icon="!">{error}</Callout>}
+      {error && (
+        <Callout type="err" icon="!">
+          <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+            <span>{error}</span>
+            {onRetryLoad && <RetryButton onClick={onRetryLoad} />}
+          </span>
+        </Callout>
+      )}
+      {onRetryLoad && persistenceAvailable && (
+        <Callout type="warn" icon="!">
+          The saved filters could not be loaded, so the defaults are shown. Saving now replaces the saved filters.
+        </Callout>
+      )}
 
       {METADATA_FILTER_CONFIG_KEYS.map(key => (
         <Field key={key} label={LABELS[key]} error={errors[key]}>
+          {control => <>
           <div style={{ color: T.fg2, fontFamily: T.font, fontSize: 11, lineHeight: 1.35 }}>
             {HELPERS[key]}
           </div>
           <textarea
+            {...control}
             aria-label={LABELS[key]}
             value={texts[key]}
             onChange={event => updateText(key, event.currentTarget.value)}
             spellCheck={false}
+            onFocus={() => setFocusedKey(key)}
+            onBlur={() => setFocusedKey(current => current === key ? null : current)}
             style={{
               minHeight: 86,
               width: '100%',
@@ -181,8 +215,10 @@ export function MetadataFilterConfigEditor({
               lineHeight: 1.35,
               padding: '8px 9px',
               outline: 'none',
+              boxShadow: focusedKey === key ? `inset 0 -2px ${T.accent}` : 'none',
             }}
           />
+          </>}
         </Field>
       ))}
 
@@ -196,7 +232,7 @@ export function MetadataFilterConfigEditor({
               border: 'none',
               borderRadius: T.rM,
               background: persistenceAvailable ? T.accent : T.surface3,
-              color: persistenceAvailable ? '#001818' : T.fg3,
+              color: persistenceAvailable ? T.accentFg : T.fg3,
               cursor: persistenceAvailable ? 'pointer' : 'not-allowed',
               fontFamily: T.font,
               fontSize: 12,

@@ -2,65 +2,79 @@
 import * as React from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 import { theme } from '../theme/tokens';
+import { useFieldControl } from './Field';
 
 export interface ChoiceGroupOption {
   value: string;
   label: string;
   desc?: string;
-  phase?: string;
-  disabled?: boolean;
 }
 
 export interface ChoiceGroupProps {
-  name: string;
+  /** Accessible name of the group; pass the visible field label. */
+  label: string;
   options: ChoiceGroupOption[];
   value: string;
   onChange: (value: string) => void;
 }
 
 /**
- * Pill-style single-select. Wraps to multiple rows, highlights the active
+ * Chip-style single-select. Wraps to multiple rows, highlights the active
  * choice with the accent color, and surfaces `desc` of the selected option
  * below the pill row so descriptions stay visible without bloating each pill.
- * `phase` renders as a small inline subscript (e.g. "Dashboard · Soon") and
- * `disabled` greys the pill + blocks selection.
+ * Keyboard follows the ARIA radio
+ * group: one Tab stop, arrow keys move focus and selection.
  */
-export function ChoiceGroup({ name, options, value, onChange }: ChoiceGroupProps): React.ReactElement {
+export function ChoiceGroup({ label, options, value, onChange }: ChoiceGroupProps): React.ReactElement {
   const { isDark } = useTheme();
   const T = theme(isDark);
+  const control = useFieldControl();
 
   const selected = options.find(o => o.value === value);
+  const tabStop = options.some(o => o.value === value) ? value : options[0]?.value;
+  // Re-choosing the current pill must not reach the caller, whose handler resets dependent fields.
+  const choose = (next: string) => { if (next !== value) onChange(next); };
+
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>, current: string) => {
+    const step = event.key === 'ArrowRight' || event.key === 'ArrowDown' ? 1
+      : event.key === 'ArrowLeft' || event.key === 'ArrowUp' ? -1 : 0;
+    if (!step || options.length === 0) return;
+    event.preventDefault();
+    const at = options.findIndex(o => o.value === current);
+    const next = options[(at + step + options.length) % options.length];
+    event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="radio"]')[(at + step + options.length) % options.length]?.focus();
+    choose(next.value);
+  };
 
   return (
-    <div role="radiogroup" aria-label={name} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+    <div role="radiogroup" id={control.id} aria-label={label} aria-describedby={control['aria-describedby']}
+      aria-invalid={control['aria-invalid']} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
         {options.map(opt => {
           const sel = value === opt.value;
-          const dis = opt.disabled ?? false;
           return (
             <button
               key={opt.value}
               type="button"
               role="radio"
               aria-checked={sel}
-              aria-disabled={dis || undefined}
-              disabled={dis}
+              tabIndex={opt.value === tabStop ? 0 : -1}
               title={opt.desc}
-              onClick={() => { if (!dis) onChange(opt.value); }}
+              onClick={() => choose(opt.value)}
+              onKeyDown={event => handleKeyDown(event, opt.value)}
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: 6,
                 padding: '5px 12px',
                 border: `1px solid ${sel ? T.accent : T.stroke1}`,
-                borderRadius: T.rFull,
+                borderRadius: T.rS,
                 background: sel ? T.accentBg : 'transparent',
-                color: sel ? T.accent : (dis ? T.fg3 : T.fg1),
+                color: sel ? T.accent : T.fg1,
                 fontFamily: T.font,
                 fontSize: 12,
                 fontWeight: sel ? 600 : 500,
-                cursor: dis ? 'not-allowed' : 'pointer',
-                opacity: dis ? 0.55 : 1,
+                cursor: 'pointer',
                 whiteSpace: 'nowrap',
                 transition: 'border-color 80ms, background 80ms, color 80ms',
               }}
@@ -78,23 +92,6 @@ export function ChoiceGroup({ name, options, value, onChange }: ChoiceGroupProps
                 />
               )}
               <span>{opt.label}</span>
-              {opt.phase && (
-                <span
-                  style={{
-                    fontFamily: T.mono,
-                    fontSize: 10,
-                    fontWeight: 500,
-                    color: T.fg3,
-                    paddingLeft: 6,
-                    borderLeft: `1px solid ${T.stroke1}`,
-                    marginLeft: 2,
-                    textTransform: 'uppercase',
-                    letterSpacing: '.4px',
-                  }}
-                >
-                  {opt.phase}
-                </span>
-              )}
             </button>
           );
         })}

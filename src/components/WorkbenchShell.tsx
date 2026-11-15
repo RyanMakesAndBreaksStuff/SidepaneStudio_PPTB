@@ -1,17 +1,23 @@
 import * as React from 'react';
-import { useMemo, useState } from 'react';
+import { useCallback, useId, useMemo, useState } from 'react';
+import { TabStrip, tabPanelProps } from './TabStrip';
 import { useTheme } from '../contexts/ThemeContext';
 import { theme } from '../theme/tokens';
 import { PaneDefinitionConfig } from '../types/PaneDefinitionConfig';
 import { MetadataFilterConfig } from '../types/MetadataFilterConfig';
+import type { MetadataFilterDraft } from './config/MetadataFilterConfigEditor';
 import { IXrmContext } from '../adapters/PptbContextAdapter';
 import { MetadataService } from '../services/MetadataService';
 import { FormXmlService } from '../services/FormXmlService';
 import { validate } from '../services/ValidationService';
-import { CommandBar } from './CommandBar';
-import { ConfigurePanel } from './ConfigurePanel';
+import { ConfigurePanel, type JumpRequest } from './ConfigurePanel';
+import { SentenceSummary } from './config/SentenceSummary';
+import type { SummarySlot } from '../services/describeConfig';
 import { PreviewPanel } from './PreviewPanel';
+import { ErrorBoundary } from './ErrorBoundary';
 import { OutputPanel } from './OutputPanel';
+import { useAccessibleTables } from './useAccessibleTables';
+import { Callout } from './Callout';
 import { PreviewSessionProvider } from '../contexts/PreviewSessionContext';
 
 export interface WorkbenchShellProps {
@@ -27,7 +33,15 @@ export interface WorkbenchShellProps {
   metadataFilterError?: string | null;
   onSaveMetadataFilterConfig: (config: MetadataFilterConfig) => Promise<void> | void;
   onResetMetadataFilterConfig: () => Promise<void> | void;
+  /** Present only while the last filter-settings load failed. */
+  onRetryMetadataFilterLoad?: () => void;
+  /** Unsaved filter edits, owned above this shell so its remounts keep them. */
+  metadataFilterDraft?: MetadataFilterDraft | null;
+  onMetadataFilterDraftChange?: (draft: MetadataFilterDraft | null) => void;
   previewEpoch?: number;
+  /** W20 — the restored config was saved for another environment and the user has not confirmed it here. */
+  orgMismatch?: boolean;
+  onConfirmOrgMismatch?: () => void;
 }
 
 type NarrowTab = 'configure' | 'preview' | 'output';
@@ -57,17 +71,35 @@ function WorkbenchShellContent({
   metadataFilterError,
   onSaveMetadataFilterConfig,
   onResetMetadataFilterConfig,
+  onRetryMetadataFilterLoad,
+  metadataFilterDraft,
+  onMetadataFilterDraftChange,
+  orgMismatch = false,
+  onConfirmOrgMismatch,
 }: WorkbenchShellProps): React.ReactElement {
   const { isDark } = useTheme();
   const T = theme(isDark);
   const [narrowTab, setNarrowTab] = useState<NarrowTab>('configure');
-  const [accessibleTables, setAccessibleTables] = useState<Set<string> | undefined>(undefined);
+  const narrowTabsId = useId();
   const [configPanelOpen, setConfigPanelOpen] = useState(true);
   const [codePanelOpen, setCodePanelOpen] = useState(true);
+  const [jumpRequest, setJumpRequest] = useState<JumpRequest | undefined>(undefined);
+  const jump = (slot: SummarySlot) => {
+    setNarrowTab('configure');
+    setConfigPanelOpen(true);
+    setJumpRequest(prev => ({ slot, seq: (prev?.seq ?? 0) + 1 }));
+  };
+  // Applied once: a request left in state would replay whenever the panel next mounts and reopen what the user closed.
+  const dropJump = useCallback((handled: JumpRequest) => setJumpRequest(prev => prev === handled ? undefined : prev), []);
 
-  const validation = useMemo(() => validate(config, accessibleTables), [config, accessibleTables]);
+  const tableList = useAccessibleTables(metadataService);
+  const accessibleTables = useMemo(
+    () => tableList.loading || tableList.error !== undefined ? undefined : new Set(tableList.tables.map(table => table.logicalName)),
+    [tableList.loading, tableList.error, tableList.tables],
+  );
+  const validation = useMemo(() => validate(config, accessibleTables, orgMismatch), [config, accessibleTables, orgMismatch]);
 
-  const formXmlService = useMemo(() => new FormXmlService(xrm), [xrm]);
+  const formXmlService = useMemo(() => new FormXmlService(xrm, () => metadataService.userLanguageCode), [xrm, metadataService]);
 
   const configurePanelProps = {
     config,
@@ -75,21 +107,42 @@ function WorkbenchShellContent({
     validation,
     metadataService,
     formXmlService,
-    onAccessibleTablesChange: setAccessibleTables,
     metadataFilterConfig,
     defaultMetadataFilterConfig,
     metadataFilterPersistenceAvailable,
     metadataFilterError,
     onSaveMetadataFilterConfig,
     onResetMetadataFilterConfig,
+    onRetryMetadataFilterLoad,
+    metadataFilterDraft,
+    onMetadataFilterDraftChange,
+    jumpRequest,
+    onJumpHandled: dropJump,
+    orgMismatch,
   };
-  const previewPanelProps = { config, validation, metadataService, xrm };
-  const outputPanelProps = { config, xrm, validation };
+  const previewPanelProps = { config, onChange, validation, metadataService, xrm, orgMismatch };
+  const previewPanel = (
+    <ErrorBoundary fallback={(error, retry) => <PreviewCrash error={error} retry={retry} />}>
+      <PreviewPanel {...previewPanelProps} />
+    </ErrorBoundary>
+  );
+  const outputPanelProps = { config, xrm, validation, copyBlocked: orgMismatch };
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden', background: T.pageBg }}>
-      <CommandBar onReset={onReset} />
-
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden', background: T.pageBg, color: T.fg1, fontFamily: T.font, fontSize: 13 }}>
+      {orgMismatch && (
+        <div role="alert" style={{ padding: '8px 12px', borderBottom: `1px solid ${T.stroke1}`, flexShrink: 0 }}>
+          <Callout type="warn" icon="⚠">
+            This configuration was saved for a different environment; table, form, view and page selections are unverified.{' '}
+            <button type="button" onClick={onConfirmOrgMismatch} style={{
+              marginLeft: 4, padding: '2px 10px', border: `1px solid ${T.warning}`, borderRadius: T.rS,
+              background: 'transparent', color: T.warning, fontFamily: T.font, fontSize: 12, cursor: 'pointer',
+            }}>Use anyway</button>
+          </Callout>
+        </div>
+      )}
+      <SentenceSummary config={config} validation={validation} onJump={jump}
+        actions={<ResetConfigButton onReset={onReset} />} />
       {layoutMode === 'wide' && (
         <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
           <aside
@@ -121,7 +174,7 @@ function WorkbenchShellContent({
           </aside>
           <section style={{ flex: 1, borderRight: `1px solid ${T.stroke1}`, minWidth: 300, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
             <PanelHeader title="Preview" />
-            <PreviewPanel {...previewPanelProps} />
+            {previewPanel}
           </section>
           <section
             aria-label={codePanelOpen ? 'Code panel' : 'Code rail'}
@@ -154,42 +207,18 @@ function WorkbenchShellContent({
 
       {layoutMode === 'narrow' && (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          <div
-            role="tablist"
-            style={{
-              display: 'flex',
-              borderBottom: `1px solid ${T.stroke1}`,
-              background: T.surface2,
-              flexShrink: 0,
-            }}
-          >
-            {NARROW_TABS.map(tab => (
-              <button
-                key={tab.id}
-                role="tab"
-                aria-selected={narrowTab === tab.id}
-                onClick={() => setNarrowTab(tab.id)}
-                style={{
-                  flex: 1,
-                  padding: '10px 0',
-                  border: 'none',
-                  borderBottom: narrowTab === tab.id ? `2px solid ${T.accent}` : '2px solid transparent',
-                  background: 'transparent',
-                  color: narrowTab === tab.id ? T.accent : T.fg2,
-                  fontFamily: T.font,
-                  fontSize: 13,
-                  fontWeight: narrowTab === tab.id ? 600 : 400,
-                  cursor: 'pointer',
-                }}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-          <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          <TabStrip label="Workbench panels" idPrefix={narrowTabsId} tabs={NARROW_TABS} value={narrowTab} onChange={setNarrowTab}
+            style={{ display: 'flex', borderBottom: `1px solid ${T.stroke1}`, background: T.surface2, flexShrink: 0 }}
+            tabStyle={active => ({
+              flex: 1, padding: '10px 0', border: 'none',
+              borderBottom: active ? `2px solid ${T.accent}` : '2px solid transparent',
+              background: 'transparent', color: active ? T.accent : T.fg2,
+              fontFamily: T.font, fontSize: 13, fontWeight: active ? 600 : 400, cursor: 'pointer',
+            })} />
+          <div {...tabPanelProps(narrowTabsId, narrowTab)} style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
             {narrowTab === 'configure' && <ConfigurePanel {...configurePanelProps} />}
-            {narrowTab === 'preview'   && <PreviewPanel {...previewPanelProps} />}
-            {narrowTab === 'output'    && <OutputPanel {...outputPanelProps} />}
+            {narrowTab === 'preview' && previewPanel}
+            {narrowTab === 'output'  && <OutputPanel {...outputPanelProps} />}
           </div>
         </div>
       )}
@@ -244,8 +273,67 @@ function RailToggle({
   );
 }
 
+function ResetConfigButton({ onReset }: { onReset: () => void }): React.ReactElement {
+  const { isDark } = useTheme();
+  const T = theme(isDark);
+  const [hoverReset, setHoverReset] = useState(false);
+
+  const handleReset = () => {
+    if (!window.confirm('Reset all configuration? This cannot be undone.')) return;
+    onReset();
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={handleReset}
+      onMouseEnter={() => setHoverReset(true)}
+      onMouseLeave={() => setHoverReset(false)}
+      style={{
+        padding: '4px 12px',
+        border: `1px solid ${T.stroke1}`,
+        borderRadius: T.rS,
+        background: hoverReset ? T.surface1 : 'transparent',
+        color: T.fg2,
+        fontFamily: T.font,
+        fontSize: 12,
+        cursor: 'pointer',
+        transition: 'background 80ms',
+      }}
+    >
+      ↺ Reset
+    </button>
+  );
+}
+
+/** Fallback for a preview render throw (e.g. server-supplied FormXML): the rest of the workbench keeps running. */
+function PreviewCrash({ error, retry }: { error: Error; retry: () => void }): React.ReactElement {
+  const { isDark } = useTheme();
+  const T = theme(isDark);
+
+  return (
+    <div role="alert" style={{
+      flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+      gap: 8, padding: 24, textAlign: 'center', fontFamily: T.font, fontSize: 13, color: T.fg2,
+    }}>
+      <div style={{ color: T.error, fontWeight: 600 }}>The preview hit an unexpected error</div>
+      <div>{error.message}</div>
+      <button type="button" onClick={retry} style={{
+        padding: '4px 12px', border: `1px solid ${T.stroke1}`, borderRadius: T.rS,
+        background: 'transparent', color: T.fg2, fontFamily: T.font, fontSize: 12, cursor: 'pointer',
+      }}>Try again</button>
+    </div>
+  );
+}
+
 /** Wide-layout counterpart of the narrow tab strip: keeps each panel's title visible. */
-function PanelHeader({ title, children }: { title?: string; children?: React.ReactNode }): React.ReactElement {
+function PanelHeader({
+  title,
+  children,
+}: {
+  title?: string;
+  children?: React.ReactNode;
+}): React.ReactElement {
   const { isDark } = useTheme();
   const T = theme(isDark);
 

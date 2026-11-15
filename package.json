@@ -1,20 +1,24 @@
 {
   "name": "@ryanmakes/side-pane-studio",
-  "version": "1.1.2",
+  "version": "1.4.0",
   "publishConfig": {
     "access": "public"
   },
   "features": {
-    "minAPI": "1.2.0",
-    "multiConnection": "none"
+    "minAPI": "1.2.7",
+    "connections": {
+      "min": 0,
+      "max": 1
+    }
   },
   "displayName": "Side Pane Studio",
-  "description": "Side Pane Studio is a visual builder for Dynamics 365 and Power Platforrm model-driven app side panes",
+  "description": "Side Pane Studio is a visual builder for Dynamics 365 and Power Platform model-driven app side panes",
   "icon": "icon/icon.svg",
   "main": "index.html",
   "files": [
     "dist",
     "documentation",
+    "!documentation/config-redesign-concepts.md",
     "README.md",
     "Change-Log.md",
     "How-To-Build.md"
@@ -42,14 +46,14 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "build:runtime": "vite build --config vite.runtime.config.ts",
     "test": "vitest run",
     "lint": "eslint .",
     "preview": "vite preview",
     "watch": "vite build --watch",
     "typecheck": "tsc --noEmit",
     "coverage": "vitest run --coverage",
-    "debug": "vite build --mode development --watch"
+    "debug": "vite build --mode development --watch",
+    "prepublishOnly": "npm run lint && npm test && npm run build"
   },
   "engines": {
     "node": ">=20.19.0"
@@ -58,22 +62,25 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
+  "overrides": {
+    "minimatch": "^11.0.3"
+  },
   "devDependencies": {
+    "@eslint-react/eslint-plugin": "5.20.6",
     "@eslint/js": "^10.0.1",
     "@microsoft/eslint-plugin-power-apps": "0.6.0",
-    "@pptb/types": "1.2.5",
+    "@pptb/types": "1.2.7",
     "@types/react": "^18.0.0",
     "@types/react-dom": "^18.0.0",
     "@vitejs/plugin-react": "^5.0.0",
     "@vitest/coverage-v8": "^4.1.11",
     "eslint": "^10.11.0",
     "eslint-plugin-promise": "7.3.0",
-    "@eslint-react/eslint-plugin": "5.20.6",
     "globals": "17.6.0",
     "jsdom": "29.1.1",
     "typescript": "^5.8.3",
     "typescript-eslint": "8.59.4",
     "vite": "^8.0.12",
-    "vitest": "4.1.11"
+    "vitest": "^4.1.12"
   }
 }

@@ -4,8 +4,10 @@ import { createRoot, Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { OutputPanel } from '../components/OutputPanel';
 import { DEFAULT_CONFIG } from '../types/PaneDefinitionConfig';
-import { xrmStub } from './testHelpers';
+import { cfg, xrmStub } from './testHelpers';
 import runtimeSource from '../runtime/sidepane.runtime.js?raw';
+import { RUNTIME_FILE_NAME } from '../constants';
+import { describeConfigText } from '../services/describeConfig';
 
 let root: Root | undefined;
 let host: HTMLDivElement | undefined;
@@ -76,20 +78,27 @@ describe('runtime download', () => {
     expect(xrm.App.sidePanes.createPane).not.toHaveBeenCalled();
   });
 
-  it('saves JavaScript through the native dialog', async () => {
-    const saveFile = vi.fn().mockResolvedValue('C:/sidepane.runtime.js');
-    vi.stubGlobal('toolboxAPI', { fileSystem: { saveFile } });
+  it('saves JavaScript through the native dialog and reports the saved path', async () => {
+    const saveFile = vi.fn().mockResolvedValue(`C:/${RUNTIME_FILE_NAME}`);
+    const showNotification = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('toolboxAPI', { fileSystem: { saveFile }, utils: { showNotification } });
     await clickRuntimeDownload();
-    expect(saveFile).toHaveBeenCalledWith('sidepane.runtime.js', runtimeSource);
+    expect(saveFile).toHaveBeenCalledWith(RUNTIME_FILE_NAME, runtimeSource);
+    expect(showNotification).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'success',
+      body: expect.stringContaining(`C:/${RUNTIME_FILE_NAME}`),
+    }));
   });
 
-  it('respects native cancellation without a browser download', async () => {
+  it('respects native cancellation without a browser download or a notification', async () => {
     const saveFile = vi.fn().mockResolvedValue(null);
+    const showNotification = vi.fn().mockResolvedValue(undefined);
     const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
-    vi.stubGlobal('toolboxAPI', { fileSystem: { saveFile } });
+    vi.stubGlobal('toolboxAPI', { fileSystem: { saveFile }, utils: { showNotification } });
     await clickRuntimeDownload();
     expect(saveFile).toHaveBeenCalledOnce();
     expect(click).not.toHaveBeenCalled();
+    expect(showNotification).not.toHaveBeenCalled();
   });
 
   it('downloads a Blob and releases its URL when the native API is absent', async () => {
@@ -98,7 +107,7 @@ describe('runtime download', () => {
     const revokeObjectURL = vi.fn();
     vi.stubGlobal('URL', { createObjectURL, revokeObjectURL });
     const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
-      expect(this.download).toBe('sidepane.runtime.js');
+      expect(this.download).toBe(RUNTIME_FILE_NAME);
       expect(this.href).toBe('blob:runtime');
       expect(this.isConnected).toBe(true);
     });
@@ -123,6 +132,51 @@ describe('runtime download', () => {
 });
 
 describe('OutputPanel', () => {
+  it('puts the output tabs in a tablist tied to their panel (r2 WR-011)', async () => {
+    await render(<OutputPanel config={DEFAULT_CONFIG} xrm={xrmStub()} validation={{ isValid: true, errors: [], warnings: [] }} />);
+    const tabs = Array.from(host!.querySelectorAll<HTMLElement>('[role="tablist"] [role="tab"]'));
+    expect(tabs.map(t => t.textContent)).toEqual(['Basic Script', 'Shared Library', 'Command Steps']);
+    expect(document.getElementById(tabs[0].getAttribute('aria-controls')!)?.getAttribute('role')).toBe('tabpanel');
+  });
+
+  it('summarizes the script with the configuration sentence', async () => {
+    await render(<OutputPanel config={DEFAULT_CONFIG} xrm={xrmStub()} validation={{ isValid: true, errors: [], warnings: [] }} />);
+    expect(host!.textContent).toContain(describeConfigText(DEFAULT_CONFIG));
+  });
+
+  it('names the subgrid in Command Steps for a subgrid button', async () => {
+    const config = { ...DEFAULT_CONFIG, trigger: { ...DEFAULT_CONFIG.trigger, kind: 'GridButton' as const, surface: 'subgrid' as const }, context: { ...DEFAULT_CONFIG.context, source: { kind: 'selectedRow' as const } } };
+    await render(<OutputPanel config={config} xrm={xrmStub()} validation={{ isValid: true, errors: [], warnings: [] }} />);
+    const tab = Array.from(host!.querySelectorAll('[role="tab"]')).find(t => t.textContent === 'Command Steps') as HTMLButtonElement;
+    await act(async () => { tab.click(); });
+    expect(host!.textContent).toContain('Subgrid commands');
+  });
+
+  it('names the generated lookup registrar and the Dependencies step in Command Steps', async () => {
+    const config = { ...DEFAULT_CONFIG, trigger: { ...DEFAULT_CONFIG.trigger, kind: 'LookupTagClick' as const, namespace: 'Contoso', functionName: 'openTag' }, host: { ...DEFAULT_CONFIG.host, entityName: 'account', lookupControls: ['parentaccountid'] }, context: { ...DEFAULT_CONFIG.context, source: { kind: 'clickedTag' as const } } };
+    await render(<OutputPanel config={config} xrm={xrmStub()} validation={{ isValid: true, errors: [], warnings: [] }} />);
+    const tab = Array.from(host!.querySelectorAll('[role="tab"]')).find(t => t.textContent === 'Command Steps') as HTMLButtonElement;
+    await act(async () => { tab.click(); });
+    expect(host!.textContent).toContain('Contoso.registerOpenTag');
+    expect(host!.textContent).toContain('Dependencies');
+  });
+
+  it('lists the deployment steps on the Shared Library tab', async () => {
+    await render(<OutputPanel config={DEFAULT_CONFIG} xrm={xrmStub()} validation={{ isValid: true, errors: [], warnings: [] }} />);
+    await clickLibraryTab();
+    expect(host!.textContent).toContain('Command Designer');
+  });
+
+  it('shows the runtime dependency step on the Shared Library tab only (codegen-config-model-006)', async () => {
+    const dependencyStep = 'Command Designer runs one library per command, so open the generated handler\'s web resource and add the runtime on its Dependencies tab.';
+    await render(<OutputPanel config={cfg()} xrm={xrmStub()} validation={{ isValid: true, errors: [], warnings: [] }} />);
+    expect(host!.textContent).not.toContain(dependencyStep);
+    expect(host!.textContent).not.toContain('<prefix>_');
+    await clickLibraryTab();
+    expect(host!.textContent).toContain(dependencyStep);
+    expect(host!.textContent).toContain('<prefix>_/scripts/sidepane.runtime.js');
+  });
+
   it('shows generated FormOnChange entitylist code with double-quoted pageType', async () => {
     const config = {
       ...DEFAULT_CONFIG,
@@ -135,8 +189,9 @@ describe('OutputPanel', () => {
       trigger: {
         ...DEFAULT_CONFIG.trigger,
         kind: 'FormOnChange' as const,
-        fieldName: 'statuscode',
+        namespace: 'Contoso',
       },
+      host: { ...DEFAULT_CONFIG.host, attribute: 'statuscode' },
     };
 
     await render(
@@ -154,7 +209,7 @@ describe('OutputPanel', () => {
 
   it('shows prerequisite warning when shared runtime is confirmed missing', async () => {
     const xrm = xrmStub();
-    xrm.checkWebResourceExists = vi.fn().mockResolvedValue(false);
+    xrm.checkWebResourceExists = vi.fn().mockResolvedValue(null);
 
     await render(
       <OutputPanel
@@ -192,6 +247,30 @@ describe('OutputPanel', () => {
     expect(host?.textContent).not.toContain('Prerequisite not detected');
   });
 
+  it('ignores a web-resource check that settles after the tab was left and re-entered', async () => {
+    let failFirst!: (error: Error) => void;
+    const first = new Promise<string | null>((_, reject) => { failFirst = reject; });
+    const xrm = xrmStub();
+    xrm.checkWebResourceExists = vi.fn()
+      .mockReturnValueOnce(first)
+      .mockResolvedValueOnce('acme_/scripts/sidepane.runtime.js');
+    await render(<OutputPanel config={DEFAULT_CONFIG} xrm={xrm} validation={{ isValid: true, errors: [], warnings: [] }} />);
+
+    await clickLibraryTab();
+    await act(async () => {
+      (host?.querySelector('[role="tab"]:nth-child(1)') as HTMLButtonElement).click();
+    });
+    await clickLibraryTab();
+    await act(async () => new Promise(r => setTimeout(r, 0)));
+    expect(host?.textContent).toContain('Shared runtime library detected');
+
+    await act(async () => { failFirst(new Error('late failure')); });
+
+    expect(host?.textContent).not.toContain('Could not verify prerequisite');
+    expect(host?.textContent).not.toContain('late failure');
+    expect(host?.textContent).toContain('Shared runtime library detected');
+  });
+
   it('withholds the basic-tab code block Copy affordance when validation has blocking errors', async () => {
     await render(
       <OutputPanel
@@ -212,7 +291,7 @@ describe('OutputPanel', () => {
 
   it('withholds the library-tab code block Copy affordance when validation has blocking errors', async () => {
     const xrm = xrmStub();
-    xrm.checkWebResourceExists = vi.fn().mockResolvedValue(true);
+    xrm.checkWebResourceExists = vi.fn().mockResolvedValue('acme_/scripts/sidepane.runtime.js');
 
     await render(
       <OutputPanel
@@ -250,7 +329,7 @@ describe('OutputPanel', () => {
   it('does not gate Copy on warnings alone (warnings are advisory, not blocking)', async () => {
     await render(
       <OutputPanel
-        config={DEFAULT_CONFIG}
+        config={cfg()}
         xrm={xrmStub()}
         validation={{
           isValid: true,
@@ -313,5 +392,36 @@ describe('OutputPanel', () => {
     // Basic tab's own CodeBlock also renders a <pre> when validation is clean, so expect
     // both it and the raw-config expander's <pre>.
     expect(host?.querySelectorAll('pre').length).toBe(2);
+  });
+
+  it('shows the Page prompt tab for a generative target', async () => {
+    const config = { ...DEFAULT_CONFIG, target: { pageType: 'generative' as const, pageId: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee', data: '{"status":"open"}' } };
+    await render(<OutputPanel config={config} xrm={xrmStub()} validation={{ isValid: true, errors: [], warnings: [] }} />);
+    const tab = Array.from(host!.querySelectorAll('[role="tab"]')).find(t => t.textContent === 'Page prompt') as HTMLButtonElement;
+    await act(async () => { tab.click(); });
+    expect(host!.textContent).toContain('accept a data object with the keys status');
+  });
+
+  it('shows no Page prompt tab for other targets', async () => {
+    await render(<OutputPanel config={DEFAULT_CONFIG} xrm={xrmStub()} validation={{ isValid: true, errors: [], warnings: [] }} />);
+    expect(Array.from(host!.querySelectorAll('[role="tab"]')).map(t => t.textContent)).not.toContain('Page prompt');
+  });
+
+  it('exposes the raw-config disclosure state and what it controls (r2 WR-012)', async () => {
+    await render(<OutputPanel config={DEFAULT_CONFIG} xrm={xrmStub()} validation={{ isValid: true, errors: [], warnings: [] }} />);
+    const expander = Array.from(host!.querySelectorAll('button')).find(b => b.textContent?.includes('Advanced — Raw Config'))!;
+    expect(expander.getAttribute('aria-expanded')).toBe('false');
+    await act(async () => { expander.click(); });
+    expect(expander.getAttribute('aria-expanded')).toBe('true');
+    expect(document.getElementById(expander.getAttribute('aria-controls')!)).not.toBeNull();
+  });
+
+  it('announces the runtime check result as a status (r2 WR-012)', async () => {
+    const xrm = { ...xrmStub(), checkWebResourceExists: vi.fn().mockResolvedValue(null) };
+    await render(<OutputPanel config={DEFAULT_CONFIG} xrm={xrm} validation={{ isValid: true, errors: [], warnings: [] }} />);
+    await clickLibraryTab();
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
+    const statuses = Array.from(host!.querySelectorAll('[role="status"]')).map(el => el.textContent ?? '');
+    expect(statuses.some(text => text.includes('Prerequisite not detected'))).toBe(true);
   });
 });

@@ -1,5 +1,112 @@
 # Change Log
 
+## v1.4.0
+
+### Changed
+
+- The Configure panel is a sentence plus three sections: **Trigger & source**
+  (trigger, surface, table, form/view/column/lookup controls), **Destination**
+  (content, which record, form, tab, form data) and **Pane & behaviour**. The
+  summary at the top reads back exactly what the generated script does, and
+  every choice offered is legal for the trigger already chosen.
+- Record context is a record *source*: the form record, the selected row, the
+  clicked tag, a lookup on the host table, a specific record, or none. A trigger
+  change snaps the source and content to legal values instead of showing an
+  error. The generated script declares the record ID in a variable you name.
+- The four grid triggers are now **Grid button** and **Grid row select** with a
+  Main grid / Subgrid choice. Field change and Lookup tag click pick their
+  column and lookup controls from metadata instead of typed names.
+- With the form record or selected row as the source, the script reads the
+  record's table at runtime (`getEntityName()`), so a table name is only
+  required where a picker needs it.
+- Web resources also receive the clicked lookup tag as URL `data`.
+- Custom pages receive `recordId` as a bare GUID, without braces, as Microsoft
+  requires for record-bound custom pages; a page that already strips braces is
+  unaffected.
+- Every picker (tables, forms, views, columns, lookup columns, dashboards) is
+  the searchable combobox with the custom-table filter inside the input.
+- The Form and Grid previews use the configured trigger table, form and view;
+  changes made in the preview update the configuration.
+- Stored configurations from earlier versions load unchanged in meaning: grid
+  trigger kinds, context modes, static IDs, lookup columns, typed field names
+  and pre-fill settings are migrated automatically.
+- Shared Library output expands the side pane rail only for command-bar
+  buttons, as Basic output does; form load, field change, row select, lookup
+  tag and console scripts leave a collapsed rail collapsed.
+- Basic output sets the configured badge on a pane it reuses, as the Shared
+  Library already did.
+- Shared Library output with **Close if already open** and a lookup record
+  source closes the open pane even when the lookup is empty.
+- A form trigger on a record that has not been saved yet stops with "Save the
+  record before opening this pane." (a dialog for command buttons, a console
+  warning for form events) instead of opening the pane with an empty record ID.
+- Field change scripts read the form, its record and any lookup while the
+  change event runs; only opening the pane waits for the 150 ms debounce.
+- Grid row select scripts remember a row selected while a pane is opening by
+  its ID and table, and open it from those values instead of re-reading an
+  event that has already ended.
+- The shared runtime (`sidepane.runtime.js`) opens one pane per pane ID at a
+  time: a call made while that pane is opening waits, the newest waiting call
+  opens next, and a repeated identical call (a double click) opens once.
+  Download the runtime again and redeploy the web resource to get this.
+- Browser globals such as `location`, `top`, `self` and `document` are
+  rejected as namespace and console function names, since the generated
+  top-level declaration would overwrite them.
+
+## v1.3.1
+
+### Added
+
+- **Related record (lookup on source record)** context mode: pick a lookup,
+  customer, or owner column on the source table, and the pane opens the record
+  it points to. Form triggers read the lookup from the form record; grid
+  triggers read it from the selected row's source view. The grid preview
+  simulates the related record from a row's lookup column, and the form
+  preview reveals a sample related record.
+- Generative page target: page ID, optional JSON page data, record context
+  sent as `entityName` + `recordId` (braces stripped), Shared Library support,
+  a generative-page preview, and an Output **Page prompt** tab that writes the
+  setup prompt for the page's inputs.
+- Table record **Create new record** mode with Form data pre-fill and optional
+  **Pre-fill from current record** (`createFromEntity`).
+- Lookup tag click generates a form OnLoad registration function for one or
+  more comma-separated lookup controls; repeat OnLoad runs do not register
+  twice. Command Steps list the corrected wiring.
+- **Close if already open** for command bar buttons.
+
+### Changed
+
+- Generated scripts and the runtime exit when side panes are unavailable
+  (native players, on-premises): command buttons alert, other triggers warn.
+- The shared runtime is only the hand-written
+  `src/runtime/sidepane.runtime.js`; the `build:runtime` script and the
+  TypeScript copy are removed.
+- Documented unsupported options: `createPane.hidden`, collapsing the rail,
+  six `entityrecord` page inputs, and `navigateTo` dialogs.
+- The studio title bar is removed. **Reset** sits on the right of the Configure
+  header, and on the Configure tab when the window is narrow.
+
+### Fixed
+
+- Mounted table pickers refresh when metadata table filters change.
+- The dashboard picker shows an explicit placeholder when no dashboard is
+  selected.
+- The preview mounted guard is restored so form layouts complete under React
+  StrictMode.
+
+### Development and maintenance
+
+- Hardened the PPTB context adapter: guarded `queryData` response shapes and
+  normalised non-`Error` Dataverse rejections. Routed `fetchXmlQuery` through
+  the adapter and removed unused host extensions, the WhoAmI cache, and the
+  unused `connectionTarget` parameter.
+- Bumped `@pptb/types` to 1.2.7.
+
+## v1.1.2
+
+- Package-only release: version bump and manifest formatting, no feature
+  changes. This is the version currently available in the Tools Marketplace.
+
 ## v1.1.1
 
 ### Added

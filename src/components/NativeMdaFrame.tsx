@@ -1,32 +1,36 @@
 import * as React from 'react';
 import { PaneConfig, TargetConfig } from '../types/PaneDefinitionConfig';
 import { ValidationResult } from '../services/ValidationService';
-import { FormModel } from '../services/FormXmlService';
 import { useTheme } from '../contexts/ThemeContext';
 import { theme } from '../theme/tokens';
 import { PaneOverlay } from './PaneOverlay';
+import type { PreviewRecord } from '../services/GridViewModel';
 import { usePreviewSize, PreviewSizeMode } from './previewSize';
 import { FL } from './flTokens';
 
 const PREVIEW_FRAME_MIN_H = 440;
 const PREVIEW_FRAME_MAX_H = 760;
 const PREVIEW_CHROME_HEIGHT = 220;
+const MOCK_CAPTION = 'Mock host: Account · fixed sample data';
+
+/**
+ * The simulated MDA host around the pane. `record` is the record the pane
+ * opens (PaneOverlay content); null when there is none.
+ */
+export type NativeMdaFrameVariant =
+  /** Static Account form with fixed sample data. Independent of pane config. */
+  | { kind: 'mock' }
+  /** The host table's form; the caller renders its FormXML as children. */
+  | { kind: 'form'; hostEntity: string; record: PreviewRecord | null }
+  /** A live grid; no form header. The caption names the table and view. */
+  | { kind: 'grid'; caption: string; record: PreviewRecord | null };
 
 interface NativeMdaFrameProps {
   pane: PaneConfig;
-  /** The simulated MDA host form (FormHeader label). Independent of pane config. */
-  hostTarget: TargetConfig;
   /** The side pane's target (PaneOverlay content). Comes from config. */
   paneTarget: TargetConfig;
   validation: ValidationResult;
-  /**
-   * Optional caption shown in the simulation strip above the frame, e.g.
-   * "Mock host: Account · fixed sample data". Used to set the user's
-   * expectations about whether the surrounding form reflects their config.
-   */
-  caption?: string;
-  /** When provided, the header renders dynamic entity/form metadata instead of static mock data. */
-  formModel?: FormModel;
+  variant: NativeMdaFrameVariant;
   children: React.ReactNode;
 }
 
@@ -221,13 +225,10 @@ function capitalizeEntity(entityName: string): string {
   return entityName[0].toUpperCase() + entityName.slice(1);
 }
 
-function FormHeader({ target, mode, formModel }: { target: TargetConfig; mode: PreviewSizeMode; formModel?: FormModel }): React.ReactElement {
-  const entityLabel =
-    (target.pageType === 'entityrecord' || target.pageType === 'entitylist')
-      ? target.entityName
-      : 'account';
+function FormHeader({ variant, mode }: { variant: Exclude<NativeMdaFrameVariant, { kind: 'grid' }>; mode: PreviewSizeMode }): React.ReactElement {
+  const entityLabel = variant.kind === 'form' ? variant.hostEntity : 'account';
   const isCompact = mode === 'compact';
-  const isDynamic = formModel != null;
+  const isDynamic = variant.kind === 'form';
 
   const title = isDynamic
     ? `${capitalizeEntity(entityLabel)} (sample)`
@@ -386,21 +387,19 @@ function FormHeader({ target, mode, formModel }: { target: TargetConfig; mode: P
   );
 }
 
-export function NativeMdaFrame({ pane, hostTarget, paneTarget, validation, caption, formModel, children }: NativeMdaFrameProps): React.ReactElement {
+export function NativeMdaFrame({ pane, paneTarget, validation, variant, children }: NativeMdaFrameProps): React.ReactElement {
   const { mode } = usePreviewSize();
   const { isDark } = useTheme();
   const T = theme(isDark);
   const isCompact = mode === 'compact';
-
-  // Pane overlay sits on the right side at regular+wide; stacks below in compact.
-  const showOverlayInline = !isCompact && pane.isSelected !== false;
-  const showOverlayStacked = isCompact && pane.isSelected !== false;
+  const caption = variant.kind === 'mock' ? MOCK_CAPTION : variant.kind === 'grid' ? variant.caption : undefined;
+  const paneRecord = variant.kind === 'mock' ? undefined : variant.record ?? undefined;
 
   return (
     <div style={{ position: 'relative', width: '100%', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
       {/* Simulation strip — sits ABOVE the rounded frame so it never overlaps
           AppHeader content. Carries the "Preview Simulation" indicator and an
-          optional caption set by the parent (e.g. "Mock host: Account·fixed sample data"). */}
+          optional caption (the mock host's, or the grid's table and view). */}
       <div
         style={{
           display: 'flex',
@@ -409,7 +408,7 @@ export function NativeMdaFrame({ pane, hostTarget, paneTarget, validation, capti
           padding: '2px 8px',
           fontFamily: FL.font,
           fontSize: 10,
-          color: FL.fgMuted,
+          color: T.fg2,
           minWidth: 0,
         }}
       >
@@ -429,7 +428,7 @@ export function NativeMdaFrame({ pane, hostTarget, paneTarget, validation, capti
             fontWeight: 700,
             letterSpacing: '.8px',
             textTransform: 'uppercase',
-            color: 'rgba(230,100,0,.88)',
+            color: T.accentAlt,
             flexShrink: 0,
           }}
         >
@@ -437,7 +436,7 @@ export function NativeMdaFrame({ pane, hostTarget, paneTarget, validation, capti
         </span>
         {caption && (
           <>
-            <span style={{ color: FL.stroke, flexShrink: 0 }}>│</span>
+            <span style={{ color: T.stroke1, flexShrink: 0 }}>│</span>
             <span
               style={{
                 minWidth: 0,
@@ -475,7 +474,7 @@ export function NativeMdaFrame({ pane, hostTarget, paneTarget, validation, capti
         <div style={{ flex: 1, minHeight: 0, display: 'flex', overflow: 'hidden', minWidth: 0 }}>
           <SiteMap mode={mode} />
           <main style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: FL.appBg }}>
-            {hostTarget.pageType !== 'entitylist' && <FormHeader target={hostTarget} mode={mode} formModel={formModel} />}
+            {variant.kind !== 'grid' && <FormHeader variant={variant} mode={mode} />}
             <div
               style={{
                 flex: 1,
@@ -487,16 +486,16 @@ export function NativeMdaFrame({ pane, hostTarget, paneTarget, validation, capti
                 minWidth: 0,
               }}
             >
+              {/* Pane overlay sits on the right at regular+wide; stacks below in compact.
+                  PaneOverlay renders nothing for an unselected pane. */}
               <div style={{ flex: 1, minWidth: 0, overflow: 'auto' }}>
                 {children}
-                {showOverlayStacked && (
-                  <div style={{ marginTop: 10 }}>
-                    <PaneOverlay pane={pane} target={paneTarget} validation={validation} layout="stacked" />
-                  </div>
+                {isCompact && (
+                  <PaneOverlay pane={pane} target={paneTarget} record={paneRecord} validation={validation} layout="stacked" />
                 )}
               </div>
-              {showOverlayInline && (
-                <PaneOverlay pane={pane} target={paneTarget} validation={validation} layout="inline" />
+              {!isCompact && (
+                <PaneOverlay pane={pane} target={paneTarget} record={paneRecord} validation={validation} layout="inline" />
               )}
             </div>
           </main>

@@ -25,13 +25,14 @@ function GridIcon({ name }: { name: keyof typeof glyphs }): React.ReactElement {
   </svg>;
 }
 
-export function MockGrid({ rows, columns, viewName, selectedRows, activeRow, onSelectionChange, onCommand, onRefresh }: {
+export function MockGrid({ rows, columns, viewName, selectedRows, activeRow, onSelectionChange, commandEnabled, onCommand, onRefresh }: {
   rows: Record<string, unknown>[];
   columns: GridColumn[];
   viewName: string;
   selectedRows: number[];
   activeRow: number | null;
   onSelectionChange: (indices: number[]) => void;
+  commandEnabled: boolean;
   onCommand: () => void;
   onRefresh: () => void;
 }): React.ReactElement {
@@ -61,7 +62,7 @@ export function MockGrid({ rows, columns, viewName, selectedRows, activeRow, onS
         {!['Back', 'Show chart', 'More commands'].includes(label) && label}
         {dropdown && <span aria-hidden="true">⌄</span>}
       </button>)}
-      <button type="button" style={buttonStyle} disabled={selectedRows.length !== 1} onClick={onCommand}>Preview command</button>
+      <button type="button" style={buttonStyle} disabled={!commandEnabled} onClick={onCommand}>Preview command</button>
     </div>
     <div style={{ background: FL.surface, borderRadius: 8, boxShadow: FL.shadow, overflow: 'hidden' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '12px 16px' }}>

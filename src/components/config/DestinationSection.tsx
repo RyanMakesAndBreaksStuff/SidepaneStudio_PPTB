@@ -1,0 +1,333 @@
+import * as React from 'react';
+import { useEffect } from 'react';
+import { useTheme } from '../../contexts/ThemeContext';
+import { theme } from '../../theme/tokens';
+import type { PaneDefinitionConfig, PageType, RecordSource, RecordSourceKind, TargetConfig } from '../../types/PaneDefinitionConfig';
+import { RECORD_TARGETS } from '../../types/PaneDefinitionConfig';
+import { allowedSources, allowedTargets, defaultSource, destinationTable, isCreating, resetTarget, retargetRecord, sendsRecord } from '../../services/triggerCapabilities';
+import { applyLookup } from '../../services/relatedRecordConfig';
+import { normalizeGuid } from '../../services/odataGuards';
+import { copyText } from '../../services/clipboard';
+import { notify } from '../../services/notify';
+import type { ConfigurePanelProps } from '../ConfigurePanel';
+import type { SectionSharedProps } from './TriggerSection';
+import { ChoiceGroup } from '../ChoiceGroup';
+import { Field } from '../Field';
+import { Input } from '../Input';
+import { TablePicker } from '../TablePicker';
+import { DashboardPicker } from '../DashboardPicker';
+import { LookupPicker } from '../LookupPicker';
+import { useLookupColumns } from '../useLookupColumns';
+import { FormSelector } from '../FormSelector';
+import { ViewPicker } from '../ViewPicker';
+import { JsonDataField } from '../JsonDataField';
+import { Callout } from '../Callout';
+
+export type DestinationSectionProps = SectionSharedProps & Pick<ConfigurePanelProps, 'formXmlService' | 'orgMismatch'>;
+
+const FORM_DATA_EXAMPLE = `{
+  "name": "Contoso",
+  "description": "Opened from the side pane.",
+  "donotemail": 1
+}`;
+const GENERATIVE_INPUTS_DOC = 'https://learn.microsoft.com/en-us/power-apps/maker/model-driven-apps/generative-pages#set-up-a-page-to-accept-input-parameters';
+
+const PAGE_TYPE_OPTIONS = [
+  { value: 'custom', label: 'Custom page', desc: 'A canvas app page in your solution' },
+  { value: 'generative', label: 'Generative page', desc: 'A page the app agent built in the app designer' },
+  { value: 'entityrecord', label: 'Table record', desc: 'Open a specific or context-driven record' },
+  { value: 'entitylist', label: 'Table list', desc: 'Show a view of table records' },
+  { value: 'webresource', label: 'Web resource', desc: 'Embed an HTML/JS web resource' },
+  { value: 'dashboard', label: 'Dashboard', desc: 'System or personal dashboard' },
+  { value: 'search', label: 'Search', desc: 'Global search results — not documented by navigateTo' },
+];
+const RECORD_MODE_OPTIONS = [
+  { value: 'open', label: 'Open existing record', desc: 'Opens the record the trigger or source supplies' },
+  { value: 'create', label: 'Create new record', desc: 'Opens a blank form; Form data pre-fills its columns' },
+];
+const SOURCE_OPTIONS: Record<RecordSourceKind, { value: string; label: string; desc: string }> = {
+  host: { value: 'host', label: 'The record on this form', desc: 'The record on the triggering form' },
+  selectedRow: { value: 'selectedRow', label: 'The selected row', desc: 'The first selected row' },
+  clickedTag: { value: 'clickedTag', label: 'The clicked tag record', desc: "The clicked tag's id and table" },
+  lookup: { value: 'lookup', label: 'A record in a lookup', desc: 'A record a lookup on the host table points to' },
+  fixed: { value: 'fixed', label: 'A specific record', desc: 'A record named here by GUID' },
+  none: { value: 'none', label: 'No record', desc: 'Open the pane without a record' },
+};
+
+type TargetFields<P extends TargetConfig['pageType']> = Partial<Omit<Extract<TargetConfig, { pageType: P }>, 'pageType'>>;
+function patchTarget<P extends TargetConfig['pageType']>(
+  prev: PaneDefinitionConfig, pageType: P, fields: TargetFields<P>,
+): PaneDefinitionConfig {
+  if (prev.target.pageType !== pageType) return prev;
+  return { ...prev, target: { ...prev.target, ...fields } as TargetConfig };
+}
+
+type SourceFields<K extends RecordSourceKind> = Partial<Omit<Extract<RecordSource, { kind: K }>, 'kind'>>;
+function patchSource<K extends RecordSourceKind>(
+  prev: PaneDefinitionConfig, kind: K, fields: SourceFields<K>,
+): PaneDefinitionConfig {
+  if (prev.context.source.kind !== kind) return prev;
+  return { ...prev, context: { ...prev.context, source: { ...prev.context.source, ...fields } as RecordSource } };
+}
+
+/** The host denies window.open and older hosts lack openInConnectionBrowser, so a link that cannot open is copied instead. */
+async function openOrCopyLink(href: string): Promise<void> {
+  try {
+    const open = window.toolboxAPI?.utils?.openInConnectionBrowser;
+    if (!open) throw new Error('openInConnectionBrowser is unavailable');
+    await open(href);
+    return;
+  } catch {
+    /* fall through to copying the address */
+  }
+  try {
+    await copyText(href);
+    notify('Link copied', 'This host could not open the link, so it was copied to your clipboard. Paste it into a browser.', 'info');
+  } catch {
+    notify('Could not open link', `Open this address in a browser: ${href}`, 'warning');
+  }
+}
+
+function openDocsLink(event: React.MouseEvent<HTMLAnchorElement>): void {
+  event.preventDefault();
+  void openOrCopyLink(event.currentTarget.href);
+}
+
+export function DestinationSection({ config, onChange, metadataService, formXmlService,
+  errors, warnings, orgMismatch = false }: DestinationSectionProps): React.ReactElement {
+  const { isDark } = useTheme();
+  const T = theme(isDark);
+  const { target, trigger, host, context } = config;
+  const { source } = context;
+  const creating = isCreating(target);
+  const recordTarget = RECORD_TARGETS.includes(target.pageType);
+  const lookupColumns = useLookupColumns(metadataService, source.kind === 'lookup' && recordTarget ? host.entityName : '');
+  const currentLookup = source.kind === 'lookup' ? lookupColumns.find(source.attribute) : undefined;
+  useEffect(() => {
+    // r2 WR-003 — while a restore from another environment is unconfirmed, this environment's metadata must not
+    // retarget it: that would read as a re-pick and dismiss the warning.
+    if (!currentLookup || orgMismatch) return;
+    onChange(prev => prev.context.source.kind === 'lookup' && prev.context.source.attribute === currentLookup.LogicalName
+      ? applyLookup(prev, host.entityName, currentLookup) : prev);
+  }, [currentLookup, orgMismatch]);
+  const resolvedTargets = Array.isArray(currentLookup?.Targets) ? [...new Set(currentLookup.Targets)] : [];
+  const destination = destinationTable(config);
+  const allowed = allowedSources(config);
+  const relatedTarget = source.kind === 'lookup' && target.pageType === 'entityrecord' && !creating;
+  const sourceHint = allowed.length !== 1 ? undefined
+    : trigger.kind === 'ManualJS' && target.pageType === 'entityrecord' && !creating
+      ? 'The console runs outside any form or grid, so opening an existing table record needs a specific record ID.'
+      : 'Set by the trigger.';
+  const tableConfirmed = relatedTarget ? resolvedTargets.length === 1 : !!destination;
+
+  return (
+    <>
+      <Field label="Content type" required>
+        <ChoiceGroup label="Content type" options={PAGE_TYPE_OPTIONS.filter(option => allowedTargets(trigger.kind).includes(option.value as PageType))}
+          value={target.pageType}
+          onChange={value => onChange(prev => {
+            if (prev.target.pageType === value) return prev;
+            const next = { ...prev, target: resetTarget(value as PageType) };
+            return value === 'entityrecord' && currentLookup ? applyLookup(next, host.entityName, currentLookup) : next;
+          })} />
+      </Field>
+      {target.pageType === 'custom' && (
+        <Field label="Custom page name" required hint="Logical name from your solution (e.g. sps_MyPage)" error={errors['target.name']}>
+          <Input value={target.name} placeholder="sps_SidePaneBuilderPage" error={!!errors['target.name']}
+            onChange={name => onChange(prev => patchTarget(prev, 'custom', { name }))} />
+        </Field>
+      )}
+      {target.pageType === 'entityrecord' && (
+        <Field label="Record">
+          <ChoiceGroup label="Record" options={RECORD_MODE_OPTIONS} value={creating ? 'create' : 'open'}
+            onChange={value => onChange(prev => patchTarget(prev, 'entityrecord', { createNew: value === 'create' }))} />
+        </Field>
+      )}
+      {recordTarget && (
+        <Field label="Record source" error={errors['context.source']} hint={sourceHint}>
+          <ChoiceGroup label="Record source"
+            options={allowed.map(kind => kind === 'none' && creating
+              ? { ...SOURCE_OPTIONS.none, desc: 'Open a blank form' } : SOURCE_OPTIONS[kind])}
+            value={source.kind}
+            onChange={value => onChange(prev => prev.context.source.kind === value ? prev : {
+              ...prev, context: { ...prev.context, source: defaultSource(value as RecordSourceKind) },
+            })} />
+        </Field>
+      )}
+      {source.kind === 'lookup' && recordTarget && (
+        <Field label="Lookup column" required hint="Lookup on the trigger table whose value opens in the pane"
+          error={errors['context.source.attribute']}>
+          <LookupPicker columns={lookupColumns} entityName={host.entityName} value={source.attribute}
+            error={!!errors['context.source.attribute']} showDestination={false}
+            onChange={(value, selected) => onChange(prev => applyLookup(prev, host.entityName,
+              selected ?? (value ? { LogicalName: value } : null)))} />
+        </Field>
+      )}
+      {source.kind === 'fixed' && recordTarget && (
+        <>
+          <Field label="Record ID" hint="GUID of the specific record" error={errors['context.source.id']}>
+            <div onBlurCapture={event => {
+              const normalized = normalizeGuid((event.target as HTMLInputElement).value);
+              if (normalized) onChange(prev => patchSource(prev, 'fixed', { id: normalized }));
+            }}>
+              <Input value={source.id} placeholder="00000000-0000-0000-0000-000000000000"
+                error={!!errors['context.source.id']}
+                onChange={id => onChange(prev => patchSource(prev, 'fixed', { id }))} />
+            </div>
+          </Field>
+          {target.pageType !== 'entityrecord' && (
+            <Field label="Record table" error={errors['context.source.entityName']}>
+              <TablePicker ariaLabel="Record table" value={source.entityName} metadataService={metadataService}
+                error={!!errors['context.source.entityName']}
+                onChange={entityName => onChange(prev => patchSource(prev, 'fixed', { entityName }))} />
+            </Field>
+          )}
+        </>
+      )}
+      {sendsRecord(config) && (
+        <Field label="Variable name" hint="Name used for the resolved record ID in generated JavaScript"
+          error={errors['context.variableName']}>
+          <Input value={context.variableName} placeholder="recordId"
+            error={!!errors['context.variableName']}
+            onChange={variableName => onChange(prev => ({
+              ...prev, context: { ...prev.context, variableName },
+            }))} />
+        </Field>
+      )}
+      {target.pageType === 'entityrecord' && (
+        <>
+          <Field label="Destination table" required={creating || source.kind === 'fixed'}
+            error={errors['target.entityName']} warning={warnings['target.entityName']}
+            hint={relatedTarget ? 'Derived from the selected lookup' : undefined}>
+            {creating || source.kind === 'fixed' ? (
+              <TablePicker ariaLabel="Destination table" value={target.entityName} metadataService={metadataService}
+                error={!!errors['target.entityName']}
+                onChange={entityName => onChange(prev => prev.target.pageType !== 'entityrecord' || prev.target.entityName === entityName ? prev
+                  : { ...prev, target: retargetRecord(prev.target, entityName) })} />
+            ) : (
+              <div role="status" aria-live="polite" style={{ color: T.fg2, fontFamily: T.font, fontSize: 13 }}>
+                {relatedTarget
+                  ? resolvedTargets.length === 1
+                    ? <>
+                        <div>{resolvedTargets[0]}</div>
+                        <div>Destination table: determined by the {source.attribute} lookup.</div>
+                      </>
+                    : resolvedTargets.length > 1
+                      ? `Possible destination tables: ${resolvedTargets.join(', ')}. Determined by the selected row.`
+                      : !source.attribute
+                        ? "Destination table is determined by the 'Lookup column' selector."
+                        : currentLookup
+                          ? `No destination table: the ${source.attribute} lookup has no related tables.`
+                          : target.entityName
+                            ? <>
+                                <div>{target.entityName}</div>
+                                <div>Saved table selection “{target.entityName}” is unconfirmed until the lookup is resolved.</div>
+                              </>
+                            : `Destination table: determined by the ${source.attribute} lookup.`
+                  : source.kind === 'clickedTag'
+                    ? 'Destination table: determined by the clicked tag.'
+                    : `Destination table: ${destination || '(table)'}`}
+              </div>
+            )}
+          </Field>
+          {/* The clicked tag names the table at runtime, so no form or tab of it can be chosen here. */}
+          {formXmlService && source.kind !== 'clickedTag' && (
+            <Field label="Form" error={errors['target.formId']}
+              hint={!tableConfirmed ? 'Choose a table to pick a form.' : undefined}>
+              <FormSelector entityName={destination} onEntityNameChange={() => undefined}
+                selectedFormId={target.formId} hideEntityPicker disabled={!tableConfirmed}
+                formXmlService={formXmlService} metadataService={metadataService}
+                onFormSelected={selection => onChange(prev => patchTarget(prev, 'entityrecord',
+                  { formId: selection?.formId ?? '', tabName: '' }))} />
+            </Field>
+          )}
+          {source.kind !== 'clickedTag' && (
+            <Field label="Tab name" hint={!tableConfirmed ? 'Choose a table to pick a form.' : 'Logical name of the form tab to focus'}>
+              <Input value={target.tabName} disabled={!tableConfirmed}
+                onChange={tabName => onChange(prev => patchTarget(prev, 'entityrecord', { tabName }))} />
+            </Field>
+          )}
+          <JsonDataField label="Form data" value={target.data} placeholder={FORM_DATA_EXAMPLE}
+            error={errors['target.data']}
+            hint="Optional JSON object of extra form parameters. Keys are column logical names (e.g. name) or pre-registered custom params. Lookups need a pair/triple: primarycontactid + primarycontactidname, or parentcustomerid + parentcustomeridname + parentcustomeridtype (account|contact|systemuser|team)."
+            onChange={data => onChange(prev => patchTarget(prev, 'entityrecord', { data }))}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <button type="button" onClick={() => onChange(prev => patchTarget(prev, 'entityrecord', { data: FORM_DATA_EXAMPLE }))}
+                style={{ fontSize: 12, padding: '4px 10px', borderRadius: T.rM, border: `1px solid ${T.stroke1}`,
+                  background: T.surface2, color: T.fg1, fontFamily: T.font, cursor: 'pointer' }}>Insert example</button>
+              <span style={{ fontSize: 11, color: T.fg3, fontFamily: T.font }}>
+                <a href="https://learn.microsoft.com/en-us/power-apps/developer/model-driven-apps/set-field-values-using-parameters-passed-form"
+                  target="_blank" rel="noreferrer" onClick={openDocsLink} style={{ color: T.accent }}>Set column values</a>
+                {' · '}
+                <a href="https://learn.microsoft.com/en-us/power-apps/developer/model-driven-apps/configure-form-accept-custom-querystring-parameters"
+                  target="_blank" rel="noreferrer" onClick={openDocsLink} style={{ color: T.accent }}>Custom query-string params</a>
+              </span>
+            </div>
+            <Callout type="info" icon="ℹ">{creating
+              ? 'In create mode these values pre-fill columns on the new record.'
+              : 'Open existing record ignores column default values. Only pre-registered custom params take effect, and any invalid key fails the navigate at runtime. Choose Create new record to pre-fill columns.'}</Callout>
+          </JsonDataField>
+        </>
+      )}
+      {target.pageType === 'entitylist' && (
+        <>
+          <Field label="Destination table" required error={errors['target.entityName']} warning={warnings['target.entityName']}>
+            <TablePicker ariaLabel="Destination table" value={target.entityName} metadataService={metadataService}
+              error={!!errors['target.entityName']}
+              onChange={entityName => onChange(prev => patchTarget(prev, 'entitylist', { entityName, viewId: '', viewType: '' }))} />
+          </Field>
+          <Field label="View" error={errors['target.viewId'] || errors['target.viewType']}>
+            <ViewPicker entityName={target.entityName} value={target.viewId} viewType={target.viewType}
+              metadataService={metadataService}
+              onChange={view => onChange(prev => patchTarget(prev, 'entitylist', { viewId: view?.id ?? '', viewType: view?.viewType ?? '' }))} />
+          </Field>
+        </>
+      )}
+      {target.pageType === 'generative' && (
+        <>
+          <Field label="Page ID" required hint="In the app designer, select the page; the properties pane shows the ID in the Generative page field"
+            error={errors['target.pageId']}>
+            <Input value={target.pageId} placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+              error={!!errors['target.pageId']} onChange={pageId => onChange(prev => patchTarget(prev, 'generative', { pageId }))} />
+          </Field>
+          <JsonDataField label="Page data" hint="Optional JSON object the page reads as pageInput.data"
+            value={target.data} error={errors['target.data']}
+            onChange={data => onChange(prev => patchTarget(prev, 'generative', { data }))} />
+          {warnings['target.pageType'] && <Callout type="warn" icon="⚠">
+            {warnings['target.pageType'].join(' ')}{' '}
+            <a href={GENERATIVE_INPUTS_DOC} target="_blank" rel="noreferrer" onClick={openDocsLink}
+              style={{ color: T.accent }}>Set up a page to accept input parameters</a>
+          </Callout>}
+        </>
+      )}
+      {target.pageType === 'webresource' && (
+        <>
+          <Field label="Web resource name" required hint="Logical name (e.g. sps_/pages/helper.html)" error={errors['target.name']}>
+            <Input value={target.name} placeholder="sps_/pages/helper.html"
+              error={!!errors['target.name']} onChange={name => onChange(prev => patchTarget(prev, 'webresource', { name }))} />
+          </Field>
+          <Callout type="warn" icon="⚠">Web resources inside a side pane do NOT have access to <code>Xrm</code> or <code>parent.Xrm</code>. Pass data via URL <code>data</code> parameter (URL-encoded JSON).</Callout>
+        </>
+      )}
+      {target.pageType === 'dashboard' && (
+        <Field label="Dashboard" required hint="Select a system or personal dashboard" error={errors['target.dashboardId']}>
+          <DashboardPicker value={target.dashboardId} metadataService={metadataService}
+            error={!!errors['target.dashboardId']}
+            onChange={(dashboardId, dashboardName) => onChange(prev => patchTarget(prev, 'dashboard', { dashboardId, dashboardName }))} />
+        </Field>
+      )}
+      {target.pageType === 'search' && (
+        <>
+          <Field label="Search text" hint="Pre-fill the global search box (optional)">
+            <Input value={target.searchText} placeholder="e.g. Contoso"
+              onChange={searchText => onChange(prev => patchTarget(prev, 'search', { searchText }))} />
+          </Field>
+          {warnings['target.pageType'] && <Callout type="warn" icon="⚠">{warnings['target.pageType'].join(' ')}</Callout>}
+        </>
+      )}
+      {warnings['target.createNew'] && <Callout type="warn" icon="⚠">{warnings['target.createNew'].join(' ')}</Callout>}
+      {warnings['context.source'] && <Callout type="warn" icon="⚠">{warnings['context.source'].join(' ')}</Callout>}
+      {errors['context.source'] && <Callout type="err" icon="✕">{errors['context.source']}</Callout>}
+    </>
+  );
+}

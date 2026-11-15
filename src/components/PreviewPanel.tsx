@@ -3,20 +3,28 @@ import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 import { theme } from '../theme/tokens';
 import { PaneDefinitionConfig } from '../types/PaneDefinitionConfig';
-import { IXrmContext } from '../adapters/PptbContextAdapter';
+import { DataverseError, type IXrmContext } from '../adapters/PptbContextAdapter';
 import { ValidationResult } from '../services/ValidationService';
-import { FormXmlService, FormModel } from '../services/FormXmlService';
+import { FormXmlService, FormModel, type FormServiceError } from '../services/FormXmlService';
 import { MetadataService } from '../services/MetadataService';
 import { FormSelector, FormSelection } from './FormSelector';
 import { FormXmlRenderer } from './FormXmlRenderer';
 import { GridPreview } from './GridPreview';
 import { MockMDAShell } from './MockMDAShell';
 import { NativeMdaFrame } from './NativeMdaFrame';
+import { RetryButton } from './RetryButton';
+import { TabStrip } from './TabStrip';
 import { PreviewSizeProvider, usePreviewSize } from './previewSize';
-import { PreviewSessionBoundary, usePreviewSessionState } from '../contexts/PreviewSessionContext';
+import { PreviewSessionBoundary, usePreviewPane, usePreviewSessionState } from '../contexts/PreviewSessionContext';
+import { buildRelatedSampleFetchXml, getRelatedLookup, relatedRecordOf } from '../services/GridViewModel';
+import type { PreviewRecord } from '../services/GridViewModel';
+import { TRIGGER_CAPABILITIES } from '../services/triggerCapabilities';
+import { changeHostTable } from '../services/relatedRecordConfig';
+import { dataverseFailureHint, describeDataverseError } from '../services/dataverseErrorText';
 
 export interface PreviewPanelProps {
   config: PaneDefinitionConfig;
+  onChange?: (updater: (prev: PaneDefinitionConfig) => PaneDefinitionConfig) => void;
   validation: ValidationResult;
   /**
    * Shared MetadataService — the cache is the same one Configure's TablePicker
@@ -24,9 +32,13 @@ export interface PreviewPanelProps {
    */
   metadataService: MetadataService;
   xrm: IXrmContext;
+  orgMismatch?: boolean;
 }
 
 type PreviewMode = 'mock' | 'form' | 'grid';
+const MODE_TABS: { id: PreviewMode; label: string }[] = [
+  { id: 'mock', label: 'Mock' }, { id: 'form', label: 'Form' }, { id: 'grid', label: 'Grid' },
+];
 
 type FormState =
   | { status: 'idle' }
@@ -34,34 +46,53 @@ type FormState =
   | { status: 'error'; reason: string }
   | { status: 'loaded'; model: FormModel };
 
+type SampleState =
+  | { status: 'idle' | 'loading' }
+  | { status: 'error'; reason: string }
+  | { status: 'loaded'; record: PreviewRecord | null };
+
+/** A transport failure carries no message from the host; anything the host did say is shown as written. */
+function formLoadFailureReason(error: FormServiceError): string {
+  if (error.code === 'invalid-formxml' || error.code === 'missing-formxml') return 'Form layout could not be read.';
+  if (error.code !== 'query-failed') return error.message;
+  const status = (error.cause as { status?: unknown } | null | undefined)?.status;
+  if (status === 404) return 'Form not found in this environment.';
+  const hint = dataverseFailureHint(error.cause);
+  if (hint) return `Could not load form layout. ${hint}`;
+  if (typeof status === 'number' && status !== 0) return `Could not load form layout (HTTP ${status}).`;
+  if (error.cause instanceof DataverseError && status === undefined) return `Could not load form layout: ${error.cause.message}`;
+  return 'Could not load form layout. Check your connection.';
+}
+
 const PreviewPanelContent = React.memo(function PreviewPanelContent({
   config,
+  onChange,
   validation,
   metadataService,
   xrm,
+  orgMismatch,
 }: PreviewPanelProps): React.ReactElement {
   const { isDark } = useTheme();
   const T = theme(isDark);
   const [mode, setMode] = usePreviewSessionState<PreviewMode>('preview-mode', 'mock');
-  const gridEligible = config.target.pageType === 'entitylist' ||
-    config.trigger.kind === 'MainGridButton' || config.trigger.kind === 'SubgridButton' ||
-    config.trigger.kind === 'MainGridOnSelect' || config.trigger.kind === 'SubgridOnSelect';
+  const caps = TRIGGER_CAPABILITIES[config.trigger.kind];
+  const gridEligible = caps.gridPreview;
+  const hostBound = caps.hostPicker !== null;
   useEffect(() => {
     if (!gridEligible && mode === 'grid') setMode('mock');
   }, [gridEligible, mode]);
   const [formState, setFormState] = useState<FormState>({ status: 'idle' });
-  // Preview-local host entity. Independent of config.target.entityName so the
-  // preview can mimic the pane sitting on a different table than the one the
-  // pane itself targets. Initialized ONCE from the configured target (if any)
-  // so the cold start isn't punitive — the user can resync on demand via the
-  // FormSelector's "Use configured" affordance if config diverges later.
-  const [previewHostEntity, setPreviewHostEntity] = usePreviewSessionState<string>(
-    'preview-host-entity',
-    () =>
-      (config.target.pageType === 'entityrecord' || config.target.pageType === 'entitylist')
-        ? config.target.entityName
-        : ''
-  );
+  const [localEntity, setLocalEntity] = usePreviewSessionState<string>('preview-host-entity', '');
+  const hostEntity = hostBound ? config.host.entityName : localEntity;
+  // RelatedRecord Form preview: one sample source record supplies the lookup the pane opens.
+  // Keyed by host table + lookup so changing either discards the previous sample.
+  const relatedLookup = getRelatedLookup(config);
+  const showSample = relatedLookup !== '';
+  const sampleKey = JSON.stringify([hostEntity, relatedLookup]);
+  const [sample, setSample] = useState<{ key: string; state: SampleState }>({ key: '', state: { status: 'idle' } });
+  const sampleState: SampleState = sample.key === sampleKey ? sample.state : { status: 'idle' };
+  const [samplePane, openSamplePane] = usePreviewPane('form');
+  const sampleRequestRef = useRef(0);
   const formRequestIdRef = useRef(0);
   const mountedRef = useRef(true);
 
@@ -82,10 +113,12 @@ const PreviewPanelContent = React.memo(function PreviewPanelContent({
     return () => ro.disconnect();
   }, []);
 
+  const lastFormSelectionRef = useRef<FormSelection | null>(null);
   const formXmlSvcRef = useRef<FormXmlService | null>(null);
-  if (!formXmlSvcRef.current) formXmlSvcRef.current = new FormXmlService(xrm);
+  if (!formXmlSvcRef.current) formXmlSvcRef.current = new FormXmlService(xrm, () => metadataService.userLanguageCode);
 
   useEffect(() => {
+    mountedRef.current = true;
     return () => {
       mountedRef.current = false;
       formRequestIdRef.current += 1;
@@ -95,24 +128,50 @@ const PreviewPanelContent = React.memo(function PreviewPanelContent({
   const handleFormSelected = useCallback(async (selection: FormSelection | null) => {
     const requestId = formRequestIdRef.current + 1;
     formRequestIdRef.current = requestId;
+    lastFormSelectionRef.current = selection;
 
     if (!selection) {
       setFormState({ status: 'idle' });
       return;
     }
     setFormState({ status: 'loading' });
+    // The table list carries the user's language code; labels parsed before it arrives use the form's first language.
+    await metadataService.listAccessibleTables();
+    if (!mountedRef.current || formRequestIdRef.current !== requestId) return;
     const result = await formXmlSvcRef.current!.getFormModelResult(selection.formId);
     if (!mountedRef.current || formRequestIdRef.current !== requestId) return;
 
     if (!result.ok) {
-      setFormState({ status: 'error', reason: 'Could not load form layout. Check your connection.' });
+      setFormState({ status: 'error', reason: formLoadFailureReason(result.error) });
     } else {
       setFormState({ status: 'loaded', model: result.model });
     }
-  }, []);
+  }, [metadataService]);
 
-  const configuredGridEntity = 'entityName' in config.target ? config.target.entityName.trim() : '';
-  const gridEntity = configuredGridEntity || previewHostEntity;
+  useEffect(() => {
+    if (!hostBound) return;
+    if (config.host.formId && hostEntity) void handleFormSelected({ entityLogicalName: hostEntity, formId: config.host.formId });
+    else void handleFormSelected(null);
+  }, [hostBound, hostEntity, config.host.formId, handleFormSelected]);
+
+  const loadSample = async () => {
+    const requestId = ++sampleRequestRef.current;
+    setSample({ key: sampleKey, state: { status: 'loading' } });
+    try {
+      const response = await xrm.fetchXml(buildRelatedSampleFetchXml(hostEntity, relatedLookup));
+      if (!mountedRef.current || sampleRequestRef.current !== requestId) return;
+      const row = Array.isArray(response.value) ? response.value[0] : undefined;
+      const record = row && typeof row === 'object' ? relatedRecordOf(row, relatedLookup) : null;
+      setSample({ key: sampleKey, state: { status: 'loaded', record } });
+      // Loading a sample whose lookup is set is one invocation of the generated script.
+      if (record) openSamplePane(config.pane.isSelected, config.behavior.reuseExistingPane);
+    } catch (error) {
+      if (!mountedRef.current || sampleRequestRef.current !== requestId) return;
+      setSample({ key: sampleKey, state: { status: 'error',
+        reason: describeDataverseError(error, 'Could not load a sample record.') } });
+    }
+  };
+
   const tabStyle = (active: boolean): React.CSSProperties => ({
     padding: '6px 14px',
     border: 'none',
@@ -132,11 +191,9 @@ const PreviewPanelContent = React.memo(function PreviewPanelContent({
     >
       <PreviewSizeProvider width={containerWidth}>
         {/* Mode tab strip */}
-        <div style={{ display: 'flex', borderBottom: `1px solid ${T.stroke1}`, background: T.surface2, flexShrink: 0 }}>
-          <button style={tabStyle(mode === 'mock')} onClick={() => setMode('mock')}>Mock</button>
-          <button style={tabStyle(mode === 'form')} onClick={() => setMode('form')}>Form</button>
-          {gridEligible && <button style={tabStyle(mode === 'grid')} onClick={() => setMode('grid')}>Grid</button>}
-        </div>
+        <TabStrip label="Preview mode" tabs={gridEligible ? MODE_TABS : MODE_TABS.filter(tab => tab.id !== 'grid')}
+          value={mode} onChange={setMode} tabStyle={tabStyle}
+          style={{ display: 'flex', borderBottom: `1px solid ${T.stroke1}`, background: T.surface2, flexShrink: 0 }} />
 
         {/* Mock mode */}
         {mode === 'mock' && (
@@ -159,40 +216,24 @@ const PreviewPanelContent = React.memo(function PreviewPanelContent({
 
         {/* Grid mode */}
         {mode === 'grid' && gridEligible && <GridPreview
-          key={JSON.stringify([gridEntity,
-            config.target.pageType === 'entitylist' ? config.target.viewId : '',
-            config.target.pageType === 'entitylist' ? config.target.viewType : ''])}
-          config={config} validation={validation} metadataService={metadataService}
-          entityName={gridEntity} allowEntityChange={!configuredGridEntity} onEntityNameChange={setPreviewHostEntity}
+          key={JSON.stringify([config.host.entityName, config.host.viewId, config.host.viewType, relatedLookup])}
+          config={config} validation={validation} metadataService={metadataService} xrm={xrm}
+          onConfigChange={onChange}
+          orgMismatch={orgMismatch}
         />}
 
         {/* Form mode */}
         {mode === 'form' && (
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
             <FormSelector
-              entityName={previewHostEntity}
-              onEntityNameChange={setPreviewHostEntity}
-              entityNameHint={
-                (config.target.pageType === 'entityrecord' || config.target.pageType === 'entitylist')
-                  ? config.target.entityName || undefined
-                  : undefined
-              }
-              configuredEntity={
-                (config.target.pageType === 'entityrecord' || config.target.pageType === 'entitylist')
-                  ? config.target.entityName || undefined
-                  : undefined
-              }
-              onUseConfigured={() => {
-                if (
-                  (config.target.pageType === 'entityrecord' || config.target.pageType === 'entitylist') &&
-                  config.target.entityName
-                ) {
-                  setPreviewHostEntity(config.target.entityName);
-                }
-              }}
+              entityName={hostEntity}
+              onEntityNameChange={hostBound ? next => onChange?.(prev => changeHostTable(prev, next)) : setLocalEntity}
               formXmlService={formXmlSvcRef.current}
               metadataService={metadataService}
-              onFormSelected={handleFormSelected}
+              selectedFormId={hostBound ? config.host.formId : undefined}
+              onFormSelected={hostBound
+                ? selection => onChange?.(prev => ({ ...prev, host: { ...prev.host, formId: selection?.formId ?? '' } }))
+                : handleFormSelected}
             />
 
             <div
@@ -217,27 +258,45 @@ const PreviewPanelContent = React.memo(function PreviewPanelContent({
               )}
 
               {formState.status === 'error' && (
-                <div style={{ color: T.error, fontFamily: T.font, fontSize: 13, textAlign: 'center', padding: 24 }}>
-                  {formState.reason}
+                <div role="alert" style={{ color: T.error, fontFamily: T.font, fontSize: 13, textAlign: 'center', padding: 24 }}>
+                  {formState.reason} <RetryButton onClick={() => void handleFormSelected(lastFormSelectionRef.current)} />
+                </div>
+              )}
+
+              {formState.status === 'loaded' && showSample && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 8, fontFamily: T.font, fontSize: 12 }}>
+                  <button type="button" disabled={sampleState.status === 'loading'} onClick={() => void loadSample()}
+                    style={{ border: `1px solid ${T.accent}`, borderRadius: T.rS, background: T.accentBg, color: T.accent,
+                      fontFamily: T.font, fontSize: 12, fontWeight: 600, padding: '6px 10px', cursor: 'pointer' }}>
+                    Load sample {hostEntity} record
+                  </button>
+                  {sampleState.status === 'loading' && <span role="status" style={{ color: T.fg3 }}>Loading sample record...</span>}
+                  {sampleState.status === 'error' && <span role="alert" style={{ color: T.error }}>{sampleState.reason}</span>}
+                  {sampleState.status === 'loaded' && sampleState.record === null && <span role="status" style={{ color: T.fg3 }}>
+                    No {hostEntity} record has a {relatedLookup} value, so the pane does not open.
+                  </span>}
                 </div>
               )}
 
               {formState.status === 'loaded' && (
                 <NativeMdaFrame
-                  pane={config.pane}
-                  hostTarget={{
-                    pageType: 'entityrecord',
-                    entityName: previewHostEntity,
-                    formId: '', tabName: '', data: '',
-                  }}
+                  pane={sampleState.status === 'loaded'
+                    ? { ...config.pane, isSelected: sampleState.record !== null && samplePane.selected } : config.pane}
                   paneTarget={config.target}
                   validation={validation}
-                  formModel={formState.model}
+                  variant={{ kind: 'form', hostEntity, record: sampleState.status === 'loaded' ? sampleState.record : null }}
                 >
                   <FormXmlRenderer model={formState.model} />
                 </NativeMdaFrame>
               )}
             </div>
+          </div>
+        )}
+
+        {/* The preview pane is scaled, so Form and Grid state the configured width as text, as Mock does. */}
+        {(mode === 'form' || (mode === 'grid' && gridEligible)) && (
+          <div style={{ flexShrink: 0, padding: '6px 12px', borderTop: `1px solid ${T.stroke1}` }}>
+            <PreviewMeta config={config} />
           </div>
         )}
       </PreviewSizeProvider>
@@ -263,6 +322,7 @@ function PreviewMeta({ config }: { config: PaneDefinitionConfig }): React.ReactE
     if (target.pageType === 'entitylist' && target.viewId) rows.push(['View', target.viewId]);
     if (target.pageType === 'entityrecord' && target.formId) rows.push(['Form', target.formId]);
     if (target.pageType === 'entityrecord' && target.tabName.trim()) rows.push(['Tab', target.tabName.trim()]);
+    if (target.pageType === 'generative' && target.pageId.trim()) rows.push(['Page ID', target.pageId.trim()]);
     return rows;
   }, [config.pane.width, config.pane.hideHeader, config.pane.canClose, config.target]);
 

@@ -6,16 +6,15 @@
 /coverage/node_modules
 /.claude
 /art assets
-/docs
 /data
 /coverage
-/package-lock.json
+.superpowers
+docs
 /tasks
 /AGENTS.md
 /AGENTS.md.bak
 /LEAN-CTX.md
 /.agents/skills
-/dist-runtime
 /.git
 /.agents
 /CLAUDE.md
@@ -30,3 +29,16 @@ secrets/
 /.codegraph
 /brand
 /dist
+/DESIGN.md
+/task6-narrow-related-grid.png
+/task6-workbench-narrow-grid.png
+/adapter-review.md
+/Nov2review.md
+/full-review
+/.omo
+/.playwright-mcp
+/.worktrees
+/.omc
+/probes
+/11-10-2026-live-test-automation.md
+/documentation/config-redesign-concepts.md

@@ -16,7 +16,7 @@ export function escapeODataStringLiteral(value: string): string {
 
 export function buildSystemFormsForEntityPath(entityLogicalName: string): string {
   return (
-    `systemforms?$filter=objecttypecode eq '${escapeODataStringLiteral(entityLogicalName)}' and type eq 2` +
+    `systemforms?$filter=objecttypecode eq '${escapeODataStringLiteral(entityLogicalName)}' and type eq 2 and formactivationstate eq 1` +
     `&$select=name,formid&$orderby=name asc`
   );
 }
@@ -29,7 +29,7 @@ export function buildSystemFormXmlPath(formId: string): string | null {
 export function buildEntityDefinitionsPath(): string {
   return (
     'EntityDefinitions' +
-    '?$select=LogicalName,SchemaName,DisplayName,EntitySetName,ObjectTypeCode,' +
+    '?$select=LogicalName,SchemaName,DisplayName,EntitySetName,' +
     'IsCustomEntity,IsActivity,IsIntersect,IsPrivate,OwnershipType,' +
     'CanCreateForms,CanModifyAdditionalSettings,IsCustomizable' +
     '&$filter=IsValidForAdvancedFind eq true and IsIntersect eq false and IsPrivate eq false'
@@ -51,10 +51,16 @@ export function buildViewsForEntityPath(
   if (!isValidLogicalName(entityLogicalName)) return null;
   const collection = viewType === 'savedquery' ? 'savedqueries' : 'userqueries';
   return `${collection}?$select=name,${viewType}id,fetchxml,layoutxml` +
-    `&$filter=returnedtypecode eq '${entityLogicalName}' and querytype eq 0&$orderby=name asc`;
+    `&$filter=returnedtypecode eq '${entityLogicalName}' and querytype eq 0 and statecode eq 0&$orderby=name asc`;
 }
 
 export function buildAttributeLabelsPath(entityLogicalName: string): string | null {
   if (!isValidLogicalName(entityLogicalName)) return null;
   return `EntityDefinitions(LogicalName='${entityLogicalName}')/Attributes?$select=LogicalName,DisplayName`;
+}
+
+export function buildLookupAttributesPath(entityLogicalName: string): string | null {
+  if (!isValidLogicalName(entityLogicalName)) return null;
+  return `EntityDefinitions(LogicalName='${entityLogicalName}')/Attributes/Microsoft.Dynamics.CRM.LookupAttributeMetadata` +
+    '?$select=LogicalName,DisplayName,Targets';
 }

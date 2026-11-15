@@ -35,6 +35,7 @@
         if (o.formId) nav.formId = o.formId;
         if (o.tabName) nav.tabName = o.tabName;
         if (o.data !== undefined) nav.data = o.data;
+        if (o.createFromEntity) nav.createFromEntity = o.createFromEntity;
         break;
       case 'entitylist':
         nav.entityName = o.entityName;
@@ -49,23 +50,71 @@
       case 'search':
         if (o.searchText) nav.searchText = o.searchText;
         break;
+      case 'generative':
+        nav.pageId = o.pageId;
+        if (o.entityName && o.recordId) {
+          nav.entityName = o.entityName;
+          nav.recordId = o.recordId;
+        }
+        if (o.data !== undefined) nav.data = o.data;
+        break;
     }
     return nav;
   }
 
+  /** paneId → the open running for that pane: when it started and the newest call that arrived meanwhile. */
+  const opening = {};
+  /** Milliseconds an open holds its pane before another call may take over, as in the Basic scripts. */
+  const OPENING_TTL_MS = 2000;
+
+  /**
+   * One open runs per pane. A call made meanwhile is kept (newest wins) and opened when the running one finishes,
+   * unless it repeats exactly what just opened, so a double click opens once. An open that outlives its lock
+   * neither releases nor replays for the call that took the lock over.
+   */
   async function open(options) {
+    const paneId = options && options.paneId;
+    const running = paneId ? opening[paneId] : undefined;
+    if (running && Date.now() - running.at < OPENING_TTL_MS) {
+      running.latest = options;
+      return;
+    }
+    const mine = { at: Date.now(), latest: undefined };
+    if (paneId) opening[paneId] = mine;
+    try {
+      await openNow(options);
+    } finally {
+      if (paneId && opening[paneId] === mine) {
+        delete opening[paneId];
+        if (mine.latest && JSON.stringify(mine.latest) !== JSON.stringify(options)) await open(mine.latest);
+      }
+    }
+  }
+
+  async function openNow(options) {
     const xrm = globalThis.Xrm;
     try {
       if (!options || !options.paneId) {
         throw new Error('SidePaneHelper.open requires a paneId.');
       }
+      if (!xrm || !xrm.App || !xrm.App.sidePanes) {
+        console.warn('SidePaneHelper.open: side panes are not available in this client.');
+        return;
+      }
       const sidePanes = xrm.App.sidePanes;
+      if (options.toggleIfOpen) {
+        const selected = sidePanes.getSelectedPane();
+        if (selected && selected.paneId === options.paneId && sidePanes.state === 1) {
+          selected.close();
+          return;
+        }
+      }
       const navInput = buildNavigateInput(options);
       const reuse = options.reuseExistingPane !== false;
       const existing = sidePanes.getPane(options.paneId);
       if (existing && reuse) {
         await existing.navigate(navInput);
-        existing.select();
+        if (options.isSelected !== false) existing.select();
         if (options.badge) existing.badge = options.badge;
       } else {
         if (existing) {

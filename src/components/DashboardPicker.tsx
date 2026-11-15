@@ -1,15 +1,9 @@
 import * as React from 'react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useTheme } from '../contexts/ThemeContext';
-import { theme } from '../theme/tokens';
-import { MetadataService, DashboardInfo, AccessibleDashboardsResult } from '../services/MetadataService';
-import { Select, SelectOption } from './Select';
+import type { MetadataService } from '../services/MetadataService';
+import { TableComboBox } from './TableComboBox';
 import { Callout } from './Callout';
-
-type LoadState =
-  | { status: 'loading' }
-  | { status: 'loaded'; dashboards: DashboardInfo[] }
-  | { status: 'error'; reason: string };
+import { RetryButton } from './RetryButton';
+import { useMetadataRequest } from './useMetadataRequest';
 
 export interface DashboardPickerProps {
   value: string;
@@ -26,86 +20,47 @@ export function DashboardPicker({
   error,
   disabled,
 }: DashboardPickerProps): React.ReactElement {
-  const { isDark } = useTheme();
-  const T = theme(isDark);
-  const [loadState, setLoadState] = useState<LoadState>({ status: 'loading' });
-  const [reloadKey, setReloadKey] = useState(0);
-
-  useEffect(() => {
-    let cancelled = false;
-    setLoadState({ status: 'loading' });
-    metadataService.listAccessibleDashboards().then((result: AccessibleDashboardsResult) => {
-      if (cancelled) return;
-      if (result.status === 'ok') {
-        setLoadState({ status: 'loaded', dashboards: result.dashboards });
-      } else {
-        setLoadState({ status: 'error', reason: result.reason });
-      }
-    }).catch((err: unknown) => {
-      if (cancelled) return;
-      setLoadState({
-        status: 'error',
-        reason: err instanceof Error ? err.message : 'Unable to load dashboards.',
-      });
-    });
-    return () => { cancelled = true; };
-  }, [metadataService, reloadKey]);
-
-  const retry = useCallback(() => {
-    metadataService.invalidate();
-    setReloadKey(k => k + 1);
+  const request = useMetadataRequest(async () => {
+    const result = await metadataService.listAccessibleDashboards();
+    if (result.status === 'error') throw new Error(result.reason);
+    return result.dashboards;
   }, [metadataService]);
+  const dashboards = request.data ?? [];
 
-  const options = useMemo<SelectOption[]>(() => {
-    if (loadState.status === 'loading') return [{ value: value || '', label: 'Loading dashboards...' }];
-    if (loadState.status === 'error') return [{ value: value || '', label: 'Could not load dashboards' }];
-    const opts = loadState.dashboards.map(d => ({
-      value: d.id,
-      label: d.isPersonal ? `${d.name} (Personal)` : d.name,
-    }));
-    if (value && !loadState.dashboards.some(d => d.id === value)) {
-      return [{ value, label: `${value} (no longer accessible)`, disabled: true }, ...opts];
+  const retry = () => {
+    metadataService.invalidate();
+    request.retry();
+  };
+
+  const handleChange = (id: string) => {
+    if (id === '') {
+      onChange('', '');
+      return;
     }
-    return opts.length > 0 ? opts : [{ value: '', label: 'No dashboards found' }];
-  }, [loadState, value]);
-
-  const handleChange = useCallback((id: string) => {
-    if (loadState.status !== 'loaded') return;
-    const found = loadState.dashboards.find(d => d.id === id);
+    const found = dashboards.find(d => d.id === id);
     if (found) onChange(found.id, found.name);
-  }, [loadState, onChange]);
+  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <Select
+      <TableComboBox
+        ariaLabel="Dashboard"
+        noun="dashboards"
         value={value}
         onChange={handleChange}
-        options={options}
-        disabled={loadState.status !== 'loaded' || disabled}
-        error={error || loadState.status === 'error'}
+        items={dashboards.map(d => ({ logicalName: d.id, displayName: d.name, detail: d.isPersonal ? 'Personal' : 'System' }))}
+        disabled={disabled}
+        loading={request.status === 'loading'}
+        error={request.error ?? undefined}
+        invalid={error || (request.status === 'loaded' && !!value && !dashboards.some(d => d.id === value))}
+        onRetry={retry}
+        placeholder="Select a dashboard…"
       />
-      {loadState.status === 'error' && (
+      {request.status === 'error' && (
         <Callout type="err" icon="x">
           <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-            <span>Could not load dashboards. {loadState.reason}</span>
-            <button
-              type="button"
-              onClick={retry}
-              style={{
-                flexShrink: 0,
-                border: `1px solid ${T.error}`,
-                background: T.pageBg,
-                color: T.error,
-                borderRadius: T.rS,
-                fontFamily: T.font,
-                fontSize: 12,
-                fontWeight: 600,
-                padding: '2px 8px',
-                cursor: 'pointer',
-              }}
-            >
-              Retry
-            </button>
+            <span>Could not load dashboards. {request.error}</span>
+            <RetryButton onClick={retry} />
           </span>
         </Callout>
       )}

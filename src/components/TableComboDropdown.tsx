@@ -4,11 +4,17 @@ import { theme } from '../theme/tokens';
 import { FilteredEntry } from './previewHelpers';
 
 export interface TableComboDropdownProps {
+  id: string;
+  optionIdPrefix: string;
   loading?: boolean;
   error?: string;
   onRetry?: () => void;
   filtered: FilteredEntry[];
+  /** All matches, including those past the rendered ones. */
+  matchCount?: number;
   query: string;
+  customOnly?: boolean;
+  noun?: string;
   highlight: number;
   value: string;
   onCommit: (logicalName: string) => void;
@@ -17,11 +23,16 @@ export interface TableComboDropdownProps {
 }
 
 export function TableComboDropdown({
+  id,
+  optionIdPrefix,
   loading,
   error,
   onRetry,
   filtered,
+  matchCount = filtered.length,
   query,
+  customOnly,
+  noun = 'tables',
   highlight,
   value,
   onCommit,
@@ -33,7 +44,7 @@ export function TableComboDropdown({
 
   function renderContent() {
     if (loading) {
-      return <div style={{ padding: 10, color: T.fg3, fontSize: 12, textAlign: 'center' }}>Loading tables…</div>;
+      return <div style={{ padding: 10, color: T.fg3, fontSize: 12, textAlign: 'center' }}>Loading {noun}…</div>;
     }
     if (error) {
       return (
@@ -64,24 +75,23 @@ export function TableComboDropdown({
     if (filtered.length === 0) {
       return (
         <div style={{ padding: 10, color: T.fg3, fontSize: 12, textAlign: 'center' }}>
-          {query ? `No tables match "${query}"` : 'No accessible tables found'}
+          {query ? `No ${noun} match "${query}"` : customOnly ? `No custom ${noun} found` : `No ${noun} found`}
         </div>
       );
     }
     return (
-      <div
-        ref={listRef}
-        role="listbox"
-        style={{ maxHeight: 280, overflowY: 'auto' }}
-      >
+      <div style={{ maxHeight: 280, overflowY: 'auto' }}>
         {filtered.map((entry, idx) => {
           const isHighlighted = idx === highlight;
           const isSelected = entry.table.logicalName === value;
           return (
             <button
               key={entry.table.logicalName}
+              id={`${optionIdPrefix}-${idx}`}
               type="button"
               role="option"
+              // Keyboard users move through options from the input (aria-activedescendant), never by Tab.
+              tabIndex={-1}
               data-idx={idx}
               aria-selected={isSelected}
               onMouseEnter={() => onHighlight(idx)}
@@ -89,6 +99,8 @@ export function TableComboDropdown({
                 e.preventDefault();
                 onCommit(entry.table.logicalName);
               }}
+              // A click without a preceding mousedown (assistive tech, synthetic activation) must commit too.
+              onClick={() => onCommit(entry.table.logicalName)}
               style={{
                 width: '100%',
                 display: 'flex',
@@ -110,18 +122,25 @@ export function TableComboDropdown({
                 {entry.table.displayName}
               </span>
               <span style={{ fontFamily: T.mono, fontSize: 11, color: T.fg3 }}>
-                {entry.table.logicalName}
+                {entry.table.detail ?? entry.table.logicalName}
               </span>
             </button>
           );
         })}
+        {matchCount > filtered.length && (
+          <div role="presentation" style={{ padding: '6px 10px', color: T.fg3, fontFamily: T.font, fontSize: 11 }}>
+            Showing the first {filtered.length} of {matchCount} {noun}. Type to narrow the list.
+          </div>
+        )}
       </div>
     );
   }
 
   return (
     <div
-      id="tablecombo-listbox"
+      id={id}
+      ref={listRef}
+      role="listbox"
       style={{
         position: 'absolute',
         top: 'calc(100% + 4px)',

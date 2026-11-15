@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { createContext, useContext, useState, useEffect } from 'react';
+import { subscribeToolboxEvents } from '../adapters/toolboxEvents';
 
 interface ThemeContextValue {
   isDark: boolean;
@@ -40,13 +41,13 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     };
 
     refreshTheme();
-    toolbox?.events?.on(handleToolboxEvent);
+    const unsubscribe = toolbox?.events ? subscribeToolboxEvents(toolbox.events, handleToolboxEvent) : undefined;
     window.addEventListener('focus', refreshTheme);
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
       active = false;
-      toolbox?.events?.off(handleToolboxEvent);
+      unsubscribe?.();
       window.removeEventListener('focus', refreshTheme);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };

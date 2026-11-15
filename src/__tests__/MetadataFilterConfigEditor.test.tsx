@@ -3,8 +3,10 @@ import { act } from 'react';
 import { createRoot, Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MetadataFilterConfigEditor } from '../components/config/MetadataFilterConfigEditor';
-import { ThemeProvider } from '../contexts/ThemeContext';
+import { ThemeContext, ThemeProvider } from '../contexts/ThemeContext';
+import { theme } from '../theme/tokens';
 import { DEFAULT_METADATA_FILTER_CONFIG } from '../types/MetadataFilterConfig';
+import { rgb } from './testHelpers';
 
 let root: Root | undefined;
 let host: HTMLDivElement | undefined;
@@ -56,6 +58,44 @@ afterEach(async () => {
 });
 
 describe('MetadataFilterConfigEditor', () => {
+  it('offers Retry beside the error when a retry handler is supplied (r2 WR-005)', async () => {
+    const onRetryLoad = vi.fn();
+    await render(
+      <MetadataFilterConfigEditor config={customConfig} defaultConfig={DEFAULT_METADATA_FILTER_CONFIG}
+        persistenceAvailable={true} onSave={() => {}} onReset={() => {}}
+        error="settings backend offline" onRetryLoad={onRetryLoad} />
+    );
+    await act(async () => { button('Retry')?.click(); });
+    expect(onRetryLoad).toHaveBeenCalledTimes(1);
+  });
+
+  it('warns that saving replaces the unread saved filters after a failed load', async () => {
+    await render(
+      <MetadataFilterConfigEditor config={customConfig} defaultConfig={DEFAULT_METADATA_FILTER_CONFIG}
+        persistenceAvailable={true} onSave={() => {}} onReset={() => {}}
+        error="settings backend offline" onRetryLoad={() => {}} />
+    );
+    expect(host?.textContent).toContain('Saving now replaces the saved filters.');
+  });
+
+  it('does not warn about replacing saved filters without a retry handler', async () => {
+    await render(
+      <MetadataFilterConfigEditor config={customConfig} defaultConfig={DEFAULT_METADATA_FILTER_CONFIG}
+        persistenceAvailable={true} onSave={() => {}} onReset={() => {}}
+        error="settings backend offline" />
+    );
+    expect(host?.textContent).not.toContain('Saving now replaces the saved filters.');
+  });
+
+  it('does not warn about replacing saved filters when persistence is unavailable', async () => {
+    await render(
+      <MetadataFilterConfigEditor config={customConfig} defaultConfig={DEFAULT_METADATA_FILTER_CONFIG}
+        persistenceAvailable={false} onSave={() => {}} onReset={() => {}}
+        error="settings backend offline" onRetryLoad={() => {}} />
+    );
+    expect(host?.textContent).not.toContain('Saving now replaces the saved filters.');
+  });
+
   it('renders helper text for each filter type', async () => {
     await render(
       <MetadataFilterConfigEditor
@@ -98,6 +138,56 @@ describe('MetadataFilterConfigEditor', () => {
       allowedStandardTables: ['contact', 'account'],
     });
   });
+
+  it.each([['light', false], ['dark', true]] as const)(
+    'draws the Save label in accentFg on the accent fill in the %s theme', async (_, isDark) => {
+      await render(
+        <ThemeContext.Provider value={{ isDark }}>
+          <MetadataFilterConfigEditor
+            config={customConfig}
+            defaultConfig={DEFAULT_METADATA_FILTER_CONFIG}
+            persistenceAvailable={true}
+            onSave={() => {}}
+            onReset={() => {}}
+          />
+        </ThemeContext.Provider>
+      );
+
+      await setTextareaValue(textarea('Allowed standard tables'), '["contact"]');
+
+      const save = button('Save')!;
+      expect(save.style.backgroundColor).toBe(rgb(theme(isDark).accent));
+      expect(save.style.color).toBe(rgb(theme(isDark).accentFg));
+    }
+  );
+
+  it.each([['valid', '["contact"]'], ['invalid', '{"bad":true}']] as const)(
+    'shows a focus underline on a %s filter textarea and removes it on blur', async (_, text) => {
+      await render(
+        <MetadataFilterConfigEditor
+          config={customConfig}
+          defaultConfig={DEFAULT_METADATA_FILTER_CONFIG}
+          persistenceAvailable={true}
+          onSave={() => {}}
+          onReset={() => {}}
+        />
+      );
+      const field = textarea('Deny exact table names');
+      await setTextareaValue(field, text);
+      await act(async () => {
+        button('Save')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        await Promise.resolve();
+      });
+      expect(field.style.boxShadow).not.toContain(theme(true).accent);
+
+      await act(async () => { field.focus(); });
+      expect(field.style.boxShadow).toContain(theme(true).accent);
+      expect(textarea('Allowed standard tables').style.boxShadow).not.toContain(theme(true).accent);
+
+      await act(async () => { field.blur(); });
+      expect(field.style.boxShadow).not.toContain(theme(true).accent);
+    }
+  );
 
   it('rejects invalid JSON array content', async () => {
     const onSave = vi.fn();

@@ -1,34 +1,105 @@
-import { PaneDefinitionConfig, TriggerKind, DEFAULT_CONFIG } from '../types/PaneDefinitionConfig';
+import { PaneDefinitionConfig, TriggerKind, COMMAND_TRIGGERS, GRID_TRIGGERS, RECORD_TARGETS } from '../types/PaneDefinitionConfig';
 import { normalizeGuid } from './odataGuards';
-import { normalizeConfigWidth } from './configGuards';
+import { isJsIdentifier, normalizeConfigWidth } from './configGuards';
+import { isSafeRelativeImagePath } from './imagePath';
+import { isCreating } from './triggerCapabilities';
+import { RUNTIME_FILE_NAME } from '../constants';
 
-const CMD_KINDS: TriggerKind[] = ['FormButton', 'MainGridButton', 'SubgridButton'];
-const GRID_KINDS: TriggerKind[] = ['MainGridButton', 'SubgridButton', 'MainGridOnSelect', 'SubgridOnSelect'];
-const GRID_SELECT_KINDS: TriggerKind[] = ['MainGridOnSelect', 'SubgridOnSelect'];
+const GRID_KINDS = GRID_TRIGGERS;
+const GRID_SELECT_KINDS: readonly TriggerKind[] = ['GridRowSelect'];
+const INVALID_ID_EXPR = `(function() { throw new Error('A valid static record ID is required for entityrecord navigation.'); })()`;
 
 /** Guard variable name — namespaced to avoid collisions with other scripts. */
 const PENDING_VAR = 'window.__spstudio_pendingPanes';
+/** codegen-config-model-002 — the row selected while a pane is opening; GridRowSelect opens it once the lock clears. */
+const LATEST_VAR = 'window.__spstudio_latestSelection';
 /** Milliseconds a pending-panes lock is considered valid before expiring. */
 const PENDING_TTL_MS = 2000;
-const IDENTIFIER_PATTERN = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
+/** L4 — shown (commands) or logged (events) when the triggering form record has no ID yet. */
+const UNSAVED_RECORD_MESSAGE = 'Save the record before opening this pane.';
+/** L5 — the variable that holds the record's table when the script reads it from the form or grid row. */
+const TABLE_VAR = 'recordEntityName';
+/**
+ * Every identifier the generated scripts declare, receive or call, plus the browser globals that a top-level
+ * `var` namespace or console function would overwrite (L6); the record variable, namespace and function names may not shadow them.
+ */
+export const GENERATED_NAMES: ReadonlySet<string> = new Set([
+  'allPanes', 'eventArgs', 'existing', 'formContext', 'pane', 'primaryControl', 'relatedAttribute',
+  'relatedRecord', 'relatedSource', 'selectedControl', 'selectedEntity', 'selectedPane', 'selectedRecordId',
+  'selectedRows', 'latestSelection', 'lockedAt', 'tag', 'executionContext', 'control', 'name', 'e', 'p',
+  'Xrm', 'window', 'SidePaneHelper', 'console', 'JSON', 'Error', 'Promise', 'Date',
+  'encodeURIComponent', 'setTimeout', 'clearTimeout', 'undefined', 'arguments', TABLE_VAR,
+  'location', 'top', 'parent', 'self', 'document', 'history', 'frames', 'opener', 'navigator', 'globalThis',
+]);
 
 function safeIdentifier(value: string, fallback: string): string {
   const trimmed = value.trim();
-  return IDENTIFIER_PATTERN.test(trimmed) ? trimmed : fallback;
+  return isJsIdentifier(trimmed) && !GENERATED_NAMES.has(trimmed) ? trimmed : fallback;
 }
 
-/** WR-002 / contract C3 — official imageSrc samples use the WebResources/ relative form. */
-function normalizeImageSrc(value: string): string {
+/**
+ * WR-002 / contract C3 — official imageSrc samples use the WebResources/ relative form. WR-013 — a path outside the
+ * allow-list emits nothing; validation uses this same function to warn when a non-empty path is dropped.
+ */
+export function normalizeImageSrc(value: string): string {
   const trimmed = value.trim();
-  if (!trimmed) return '';
+  if (!trimmed || !isSafeRelativeImagePath(trimmed)) return '';
   return trimmed.startsWith('WebResources/') ? trimmed : `WebResources/${trimmed}`;
 }
 
-function getSafeTriggerNames(config: PaneDefinitionConfig): { ns: string; fn: string } {
-  return {
-    ns: safeIdentifier(config.trigger.namespace || '', 'MyNamespace'),
-    fn: safeIdentifier(config.trigger.functionName || '', 'openPane'),
-  };
+/** One `key: expression` entry of a generated object literal; the SPREAD key emits `...expression` instead. */
+type Field = readonly [key: string, expr: string];
+const SPREAD = '...';
+
+function formatField([key, expr]: Field): string {
+  return key === SPREAD ? `${SPREAD}${expr}` : `${key}: ${expr}`;
+}
+
+export interface TriggerNameError { field: 'trigger.namespace' | 'trigger.functionName'; message: string; }
+export type TriggerNames =
+  | { ok: true; segments: string[]; ns: string; fn: string }
+  | { ok: false; errors: TriggerNameError[] };
+type ResolvedTriggerNames = Extract<TriggerNames, { ok: true }>;
+
+/** Emitted in place of a script when the trigger names are invalid; validation reports the reason. */
+const INVALID_NAMES_SCRIPT = '// Fix the trigger namespace and function name errors to generate this script.';
+
+/**
+ * CR-001 — the one source of the names the scripts define and the UI shows. A dotted namespace is split into
+ * segments; an invalid name is an error, never replaced by a fallback. At most one error per field.
+ */
+export function resolveTriggerNames(config: PaneDefinitionConfig): TriggerNames {
+  const errors: TriggerNameError[] = [];
+  const namespace = (config.trigger.namespace || '').trim();
+  const segments = namespace.split('.').map(segment => segment.trim());
+  const fn = (config.trigger.functionName || '').trim();
+  const reservedSegment = segments.find(segment => GENERATED_NAMES.has(segment));
+
+  if (!namespace) errors.push({ field: 'trigger.namespace', message: 'Namespace is required.' });
+  else if (!segments.every(isJsIdentifier)) {
+    errors.push({ field: 'trigger.namespace', message: 'Namespace must be JavaScript identifiers separated by dots, such as Contoso.Panes. Reserved words are not allowed.' });
+  } else if (reservedSegment) {
+    errors.push({ field: 'trigger.namespace', message: `${reservedSegment} is used by the generated script. Choose another namespace.` });
+  }
+
+  if (!fn) errors.push({ field: 'trigger.functionName', message: 'Function name is required.' });
+  else if (!isJsIdentifier(fn)) {
+    errors.push({ field: 'trigger.functionName', message: 'Function name must be a valid JavaScript identifier. Reserved words are not allowed.' });
+  } else if (GENERATED_NAMES.has(fn)) {
+    errors.push({ field: 'trigger.functionName', message: `${fn} is used by the generated script. Choose another function name.` });
+  }
+
+  return errors.length > 0 ? { ok: false, errors } : { ok: true, segments, ns: segments.join('.'), fn };
+}
+
+/** One line per segment: `var A = A || {};` then `A.B = A.B || {};`, so each level exists before the next is assigned. */
+export function namespaceDeclaration(segments: readonly string[]): string {
+  return segments
+    .map((_, index) => {
+      const path = segments.slice(0, index + 1).join('.');
+      return `${index === 0 ? 'var ' : ''}${path} = ${path} || {};`;
+    })
+    .join('\n');
 }
 
 /** WR-005 — every generated catch both logs and tells the user. */
@@ -39,164 +110,274 @@ function buildCatchBody(label: string, indent: string): string {
   );
 }
 
-function buildConfiguredRecordIdExpression(config: PaneDefinitionConfig): string {
-  const configuredId = config.context.staticRecordId;
-  const normalized = normalizeGuid(configuredId);
-  if (normalized) return JSON.stringify(normalized);
+/** Name of the generated form OnLoad function that registers the lookup tag click handler. */
+export function lookupRegistrarName(functionName: string): string {
+  return `register${functionName.charAt(0).toUpperCase()}${functionName.slice(1)}`;
+}
 
-  return `(function() { throw new Error('A valid static record ID is required for entityrecord navigation.'); })()`;
+/** Item 2 — registrations live on each control, so remove-then-add keeps repeat OnLoad runs from registering twice. */
+function buildLookupRegistrar(ns: string, fn: string, controls: readonly string[]): string {
+  const registrar = `${ns}.${lookupRegistrarName(fn)}`;
+  return `
+// Form OnLoad handler. Turn on "Pass execution context as first parameter". Safe to run more than once.
+${registrar} = function(executionContext) {
+  var formContext = executionContext.getFormContext();
+  ${JSON.stringify([...controls])}.forEach(function(name) {
+    var control = formContext.getControl(name);
+    if (!control) { console.warn(${JSON.stringify(`${registrar}: no lookup control `)} + name); return; }
+    control.removeOnLookupTagClick(${ns}.${fn});
+    control.addOnLookupTagClick(${ns}.${fn});
+  });
+};`;
+}
+
+/** Custom and generative pages read recordId as a bare GUID; form, grid and tag IDs arrive as {GUID}. Static IDs are already normalized literals. */
+function bareGuidExpr(idExpr: string): string {
+  return idExpr.startsWith('"') ? idExpr : `${idExpr}.replace(/[{}]/g, '')`;
+}
+
+/** Contract C4 — the createPane options, shared by both outputs so they emit the same keys. */
+function paneFields(config: PaneDefinitionConfig): Field[] {
+  const { pane } = config;
+  const fields: Field[] = [
+    ['paneId', JSON.stringify(pane.paneId)],
+    ['title', JSON.stringify(pane.title)],
+    ['width', String(normalizeConfigWidth(pane.width))],
+    // Always explicit: the platform default shows no close button, and SidePaneHelper forwards only a defined value.
+    // P1-CGS-E: hideHeader hides the entire header bar, close button included.
+    ['canClose', pane.hideHeader || !pane.canClose ? 'false' : 'true'],
+  ];
+  // P1-D-C: emit isSelected only when false (API default is true; omitting true is harmless)
+  if (pane.isSelected === false) fields.push(['isSelected', 'false']);
+  if (pane.hideHeader) fields.push(['hideHeader', 'true']);
+  if (pane.alwaysRender) fields.push(['alwaysRender', 'true']);
+  if (pane.keepBadgeOnSelect) fields.push(['keepBadgeOnSelect', 'true']);
+  const imageSrc = normalizeImageSrc(pane.imageSrc);
+  if (imageSrc) fields.push(['imageSrc', JSON.stringify(imageSrc)]);
+  return fields;
 }
 
 function buildPaneOptions(config: PaneDefinitionConfig): string {
-  const { pane } = config;
-  const width = normalizeConfigWidth(pane.width);
-  const opts: string[] = [
-    `    paneId: ${JSON.stringify(pane.paneId)}`,
-    `    title: ${JSON.stringify(pane.title)}`,
-    `    width: ${width}`,
-  ];
-
-  // P1-CGS-E: defensively coerce canClose to false when hideHeader hides the entire header bar.
-  const effectiveCanClose = pane.hideHeader ? false : pane.canClose;
-  opts.push(`    canClose: ${effectiveCanClose ? 'true' : 'false'}`);
-
-  // P1-D-C: emit isSelected only when false (API default is true; omitting true is harmless)
-  if (pane.isSelected === false) opts.push(`    isSelected: false`);
-  if (pane.hideHeader) opts.push(`    hideHeader: true`);
-  if (pane.alwaysRender) opts.push(`    alwaysRender: true`);
-  if (pane.keepBadgeOnSelect) opts.push(`    keepBadgeOnSelect: true`);
-  const imageSrc = normalizeImageSrc(pane.imageSrc);
-  if (imageSrc) opts.push(`    imageSrc: ${JSON.stringify(imageSrc)}`);
-  return `{\n${opts.join(',\n')}\n  }`;
+  return `{\n${paneFields(config).map(field => `    ${formatField(field)}`).join(',\n')}\n  }`;
 }
 
 interface RecordContext {
   idExpr: string | null;
-  entityName: string;
+  /** JS expression for the record's table; null when the table is unknown. */
+  entityExpr: string | null;
+  /** Logical name, '' when that expression is only known at runtime, or null when no record pair is sent. */
+  table: string | null;
 }
 
-/** CR-001 / plan contract C1 — the single owner of record-context resolution. */
-function buildRecordContext(config: PaneDefinitionConfig): RecordContext {
-  const { context, trigger, target } = config;
-  const targetEntityName =
-    target.pageType === 'entityrecord' || target.pageType === 'entitylist' ? target.entityName : '';
-  const entityName = context.entityName || targetEntityName || '';
+/** Form object whose record identity and attributes form triggers read. */
+function formObjectExpr(kind: TriggerKind, formContextExpr = 'formContext'): string | null {
+  if (kind === 'FormOnLoad' || kind === 'FormOnChange') return formContextExpr;
+  if (kind === 'FormButton') return 'primaryControl';
+  return null;
+}
 
-  if (trigger.kind === 'LookupTagClick' &&
-      (target.pageType === 'custom' || target.pageType === 'entityrecord')) {
-    return { idExpr: 'tag.id', entityName: 'tag.entityType' };
-  }
+function runtimeHostEntityExpr(kind: TriggerKind, formContextExpr: string): string | null {
+  const form = formObjectExpr(kind, formContextExpr);
+  if (form) return `${form}.data.entity.getEntityName()`;
+  if (GRID_KINDS.includes(kind)) return 'selectedEntity.getEntityName()';
+  return null;
+}
 
-  let idExpr: string | null = null;
-  switch (context.mode) {
-    case 'CurrentRecord':
-      if (trigger.kind === 'FormOnLoad' || trigger.kind === 'FormOnChange') {
-        idExpr = 'formContext.data.entity.getId()';
-      } else if (trigger.kind === 'FormButton') {
-        idExpr = 'primaryControl.data.entity.getId()';
-      } else if (GRID_KINDS.includes(trigger.kind)) {
-        idExpr = 'selectedRecordId';
-      }
-      break;
-    case 'SelectedRow':
-      if (GRID_KINDS.includes(trigger.kind)) {
-        idExpr = 'selectedRecordId';
-      }
-      break;
-    case 'Static': {
-      const normalized = normalizeGuid(context.staticRecordId);
-      idExpr = normalized ? JSON.stringify(normalized) : null;
-      break;
+/** Contract C3 — the single owner of record-context resolution. */
+function buildRecordContext(config: PaneDefinitionConfig, formContextExpr = 'formContext'): RecordContext {
+  const { context: { source }, trigger, target, host } = config;
+  const none: RecordContext = { idExpr: null, entityExpr: null, table: null };
+  if (!RECORD_TARGETS.includes(target.pageType)) return none;
+  const kind = trigger.kind;
+  const form = formObjectExpr(kind, formContextExpr);
+  const hostTable = host.entityName.trim();
+  const hostExpr = hostTable ? JSON.stringify(hostTable) : runtimeHostEntityExpr(kind, formContextExpr);
+  switch (source.kind) {
+    case 'host':        return form ? { idExpr: `${form}.data.entity.getId()`, entityExpr: hostExpr, table: hostTable } : none;
+    case 'selectedRow': return GRID_KINDS.includes(kind) ? { idExpr: 'selectedRecordId', entityExpr: hostExpr, table: hostTable } : none;
+    case 'clickedTag':  return kind === 'LookupTagClick' ? { idExpr: 'tag.id', entityExpr: 'tag.entityType', table: '' } : none;
+    case 'lookup':      return form || GRID_KINDS.includes(kind) ? { idExpr: 'relatedRecord.id', entityExpr: 'relatedRecord.entityType', table: '' } : none;
+    case 'fixed': {
+      const id = normalizeGuid(source.id);
+      const table = (target.pageType === 'entityrecord' ? target.entityName : source.entityName).trim();
+      return { idExpr: id ? JSON.stringify(id) : INVALID_ID_EXPR, entityExpr: table ? JSON.stringify(table) : null, table: table || null };
     }
-    case 'None':
-      break;
+    case 'none':        return none;
   }
-
-  return { idExpr, entityName };
 }
 
-function buildTargetParameterParts(target: PaneDefinitionConfig['target']): string[] {
-  const parts: string[] = [];
-  if (target.pageType === 'entitylist' && target.viewId.trim()) {
-    parts.push(`viewId: ${JSON.stringify(normalizeGuid(target.viewId) ?? target.viewId)}`);
-    parts.push(`viewType: ${JSON.stringify(target.viewType)}`);
-  }
-  if (target.pageType === 'entityrecord') {
-    if (target.formId.trim()) parts.push(`formId: ${JSON.stringify(normalizeGuid(target.formId) ?? target.formId)}`);
-    if (target.tabName.trim()) parts.push(`tabName: ${JSON.stringify(target.tabName.trim())}`);
-    if (target.data.trim()) parts.push(`data: JSON.parse(${JSON.stringify(target.data)})`);
-  }
-  return parts;
+/** Table the script sends with a record: its logical name, '' when the table is only known at runtime, or null when no record is sent. */
+export function recordContextTable(config: PaneDefinitionConfig): string | null {
+  return buildRecordContext(config).table;
 }
 
-function buildNavigateInput(config: PaneDefinitionConfig): string {
+/** Declare the record ID once before both navigation paths use it. */
+function declareRecordVariable(config: PaneDefinitionConfig, rc: RecordContext, indent: string): { line: string; rc: RecordContext } {
+  if (!rc.idExpr || isCreating(config.target)) return { line: '', rc };
+  const name = safeIdentifier(config.context.variableName, 'recordId');
+  const { kind } = config.context.source;
+  // L5 — a table read from the form or grid row is captured with the ID, before any await can end the event.
+  const readsTable = (kind === 'host' || kind === 'selectedRow') && rc.table === '';
+  const tableLine = readsTable ? `${indent}var ${TABLE_VAR} = ${rc.entityExpr};\n` : '';
+  // L4 — a form record that has never been saved has an empty ID; stop before any pane opens.
+  const unsaved = kind === 'host'
+    ? `${indent}if (!${name}) { ${buildNotice(config, UNSAVED_RECORD_MESSAGE)} return; }\n`
+    : '';
+  return {
+    line: `${indent}var ${name} = ${rc.idExpr};\n${tableLine}${unsaved}`,
+    rc: { ...rc, idExpr: name, entityExpr: readsTable ? TABLE_VAR : rc.entityExpr },
+  };
+}
+
+/** Item 3 — createFromEntity copies mapped columns from the triggering record. Null when no record triggers the script. */
+function buildCreateFromEntityExpr(config: PaneDefinitionConfig, formContextExpr = 'formContext'): string | null {
+  const { target, trigger, context: { source }, host } = config;
+  if (!isCreating(target)) return null;
+  const form = formObjectExpr(trigger.kind, formContextExpr);
+  if (source.kind === 'host' && form) return `{ entityType: ${form}.data.entity.getEntityName(), id: ${form}.data.entity.getId() }`;
+  if (source.kind === 'selectedRow' && GRID_KINDS.includes(trigger.kind)) {
+    const table = host.entityName.trim();
+    return `{ entityType: ${table ? JSON.stringify(table) : 'selectedEntity.getEntityName()'}, id: selectedRecordId }`;
+  }
+  return null;
+}
+
+/**
+ * RelatedRecord — declares `relatedRecord` ({ id, entityType }) from the source record's lookup,
+ * or returns before any pane opens when the lookup is empty. Form triggers read the form value
+ * (unsaved edits included); grid rows expose only view columns, so grids read the saved record.
+ */
+function buildRelatedRecordPreamble(config: PaneDefinitionConfig, indent: string, formContextExpr = 'formContext'): string {
+  const { context: { source }, trigger, host } = config;
+  if (source.kind !== 'lookup') return '';
+  const lookup = source.attribute.trim();
+  const form = formObjectExpr(trigger.kind, formContextExpr);
+  if (form) {
+    return (
+      `${indent}var relatedAttribute = ${form}.getAttribute(${JSON.stringify(lookup)});\n` +
+      `${indent}if (!relatedAttribute) throw new Error(${JSON.stringify(`The lookup column ${lookup} is not on this form.`)});\n` +
+      `${indent}var relatedRecord = (relatedAttribute.getValue() || [])[0];\n` +
+      `${indent}if (!relatedRecord) return;\n`
+    );
+  }
+  if (!GRID_KINDS.includes(trigger.kind)) return '';
+  const valueKey = `_${lookup}_value`;
+  return (
+    `${indent}var relatedSource = await Xrm.WebApi.retrieveRecord(${JSON.stringify(host.entityName.trim())}, ` +
+    `selectedRecordId.replace(/[{}]/g, ''), ${JSON.stringify(`?$select=${valueKey}`)});\n` +
+    `${indent}if (!relatedSource[${JSON.stringify(valueKey)}]) return;\n` +
+    `${indent}var relatedRecord = { id: relatedSource[${JSON.stringify(valueKey)}], ` +
+    `entityType: relatedSource[${JSON.stringify(`${valueKey}@Microsoft.Dynamics.CRM.lookuplogicalname`)}] };\n`
+  );
+}
+
+/**
+ * WR-007 / contract C4 — the one owner of navigation target keys. Basic output formats them as the navigateTo input;
+ * library output passes the same keys to SidePaneHelper.open. name and webresourceName are mutually exclusive.
+ */
+function targetFields(config: PaneDefinitionConfig, rc: RecordContext, formContextExpr = 'formContext'): ReadonlyArray<Field> {
   const { target } = config;
-  const rc = buildRecordContext(config);
-
+  const fields: Field[] = [['pageType', JSON.stringify(target.pageType)]];
+  const record = rc.idExpr && rc.entityExpr ? { id: rc.idExpr, entity: rc.entityExpr } : null;
   switch (target.pageType) {
-    case 'custom': {
-      const parts = [
-        `pageType: ${JSON.stringify(target.pageType)}`,
-        `name: ${JSON.stringify(target.name)}`,
-      ];
-      if (rc.idExpr && rc.entityName) {
-        parts.push(`entityName: ${rc.idExpr === 'tag.id' ? rc.entityName : JSON.stringify(rc.entityName)}`);
-        parts.push(`recordId: ${rc.idExpr}`);
-      }
-      return `{ ${parts.join(', ')} }`;
-    }
+    case 'custom':
+      fields.push(['name', JSON.stringify(target.name)]);
+      if (record) fields.push(['entityName', record.entity], ['recordId', bareGuidExpr(record.id)]);
+      break;
     case 'entityrecord': {
-      const entityIdExpr = rc.idExpr ?? buildConfiguredRecordIdExpression(config);
-      return `{ ${[
-        `pageType: ${JSON.stringify(target.pageType)}`,
-        `entityName: ${rc.idExpr === 'tag.id' ? rc.entityName : JSON.stringify(rc.entityName)}`,
-        `entityId: ${entityIdExpr}`,
-        ...buildTargetParameterParts(target),
-      ].join(', ')} }`;
+      // Create mode: no entityId, and the configured table wins over the context table.
+      if (target.createNew) fields.push(['entityName', JSON.stringify(target.entityName)]);
+      else fields.push(['entityName', rc.entityExpr ?? '""'], ['entityId', rc.idExpr ?? INVALID_ID_EXPR]);
+      const formTab: Field[] = [];
+      if (target.formId.trim()) formTab.push(['formId', JSON.stringify(normalizeGuid(target.formId) ?? target.formId)]);
+      if (target.tabName.trim()) formTab.push(['tabName', JSON.stringify(target.tabName.trim())]);
+      // A table known only at runtime gets the configured form and tab only when it is the configured table.
+      if (formTab.length && rc.table === '' && rc.entityExpr && target.entityName.trim() && !target.createNew) {
+        fields.push([SPREAD, `(${rc.entityExpr} === ${JSON.stringify(target.entityName)} ? { ${formTab.map(formatField).join(', ')} } : {})`]);
+      } else {
+        fields.push(...formTab);
+      }
+      if (target.data.trim()) fields.push(['data', `JSON.parse(${JSON.stringify(target.data)})`]);
+      const createFrom = buildCreateFromEntityExpr(config, formContextExpr);
+      if (createFrom) fields.push(['createFromEntity', createFrom]);
+      break;
     }
     case 'entitylist':
-      return `{ ${[
-        `pageType: ${JSON.stringify(target.pageType)}`,
-        `entityName: ${JSON.stringify(rc.entityName)}`,
-        ...buildTargetParameterParts(target),
-      ].join(', ')} }`;
-    case 'webresource': {
-      const parts = [
-        `pageType: ${JSON.stringify(target.pageType)}`,
-        `webresourceName: ${JSON.stringify(target.name)}`,
-      ];
-      if (rc.idExpr && rc.entityName) {
-        parts.push(
-          `data: encodeURIComponent(JSON.stringify({ entityName: ${JSON.stringify(rc.entityName)}, recordId: ${rc.idExpr} }))`
-        );
+      fields.push(['entityName', JSON.stringify(target.entityName)]);
+      if (target.viewId.trim()) {
+        fields.push(['viewId', JSON.stringify(normalizeGuid(target.viewId) ?? target.viewId)], ['viewType', JSON.stringify(target.viewType)]);
       }
-      return `{ ${parts.join(', ')} }`;
-    }
+      break;
+    case 'webresource':
+      fields.push(['webresourceName', JSON.stringify(target.name)]);
+      if (record) fields.push(['data', `encodeURIComponent(JSON.stringify({ entityName: ${record.entity}, recordId: ${record.id} }))`]);
+      break;
     case 'dashboard':
-      return `{ pageType: ${JSON.stringify(target.pageType)}, dashboardId: ${JSON.stringify(target.dashboardId)} }`;
+      fields.push(['dashboardId', JSON.stringify(target.dashboardId)]);
+      break;
     case 'search':
-      return target.searchText
-        ? `{ pageType: ${JSON.stringify(target.pageType)}, searchText: ${JSON.stringify(target.searchText)} }`
-        : `{ pageType: ${JSON.stringify(target.pageType)} }`;
+      if (target.searchText) fields.push(['searchText', JSON.stringify(target.searchText)]);
+      break;
+    case 'generative':
+      fields.push(['pageId', JSON.stringify(normalizeGuid(target.pageId) ?? target.pageId)]);
+      if (target.data.trim()) fields.push(['data', `JSON.parse(${JSON.stringify(target.data)})`]);
+      if (record) fields.push(['entityName', record.entity], ['recordId', bareGuidExpr(record.id)]);
+      break;
   }
+  return fields;
+}
+
+function buildNavigateInput(config: PaneDefinitionConfig, rc: RecordContext): string {
+  return `{ ${targetFields(config, rc).map(formatField).join(', ')} }`;
 }
 
 function buildStateAssignment(config: PaneDefinitionConfig): string {
-  const isCmd = CMD_KINDS.includes(config.trigger.kind);
+  const isCmd = COMMAND_TRIGGERS.includes(config.trigger.kind);
   if (isCmd && config.pane.isSelected !== false && config.behavior.expandOnOpen) {
     return `  Xrm.App.sidePanes.state = 1;\n`;
   }
   return '';
 }
 
-function buildGetOrCreateBody(config: PaneDefinitionConfig, indent = '  '): string {
-  const { pane, context } = config;
+/** Commands tell the user in a dialog; load and change handlers log instead of raising a dialog on every form load. */
+function buildNotice(config: PaneDefinitionConfig, message: string): string {
+  const text = JSON.stringify(message);
+  return COMMAND_TRIGGERS.includes(config.trigger.kind)
+    ? `Xrm.Navigation.openAlertDialog({ text: ${text} });`
+    : `console.warn(${text});`;
+}
+
+/** Side panes are unavailable in on-premises deployments and native players. */
+function buildAvailabilityGuard(config: PaneDefinitionConfig, indent: string): string {
+  return `${indent}if (!Xrm.App || !Xrm.App.sidePanes) { ${buildNotice(config, 'Side panes are not available in this client.')} return; }
+`;
+}
+
+/** Runs after the availability guard and before any lookup read, so a closing click does no other work. */
+function buildToggleIfOpen(config: PaneDefinitionConfig, indent: string): string {
+  if (!config.behavior.toggleIfOpen || !COMMAND_TRIGGERS.includes(config.trigger.kind)) return '';
+  return (
+    `${indent}var selectedPane = Xrm.App.sidePanes.getSelectedPane();
+` +
+    `${indent}if (selectedPane && selectedPane.paneId === ${JSON.stringify(config.pane.paneId)} && Xrm.App.sidePanes.state === 1) { selectedPane.close(); return; }
+`
+  );
+}
+
+/** prelude: the guards and reads that need the triggering event (lookup, record, table). open: the side pane calls. */
+function buildGetOrCreateParts(config: PaneDefinitionConfig, indent = '  '): { prelude: string; open: string } {
+  const { pane, behavior } = config;
   const paneOpts = buildPaneOptions(config);
-  const navInput = buildNavigateInput(config);
+  const declared = declareRecordVariable(config, buildRecordContext(config), indent);
+  const navInput = buildNavigateInput(config, declared.rc);
   const stateAssign = buildStateAssignment(config);
   const paneIdJson = JSON.stringify(pane.paneId);
-  const reuseCheck = context.reuseExistingPane
-    ? `${indent}var existing = Xrm.App.sidePanes.getPane(${paneIdJson});\n${indent}if (existing) { await existing.navigate(${navInput}); existing.select(); } else {\n`
+  // codegen-config-model-003 — isSelected: false keeps a reused pane in the background too.
+  const selectExisting = pane.isSelected === false ? '' : ' existing.select();';
+  // L1 — a reused pane gets the badge too, after select, as SidePaneHelper.open does.
+  const badgeExisting = pane.badgeValue ? ` existing.badge = ${JSON.stringify(pane.badgeValue)};` : '';
+  const reuseCheck = behavior.reuseExistingPane
+    ? `${indent}var existing = Xrm.App.sidePanes.getPane(${paneIdJson});\n${indent}if (existing) { await existing.navigate(${navInput});${selectExisting}${badgeExisting} } else {\n`
     : `${indent}var existing = Xrm.App.sidePanes.getPane(${paneIdJson});\n${indent}if (existing) { existing.close(); await Promise.resolve(); }\n`;
 
   const badgeAssign = pane.badgeValue
@@ -208,35 +389,43 @@ function buildGetOrCreateBody(config: PaneDefinitionConfig, indent = '  '): stri
     : '';
 
   const createBody = `${stateAssign}${indent}var pane = await Xrm.App.sidePanes.createPane(${paneOpts});\n${indent}await pane.navigate(${navInput});\n${badgeAssign}`;
-  return `${reuseCheck}${createBody}${context.reuseExistingPane ? `${indent}}\n` : ''}${closeOthersBlock}`;
+  // Lookup handlers guard before preventDefault, so the shared body must not repeat the check.
+  const availabilityGuard = config.trigger.kind === 'LookupTagClick' ? '' : buildAvailabilityGuard(config, indent);
+  return {
+    prelude: `${availabilityGuard}${buildToggleIfOpen(config, indent)}${buildRelatedRecordPreamble(config, indent)}${declared.line}`,
+    open: `${reuseCheck}${createBody}${behavior.reuseExistingPane ? `${indent}}\n` : ''}${closeOthersBlock}`,
+  };
 }
 
-function generateFormOnLoad(config: PaneDefinitionConfig): string {
-  const { ns, fn } = getSafeTriggerNames(config);
+function buildGetOrCreateBody(config: PaneDefinitionConfig, indent = '  '): string {
+  const { prelude, open } = buildGetOrCreateParts(config, indent);
+  return `${prelude}${open}`;
+}
+
+/** Prefixes every line of `text` with `indent`, blank lines included, so a body nests inside a wrapper block. */
+function indentLines(text: string, indent: string): string {
+  return text.split('\n').map(line => indent + line).join('\n');
+}
+
+function generateFormOnLoad(config: PaneDefinitionConfig, { segments, ns, fn }: ResolvedTriggerNames): string {
   const body = buildGetOrCreateBody(config, '  ');
 
-  return `var ${ns} = ${ns} || {};
+  return `${namespaceDeclaration(segments)}
 ${ns}.${fn} = async function(executionContext) {
   var formContext = executionContext.getFormContext();
   try {
-${body
-  .split('\n')
-  .map(l => '  ' + l)
-  .join('\n')}
-    // Staleness guard after await
-    if (executionContext.getFormContext() !== formContext) return;
+${indentLines(body, '  ')}
   } catch(e) {
     ${buildCatchBody(`${ns}.${fn}`, '    ')}
   }
 };`;
 }
 
-function generateFormButton(config: PaneDefinitionConfig): string {
-  const { ns, fn } = getSafeTriggerNames(config);
+function generateFormButton(config: PaneDefinitionConfig, { segments, ns, fn }: ResolvedTriggerNames): string {
   const body = buildGetOrCreateBody(config, '    ');
   const paneIdJson = JSON.stringify(config.pane.paneId);
 
-  return `var ${ns} = ${ns} || {};
+  return `${namespaceDeclaration(segments)}
 ${PENDING_VAR} = ${PENDING_VAR} || {};
 ${ns}.${fn} = function(primaryControl) {
   // primaryControl is captured at invocation time; assumed stable for command bar actions.
@@ -244,10 +433,7 @@ ${ns}.${fn} = function(primaryControl) {
   ${PENDING_VAR}[${paneIdJson}] = Date.now();
   (async function() {
     try {
-${body
-  .split('\n')
-  .map(l => '    ' + l)
-  .join('\n')}
+${indentLines(body, '    ')}
     } catch(e) {
       ${buildCatchBody(`${ns}.${fn}`, '      ')}
     } finally {
@@ -257,76 +443,128 @@ ${body
 };`;
 }
 
-function generateGridButtonScript(config: PaneDefinitionConfig): string {
-  const { ns, fn } = getSafeTriggerNames(config);
+/**
+ * Grid triggers that read the row declare selectedEntity and selectedRecordId first; such a command does nothing with
+ * no selected row. '' for other triggers, and for a grid command whose source is a fixed record or no record.
+ */
+/** r2 CR-001 — a grid button reads the selected row only for these sources (buildRecordContext, buildCreateFromEntityExpr, buildRelatedRecordPreamble). Shared with the deploy steps. */
+export function gridButtonReadsSelection(config: PaneDefinitionConfig): boolean {
+  const source = config.context.source.kind;
+  return config.trigger.kind === 'GridButton' && (source === 'selectedRow' || source === 'lookup');
+}
+
+function gridRowPreamble(config: PaneDefinitionConfig): string {
+  const { kind } = config.trigger;
+  // OnRecordSelect: executionContext.getEventSource().getId() — Power Apps grid control sample
+  // https://learn.microsoft.com/power-apps/developer/model-driven-apps/clientapi/reference/events/grid-onrecordselect
+  if (GRID_SELECT_KINDS.includes(kind)) {
+    return `  var selectedEntity = executionContext.getEventSource();\n  var selectedRecordId = selectedEntity.getId();\n`;
+  }
+  if (!gridButtonReadsSelection(config)) return '';
+  // codegen-config-model-001 — SelectedControl is the grid context for main grids and subgrids; a command that
+  // passes PrimaryControl first (the form, on a subgrid) still finds the grid as the second argument. With no grid at all,
+  // the user is told which parameter to add instead of seeing a TypeError.
+  // https://learn.microsoft.com/power-apps/developer/model-driven-apps/pass-data-page-parameter-ribbon-actions#form-and-grid-context-in-ribbon-actions
+  const noGrid = `!selectedControl || typeof selectedControl.getGrid !== 'function'`;
+  const missingGrid = JSON.stringify('This command needs the grid. In Command Designer, add SelectedControl as the first Action parameter.');
+  return (
+    `  if (${noGrid}) selectedControl = arguments[1];\n` +
+    `  if (${noGrid}) { Xrm.Navigation.openErrorDialog({ message: ${missingGrid} }); return; }\n` +
+    `  var selectedRows = selectedControl.getGrid().getSelectedRows();\n` +
+    `  if (!selectedRows || selectedRows.getLength() === 0) { return; }\n` +
+    `  var selectedEntity = selectedRows.get(0).getData().getEntity();\n` +
+    `  var selectedRecordId = selectedEntity.getId();\n`
+  );
+}
+
+/** LookupTagClick: guard, then cancel the default navigation and read the clicked tag. '' for other triggers. */
+function lookupTagPreamble(config: PaneDefinitionConfig): string {
+  if (config.trigger.kind !== 'LookupTagClick') return '';
+  return (
+    `${buildAvailabilityGuard(config, '  ')}  var eventArgs = executionContext.getEventArgs();\n` +
+    `  eventArgs.preventDefault();\n` +
+    `  var tag = eventArgs.getTagValue();\n` +
+    `  if (!tag || !tag.id) return;\n`
+  );
+}
+
+function generateGridButtonScript(config: PaneDefinitionConfig, { segments, ns, fn }: ResolvedTriggerNames): string {
   const body = buildGetOrCreateBody(config, '    ');
   const paneIdJson = JSON.stringify(config.pane.paneId);
   const onSelect = GRID_SELECT_KINDS.includes(config.trigger.kind);
-  const arg = onSelect ? 'executionContext' : 'primaryControl';
-  // OnRecordSelect: executionContext.getEventSource().getId() — Power Apps grid control sample
-  // https://learn.microsoft.com/power-apps/developer/model-driven-apps/clientapi/reference/events/grid-onrecordselect
-  const rowPreamble = onSelect
-    ? `  var selectedRecordId = executionContext.getEventSource().getId();\n`
-    : `  var selectedRows = primaryControl.getGrid().getSelectedRows();\n  if (!selectedRows || selectedRows.getLength() === 0) { return; }\n  var selectedRecordId = selectedRows.get(0).getData().getEntity().getId();\n`;
+  const arg = onSelect ? 'executionContext' : 'selectedControl';
+  // codegen-config-model-002 — row selection is latest-wins: a row selected while a pane opens is opened when it finishes.
+  // Each selection owns its lock by timestamp, so a call that outlives its lock neither releases a newer call's lock
+  // nor replays a selection that newer call superseded. M13 — a selection is stored as the row's values and replayed
+  // from them, so the ended event is never read again. Grid buttons keep dropping a repeat click.
+  const pending = `${PENDING_VAR}[${paneIdJson}]`;
+  const latest = `${LATEST_VAR}[${paneIdJson}]`;
+  const whenLocked = onSelect ? `{ ${latest} = { id: selectedRecordId, entityName: selectedEntity.getEntityName() }; return; }` : 'return;';
+  const replayedRow = '{ getId: function() { return latestSelection.id; }, getEntityName: function() { return latestSelection.entityName; } }';
+  const takeLock = onSelect
+    ? `  var lockedAt = Date.now();\n  ${pending} = lockedAt;\n  delete ${latest};\n`
+    : `  ${pending} = Date.now();\n`;
+  const releaseLock = onSelect
+    ? `      if (${pending} === lockedAt) {\n` +
+      `        delete ${pending};\n` +
+      `        var latestSelection = ${latest};\n` +
+      `        delete ${latest};\n` +
+      `        if (latestSelection) ${ns}.${fn}({ getEventSource: function() { return ${replayedRow}; } });\n` +
+      `      }`
+    : `      delete ${pending};`;
 
-  return `var ${ns} = ${ns} || {};
-${PENDING_VAR} = ${PENDING_VAR} || {};
+  return `${namespaceDeclaration(segments)}
+${PENDING_VAR} = ${PENDING_VAR} || {};${onSelect ? `\n${LATEST_VAR} = ${LATEST_VAR} || {};` : ''}
 ${ns}.${fn} = function(${arg}) {
-${rowPreamble}  if (${PENDING_VAR}[${paneIdJson}] && (Date.now() - ${PENDING_VAR}[${paneIdJson}]) < ${PENDING_TTL_MS}) return;
-  ${PENDING_VAR}[${paneIdJson}] = Date.now();
-  (async function() {
+${gridRowPreamble(config)}  if (${pending} && (Date.now() - ${pending}) < ${PENDING_TTL_MS}) ${whenLocked}
+${takeLock}  (async function() {
     try {
-${body
-  .split('\n')
-  .map(l => '    ' + l)
-  .join('\n')}
+${indentLines(body, '    ')}
     } catch(e) {
       ${buildCatchBody(`${ns}.${fn}`, '      ')}
     } finally {
-      delete ${PENDING_VAR}[${paneIdJson}];
+${releaseLock}
     }
   })();
 };`;
 }
 
-function generateManualJS(config: PaneDefinitionConfig): string {
-  const { fn } = getSafeTriggerNames(config);
+/** Console output defines the same namespaced function as other triggers and calls it once. */
+function generateManualJS(config: PaneDefinitionConfig, { segments, ns, fn }: ResolvedTriggerNames): string {
   const body = buildGetOrCreateBody(config, '  ');
 
-  return `async function ${fn}() {
+  return `${namespaceDeclaration(segments)}
+${ns}.${fn} = async function() {
   try {
-${body
-  .split('\n')
-  .map(l => '  ' + l)
-  .join('\n')}
+${indentLines(body, '  ')}
   } catch(e) {
-    ${buildCatchBody(fn, '    ')}
+    ${buildCatchBody(`${ns}.${fn}`, '    ')}
   }
-}
-${fn}().catch(console.error);`;
+};
+${ns}.${fn}().catch(console.error);`;
 }
 
-function generateFormOnChange(config: PaneDefinitionConfig): string {
-  const { trigger, pane } = config;
-  const { ns, fn } = getSafeTriggerNames(config);
-  const field = trigger.fieldName || '';
+function generateFormOnChange(config: PaneDefinitionConfig, { segments, ns, fn }: ResolvedTriggerNames): string {
+  const { pane } = config;
+  const field = config.host.attribute || '';
   const timerVar = `__spstudio_tmr_${pane.paneId.replace(/[^a-zA-Z0-9_]/g, '_')}`;
-  const body = buildGetOrCreateBody(config, '    ');
+  const { prelude, open } = buildGetOrCreateParts(config, '    ');
 
-  return `var ${ns} = ${ns} || {};
+  // M12 — the form, its record and any lookup are read while the event runs; only the pane calls wait out the debounce.
+  return `${namespaceDeclaration(segments)}
 var ${timerVar};
 ${ns}.${fn} = function(executionContext) {
   // Wire in OnLoad: formContext.getAttribute(${JSON.stringify(field)}).addOnChange(${ns}.${fn});
   clearTimeout(${timerVar});
+  var formContext = executionContext.getFormContext();
+  try {
+${prelude}  } catch(e) {
+${buildCatchBody(`${ns}.${fn}`, '    ')}
+    return;
+  }
   ${timerVar} = setTimeout(async function() {
-    var formContext = executionContext.getFormContext();
     try {
-${body
-    .split('\n')
-    .map(l => '    ' + l)
-    .join('\n')}
-      // Staleness guard after await
-      if (executionContext.getFormContext() !== formContext) return;
+${indentLines(open, '  ')}
     } catch(e) {
       ${buildCatchBody(`${ns}.${fn}`, '      ')}
     }
@@ -334,131 +572,92 @@ ${body
 };`;
 }
 
-function generateLookupTagClick(config: PaneDefinitionConfig): string {
-  const { trigger } = config;
-  const { ns, fn } = getSafeTriggerNames(config);
+function generateLookupTagClick(config: PaneDefinitionConfig, { segments, ns, fn }: ResolvedTriggerNames): string {
   const body = buildGetOrCreateBody(config, '  ');
-  return `var ${ns} = ${ns} || {};
+  return `${namespaceDeclaration(segments)}
 ${ns}.${fn} = async function(executionContext) {
-  var eventArgs = executionContext.getEventArgs();
-  eventArgs.preventDefault();
-  var tag = eventArgs.getTagValue();
-  if (!tag || !tag.id) return;
-  try {
-${body.split('\n').map(line => '  ' + line).join('\n')}
+${lookupTagPreamble(config)}  try {
+${indentLines(body, '  ')}
   } catch(e) {
     ${buildCatchBody(`${ns}.${fn}`, '    ')}
   }
-};
-// Register from form OnLoad:
-// formContext.getControl(${JSON.stringify(trigger.fieldName || '')}).addOnLookupTagClick(${ns}.${fn});`;
+};${buildLookupRegistrar(ns, fn, config.host.lookupControls)}`;
 }
 
 export function generateBasicScript(config: PaneDefinitionConfig): string {
-  switch (config.trigger.kind) {
+  const names = resolveTriggerNames(config);
+  if (!names.ok) return INVALID_NAMES_SCRIPT;
+  const kind = config.trigger.kind;
+  switch (kind) {
     case 'FormOnLoad':
-      return generateFormOnLoad(config);
+      return generateFormOnLoad(config, names);
     case 'FormButton':
-      return generateFormButton(config);
-    case 'MainGridButton':
-    case 'SubgridButton':
-    case 'MainGridOnSelect':
-    case 'SubgridOnSelect':
-      return generateGridButtonScript(config);
+      return generateFormButton(config, names);
+    case 'GridButton':
+    case 'GridRowSelect':
+      return generateGridButtonScript(config, names);
     case 'ManualJS':
-      return generateManualJS(config);
+      return generateManualJS(config, names);
     case 'FormOnChange':
-      return generateFormOnChange(config);
+      return generateFormOnChange(config, names);
     case 'LookupTagClick':
-      return generateLookupTagClick(config);
-    default:
-      return generateFormButton(config);
+      return generateLookupTagClick(config, names);
   }
+  // IN-004 — parseStoredConfig rejects unknown kinds, so only a caller that bypasses the type can reach this.
+  const _exhaustive: never = kind;
+  throw new Error(`Unsupported trigger kind: ${String(_exhaustive)}`);
 }
 
 export function generateLibraryScript(config: PaneDefinitionConfig): string {
-  const { pane, trigger, target, context, behavior } = config;
-  const width = normalizeConfigWidth(pane.width);
-  const ns = safeIdentifier(trigger.namespace || '', 'MyOrg');
-  const fn = safeIdentifier(trigger.functionName || '', 'openPane');
-  const rc = buildRecordContext(config);
+  const { pane, trigger, behavior } = config;
+  const names = resolveTriggerNames(config);
+  if (!names.ok) return INVALID_NAMES_SCRIPT;
+  const { segments, ns, fn } = names;
+  const formContextExpr = trigger.kind === 'FormOnLoad' || trigger.kind === 'FormOnChange'
+    ? 'executionContext.getFormContext()'
+    : 'formContext';
+  const declared = declareRecordVariable(config, buildRecordContext(config, formContextExpr), '  ');
+  const relatedPreamble = buildRelatedRecordPreamble(config, '      ', formContextExpr);
+  // L3 — an empty lookup returns before SidePaneHelper.open, so a closing click is handled here first, as in Basic.
+  // The availability guard comes first because the toggle reads Xrm.App.sidePanes.
+  const toggle = relatedPreamble ? buildToggleIfOpen(config, '  ') : '';
+  const toggleFirst = toggle ? `${buildAvailabilityGuard(config, '  ')}${toggle}` : '';
 
-  const optLines: string[] = [
-    `    paneId: ${JSON.stringify(pane.paneId)}`,
-    `    title: ${JSON.stringify(pane.title)}`,
-    `    pageType: ${JSON.stringify(target.pageType)}`,
-  ];
-
-  // Guard formContext expressions inside a library wrapper that receives executionContext.
-  const libIdExpr = rc.idExpr?.replace(/^formContext\./, 'executionContext.getFormContext().') ?? null;
-  const libEntityName = rc.idExpr === 'tag.id' ? rc.entityName : JSON.stringify(rc.entityName);
-
-  // Target keys — contract C4. name and webresourceName are mutually exclusive (WR-007).
-  if (target.pageType === 'custom') {
-    optLines.push(`    name: ${JSON.stringify(target.name)}`);
-    if (libIdExpr && rc.entityName) {
-      optLines.push(`    entityName: ${libEntityName}`);
-      optLines.push(`    recordId: ${libIdExpr}`);
-    }
-  } else if (target.pageType === 'webresource') {
-    optLines.push(`    webresourceName: ${JSON.stringify(target.name)}`);
-    if (libIdExpr && rc.entityName) {
-      optLines.push(
-        `    data: encodeURIComponent(JSON.stringify({ entityName: ${JSON.stringify(rc.entityName)}, recordId: ${libIdExpr} }))`
-      );
-    }
-  } else if (target.pageType === 'entityrecord') {
-    optLines.push(`    entityName: ${libEntityName}`);
-    optLines.push(`    entityId: ${libIdExpr ?? buildConfiguredRecordIdExpression(config)}`);
-  } else if (target.pageType === 'entitylist') {
-    optLines.push(`    entityName: ${JSON.stringify(rc.entityName)}`);
-  } else if (target.pageType === 'dashboard') {
-    optLines.push(`    dashboardId: ${JSON.stringify(target.dashboardId)}`);
-  } else if (target.pageType === 'search' && target.searchText) {
-    optLines.push(`    searchText: ${JSON.stringify(target.searchText)}`);
-  }
-
-  optLines.push(...buildTargetParameterParts(target).map(part => `    ${part}`));
-
-  // Appearance + behavior keys — contract C4. isResizable is deliberately absent.
-  if (width !== DEFAULT_CONFIG.pane.width) optLines.push(`    width: ${width}`);
-  if (!pane.canClose) optLines.push(`    canClose: false`);
-  if (pane.hideHeader) optLines.push(`    hideHeader: true`);
-  if (pane.isSelected === false) optLines.push(`    isSelected: false`);
-  if (pane.alwaysRender) optLines.push(`    alwaysRender: true`);
-  if (pane.keepBadgeOnSelect) optLines.push(`    keepBadgeOnSelect: true`);
-  const imageSrc = normalizeImageSrc(pane.imageSrc);
-  if (imageSrc) optLines.push(`    imageSrc: ${JSON.stringify(imageSrc)}`);
-  if (pane.badgeValue) optLines.push(`    badge: ${JSON.stringify(pane.badgeValue)}`);
-  if (!context.reuseExistingPane) optLines.push(`    reuseExistingPane: false`);
-  if (!behavior.expandOnOpen) optLines.push(`    expandOnOpen: false`);
-  if (behavior.closeOthers) optLines.push(`    closeOthers: true`);
+  // Contract C4: the same pane and target keys as the Basic script, then the behavior keys Basic implements inline.
+  const fields: Field[] = [...paneFields(config), ...targetFields(config, declared.rc, formContextExpr)];
+  if (pane.badgeValue) fields.push(['badge', JSON.stringify(pane.badgeValue)]);
+  if (!behavior.reuseExistingPane) fields.push(['reuseExistingPane', 'false']);
+  // M1 — only a command click expands the rail, as in the Basic script (buildStateAssignment).
+  if (!behavior.expandOnOpen || !COMMAND_TRIGGERS.includes(trigger.kind)) fields.push(['expandOnOpen', 'false']);
+  if (behavior.closeOthers) fields.push(['closeOthers', 'true']);
+  if (behavior.toggleIfOpen && COMMAND_TRIGGERS.includes(trigger.kind) && !toggleFirst) fields.push(['toggleIfOpen', 'true']);
 
   const param =
     trigger.kind === 'FormOnLoad' || trigger.kind === 'FormOnChange' || trigger.kind === 'LookupTagClick' || GRID_SELECT_KINDS.includes(trigger.kind)
       ? 'executionContext'
       : trigger.kind === 'ManualJS'
         ? ''
-        : 'primaryControl';
+        : trigger.kind === 'GridButton'
+          ? 'selectedControl'
+          : 'primaryControl';
 
-  const gridContext = GRID_SELECT_KINDS.includes(trigger.kind)
-    ? `  var selectedRecordId = executionContext.getEventSource().getId();\n`
-    : trigger.kind === 'MainGridButton' || trigger.kind === 'SubgridButton'
-      ? `  var selectedRows = primaryControl.getGrid().getSelectedRows();\n  if (!selectedRows || selectedRows.getLength() === 0) { return; }\n  var selectedRecordId = selectedRows.get(0).getData().getEntity().getId();\n`
-      : '';
+  const lookupRegistration = trigger.kind === 'LookupTagClick' ? buildLookupRegistrar(ns, fn, config.host.lookupControls) : '';
+  // codegen-config-model-006 — a missing runtime is reported, not thrown; commands tell the user, other triggers log.
+  const missingRuntime = JSON.stringify(`SidePaneHelper library (${RUNTIME_FILE_NAME}) is not loaded.`);
+  const runtimeGuard = `  if (typeof SidePaneHelper === 'undefined') { ${COMMAND_TRIGGERS.includes(trigger.kind)
+    ? `Xrm.Navigation.openErrorDialog({ message: ${missingRuntime} });`
+    : `console.error(${missingRuntime});`} return; }\n`;
+  // codegen-config-model-008 — ManualJS output is pasted into the console, so it runs the function it defines.
+  const manualInvocation = trigger.kind === 'ManualJS' ? `\n${ns}.${fn}();` : '';
 
-  const lookupPreamble = trigger.kind === 'LookupTagClick'
-    ? `  var eventArgs = executionContext.getEventArgs();\n  eventArgs.preventDefault();\n  var tag = eventArgs.getTagValue();\n  if (!tag || !tag.id) return;\n`
-    : '';
+  const openCall = `  SidePaneHelper.open({\n${fields.map(field => `    ${formatField(field)}`).join(',\n')}\n  });\n`;
+  // Lookup resolution awaits the lookup, so the open call and record variable share its async scope.
+  const body = relatedPreamble
+    ? `${toggleFirst}  (async function() {\n    try {\n${relatedPreamble}${declared.line.replace(/^ {2}/, '      ')}${openCall.replace(/^(?=.)/gm, '    ')}` +
+      `    } catch(e) {\n${buildCatchBody(`${ns}.${fn}`, '      ')}\n    }\n  })();\n`
+    : `${declared.line}${openCall}`;
 
-  const lookupRegistration = trigger.kind === 'LookupTagClick'
-    ? `\n// Register from form OnLoad:\n// formContext.getControl(${JSON.stringify(trigger.fieldName || '')}).addOnLookupTagClick(${ns}.${fn});`
-    : '';
-
-  return `var ${ns} = ${ns} || {};
+  return `${namespaceDeclaration(segments)}
 ${ns}.${fn} = function(${param}) {
-${lookupPreamble}${gridContext}  SidePaneHelper.open({
-${optLines.join(',\n')}
-  });
-};${lookupRegistration}`;
+${runtimeGuard}${lookupTagPreamble(config)}${gridRowPreamble(config)}${body}};${lookupRegistration}${manualInvocation}`;
 }

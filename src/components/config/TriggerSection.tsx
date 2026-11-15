@@ -1,0 +1,103 @@
+import * as React from 'react';
+import type { ConfigurePanelProps } from '../ConfigurePanel';
+import type { TriggerKind } from '../../types/PaneDefinitionConfig';
+import { TRIGGER_CAPABILITIES, TRIGGER_KINDS } from '../../services/triggerCapabilities';
+import { changeHostTable } from '../../services/relatedRecordConfig';
+import { resolveTriggerNames } from '../../services/CodeGenerationService';
+import { Field } from '../Field';
+import { ChoiceGroup } from '../ChoiceGroup';
+import { TablePicker } from '../TablePicker';
+import { FormSelector } from '../FormSelector';
+import { ViewPicker } from '../ViewPicker';
+import { ColumnPicker } from './ColumnPicker';
+import { LookupControlsPicker } from './LookupControlsPicker';
+import { Input } from '../Input';
+
+export type SectionSharedProps = Pick<ConfigurePanelProps,
+  'config' | 'onChange' | 'metadataService'> & {
+  errors: Record<string, string>;
+  /** Every warning message per field, from `warningsByField`. */
+  warnings: Record<string, string[]>;
+};
+
+/** No warning is reported on a trigger or host field. */
+export interface TriggerSectionProps extends Omit<SectionSharedProps, 'warnings'> {
+  formXmlService?: ConfigurePanelProps['formXmlService'];
+}
+
+export function TriggerSection({ config, onChange, metadataService,
+  formXmlService, errors }: TriggerSectionProps): React.ReactElement {
+  const { trigger, host } = config;
+  const caps = TRIGGER_CAPABILITIES[trigger.kind];
+  // CR-001 — the full call is the name the generated script defines; no hint while the names are invalid.
+  const names = resolveTriggerNames(config);
+  return (
+    <>
+      <Field label="Trigger type" required>
+        <ChoiceGroup label="Trigger type"
+          options={TRIGGER_KINDS.map(kind => ({ value: kind, label: TRIGGER_CAPABILITIES[kind].label, desc: TRIGGER_CAPABILITIES[kind].desc }))}
+          value={trigger.kind}
+          onChange={value => onChange(prev => ({ ...prev, trigger: { ...prev.trigger, kind: value as TriggerKind } }))} />
+      </Field>
+      {caps.family === 'grid' && (
+        <Field label="Grid surface">
+          <ChoiceGroup label="Grid surface" options={[
+            { value: 'main', label: 'Main grid' }, { value: 'subgrid', label: 'Subgrid' },
+          ]} value={trigger.surface}
+            onChange={surface => onChange(prev => TRIGGER_CAPABILITIES[prev.trigger.kind].family !== 'grid' ? prev
+              : { ...prev, trigger: { ...prev.trigger, surface: surface as 'main' | 'subgrid' } })} />
+        </Field>
+      )}
+      {caps.hostPicker !== null && (
+        <Field label="Trigger table" error={errors['host.entityName']}
+          hint={caps.family === 'grid' ? 'The grid the command or row event belongs to' : 'Leave empty to read the table at runtime'}>
+          <TablePicker ariaLabel="Trigger table" value={host.entityName} metadataService={metadataService}
+            onChange={entityName => onChange(prev => changeHostTable(prev, entityName))}
+            error={!!errors['host.entityName']} />
+        </Field>
+      )}
+      {caps.hostPicker === 'form' && formXmlService && (
+        <Field label="Form">
+          <FormSelector entityName={host.entityName} onEntityNameChange={() => undefined}
+            selectedFormId={host.formId} hideEntityPicker disabled={!host.entityName}
+            formXmlService={formXmlService} metadataService={metadataService}
+            onFormSelected={selection => onChange(prev => TRIGGER_CAPABILITIES[prev.trigger.kind].hostPicker !== 'form' ? prev
+              : { ...prev, host: { ...prev.host, formId: selection?.formId ?? '' } })} />
+        </Field>
+      )}
+      {caps.hostPicker === 'view' && (
+        <Field label="View">
+          <ViewPicker entityName={host.entityName} value={host.viewId} viewType={host.viewType}
+            metadataService={metadataService}
+            onChange={view => onChange(prev => TRIGGER_CAPABILITIES[prev.trigger.kind].hostPicker !== 'view' ? prev
+              : { ...prev, host: { ...prev.host, viewId: view?.id ?? '', viewType: view?.viewType ?? '' } })} />
+        </Field>
+      )}
+      {caps.hostPicker === 'column' && (
+        <Field label="Column" required error={errors['host.attribute']}>
+          <ColumnPicker entityName={host.entityName} value={host.attribute} metadataService={metadataService}
+            error={!!errors['host.attribute']}
+            onChange={attribute => onChange(prev => prev.trigger.kind !== 'FormOnChange' ? prev
+              : { ...prev, host: { ...prev.host, attribute } })} />
+        </Field>
+      )}
+      {caps.hostPicker === 'lookup' && (
+        <Field label="Lookup controls" required error={errors['host.lookupControls']}>
+          <LookupControlsPicker entityName={host.entityName} value={host.lookupControls} metadataService={metadataService}
+            error={!!errors['host.lookupControls']}
+            onChange={lookupControls => onChange(prev => prev.trigger.kind !== 'LookupTagClick' ? prev
+              : { ...prev, host: { ...prev.host, lookupControls } })} />
+        </Field>
+      )}
+      <Field label="Function name" error={errors['trigger.functionName']}
+        hint={names.ok ? `Full call: ${names.ns}.${names.fn}` : undefined}>
+        <Input value={trigger.functionName} placeholder="openRelatedRecordsPane"
+          onChange={functionName => onChange(prev => ({ ...prev, trigger: { ...prev.trigger, functionName } }))} />
+      </Field>
+      <Field label="Namespace" error={errors['trigger.namespace']} hint="JavaScript namespace prefix, such as Contoso or Contoso.Panes">
+        <Input value={trigger.namespace} placeholder="Contoso"
+          onChange={namespace => onChange(prev => ({ ...prev, trigger: { ...prev.trigger, namespace } }))} />
+      </Field>
+    </>
+  );
+}

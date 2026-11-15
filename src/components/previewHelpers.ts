@@ -1,28 +1,28 @@
-import { TableInfo } from '../services/MetadataService';
 import { normalizeConfigWidth } from '../services/configGuards';
 import { MAX_CONFIG_WIDTH, MIN_CONFIG_WIDTH } from '../types/PaneDefinitionConfig';
 
-export { MAX_CONFIG_WIDTH, MIN_CONFIG_WIDTH } from '../types/PaneDefinitionConfig';
-
-export interface FilteredEntry {
-  table: TableInfo;
-  matchedOn: 'display' | 'logical' | 'both';
+export interface ComboItem {
+  logicalName: string;
+  displayName: string;
+  detail?: string;
+  isCustomEntity?: boolean;
 }
 
-export function filterTables(tables: TableInfo[], query: string): FilteredEntry[] {
+export interface FilteredEntry<T extends ComboItem = ComboItem> {
+  table: T;
+}
+
+export function filterTables<T extends ComboItem>(tables: T[], query: string): FilteredEntry<T>[] {
   const q = query.trim().toLowerCase();
   if (!q) {
-    return tables.map(t => ({ table: t, matchedOn: 'display' as const }));
+    return tables.map(t => ({ table: t }));
   }
-  const out: FilteredEntry[] = [];
+  const out: FilteredEntry<T>[] = [];
   for (const t of tables) {
     const inDisplay = t.displayName.toLowerCase().includes(q);
     const inLogical = t.logicalName.toLowerCase().includes(q);
     if (!inDisplay && !inLogical) continue;
-    out.push({
-      table: t,
-      matchedOn: inDisplay && inLogical ? 'both' : inDisplay ? 'display' : 'logical',
-    });
+    out.push({ table: t });
   }
   out.sort((a, b) => {
     const ap = a.table.displayName.toLowerCase().startsWith(q) || a.table.logicalName.toLowerCase().startsWith(q);
@@ -33,44 +33,17 @@ export function filterTables(tables: TableInfo[], query: string): FilteredEntry[
   return out;
 }
 
-const MID_CONFIG_WIDTH = 1000;
-const MIN_PREVIEW_WIDTH = 120;
-const MID_PREVIEW_WIDTH = 270;
+const MIN_PREVIEW_WIDTH = 160;
 const MAX_PREVIEW_WIDTH = 300;
 
+/** Inline preview width: the 300..1200 config range scaled linearly onto 160..300 px. */
 export function getPreviewPaneWidth(configWidth: number): number {
   const clamped = normalizeConfigWidth(configWidth);
-  if (clamped <= MID_CONFIG_WIDTH) {
-    return Math.round(
-      MIN_PREVIEW_WIDTH +
-      ((clamped - MIN_CONFIG_WIDTH) / (MID_CONFIG_WIDTH - MIN_CONFIG_WIDTH)) *
-        (MID_PREVIEW_WIDTH - MIN_PREVIEW_WIDTH)
-    );
-  }
-
   return Math.round(
-    MID_PREVIEW_WIDTH +
-    ((clamped - MID_CONFIG_WIDTH) / (MAX_CONFIG_WIDTH - MID_CONFIG_WIDTH)) *
-      (MAX_PREVIEW_WIDTH - MID_PREVIEW_WIDTH)
+    MIN_PREVIEW_WIDTH +
+    ((clamped - MIN_CONFIG_WIDTH) / (MAX_CONFIG_WIDTH - MIN_CONFIG_WIDTH)) *
+      (MAX_PREVIEW_WIDTH - MIN_PREVIEW_WIDTH)
   );
-}
-
-export function getSafePreviewImageSrc(imageSrc: string): string | null {
-  const trimmed = imageSrc.trim();
-  if (!trimmed) return null;
-
-  const lower = trimmed.toLowerCase();
-  if (
-    lower.startsWith('http:') ||
-    lower.startsWith('https:') ||
-    lower.startsWith('//') ||
-    lower.startsWith('data:') ||
-    lower.startsWith('javascript:')
-  ) {
-    return null;
-  }
-
-  return trimmed;
 }
 
 export function escapeHtml(str: string): string {

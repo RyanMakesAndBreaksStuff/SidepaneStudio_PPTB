@@ -1,66 +1,106 @@
 // src/components/TableComboBox.tsx
-// A filterable single-select combobox for Dataverse tables. Presentational —
-// the parent owns the table list + load state, so this component can be reused
-// against any MetadataService caller without coupling.
+// A filterable single-select combobox for metadata items. The parent owns
+// data and load state so the picker stays reusable across metadata callers.
 import * as React from 'react';
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 import { theme } from '../theme/tokens';
-import { TableInfo } from '../services/MetadataService';
-import { filterTables } from './previewHelpers';
+import { type ComboItem, filterTables } from './previewHelpers';
 import { TableComboDropdown } from './TableComboDropdown';
+import { useFieldControl } from './Field';
 
 export interface TableComboBoxProps {
-  /** Selected table logical name (or '' for none). */
+  /** Selected item logical name (or '' for none). */
   value: string;
   onChange: (logicalName: string) => void;
-  /** Full table list — pass [] while loading. */
-  tables: TableInfo[];
+  /** Items to list — pass [] while loading. */
+  items?: ComboItem[];
+  /** Plural noun used in loading and empty copy. */
+  noun?: string;
   loading?: boolean;
   error?: string;
+  /** Mark the current selection as invalid without replacing available choices. */
+  invalid?: boolean;
   onRetry?: () => void;
   placeholder?: string;
   /** Optional aria-label for the input. */
   ariaLabel?: string;
+  /** Filter the available table list to custom entities. */
+  customOnly?: boolean;
+  /** Supply this callback to show the custom-only filter button. */
+  onCustomOnlyChange?: (next: boolean) => void;
+  /** Disable only the custom-only filter button. */
+  filterDisabled?: boolean;
+  /** Disable the picker and all of its actions. */
+  disabled?: boolean;
 }
+
+/** A broad query in a large org matches thousands of rows; mounting them all on each keystroke stalls typing. */
+const MAX_VISIBLE_OPTIONS = 100;
 
 export function TableComboBox({
   value,
   onChange,
-  tables,
+  items,
+  noun = 'tables',
   loading,
   error,
+  invalid = false,
   onRetry,
   placeholder,
   ariaLabel,
+  customOnly = false,
+  onCustomOnlyChange,
+  filterDisabled = false,
+  disabled = false,
 }: TableComboBoxProps): React.ReactElement {
   const { isDark } = useTheme();
   const T = theme(isDark);
+  const id = React.useId().replace(/:/g, '');
+  const listboxId = `${id}-listbox`;
+  // An enclosing Field supplies the id its label points at and the hint or error that describes this input.
+  const control = useFieldControl();
 
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [highlight, setHighlight] = useState(0);
+  const [focused, setFocused] = useState(false);
+  const isOpen = open && !disabled;
   const rootRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
+  const list = items ?? [];
+  const singular = noun.replace(/s$/, '');
 
-  // Resolve display label for the current value (may not be in `tables` yet during loading)
+  // Resolve display label for the current value (may not be in the list yet during loading).
   const currentTable = useMemo(
-    () => tables.find(t => t.logicalName === value),
-    [tables, value]
+    () => list.find(t => t.logicalName === value),
+    [list, value]
   );
   const displayValue = currentTable
     ? `${currentTable.displayName} (${currentTable.logicalName})`
     : value;
+  const customTables = useMemo(
+    () => customOnly ? list.filter(table => table.isCustomEntity === true) : list,
+    [list, customOnly]
+  );
+  const matches = useMemo(() => filterTables(customTables, query), [customTables, query]);
+  const filtered = useMemo(() => matches.slice(0, MAX_VISIBLE_OPTIONS), [matches]);
 
-  const filtered = useMemo(() => filterTables(tables, query), [tables, query]);
-
-  // Reset highlight when the filtered list changes
-  useEffect(() => { setHighlight(0); }, [query, open]);
-
-  // Click-outside closes the panel
+  // Close and clear transient search when the picker becomes unavailable.
   useEffect(() => {
-    if (!open) return;
+    if (disabled) {
+      setOpen(false);
+      setQuery('');
+    }
+  }, [disabled]);
+
+  // Reset highlight whenever query, visible choices, or picker visibility changes.
+  useEffect(() => { setHighlight(0); }, [query, customOnly, isOpen]);
+
+  // Click-outside closes the panel.
+  useEffect(() => {
+    if (!isOpen) return;
     const handler = (e: MouseEvent) => {
       if (!rootRef.current?.contains(e.target as Node)) {
         setOpen(false);
@@ -69,14 +109,14 @@ export function TableComboBox({
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
-  }, [open]);
+  }, [isOpen]);
 
-  // Scroll the highlighted row into view
+  // Scroll the highlighted row into view.
   useEffect(() => {
-    if (!open || !listRef.current) return;
+    if (!isOpen || !listRef.current) return;
     const item = listRef.current.querySelector<HTMLElement>(`[data-idx="${highlight}"]`);
-    if (item) item.scrollIntoView({ block: 'nearest' });
-  }, [highlight, open]);
+    item?.scrollIntoView?.({ block: 'nearest' });
+  }, [highlight, isOpen]);
 
   const commit = useCallback((logicalName: string) => {
     onChange(logicalName);
@@ -86,25 +126,26 @@ export function TableComboBox({
   }, [onChange]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (disabled) return;
     if (e.key === 'ArrowDown') {
       e.preventDefault();
-      if (!open) setOpen(true);
+      if (!isOpen) setOpen(true);
       setHighlight(h => Math.min(h + 1, filtered.length - 1));
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
-      if (!open) setOpen(true);
+      if (!isOpen) setOpen(true);
       setHighlight(h => Math.max(h - 1, 0));
     } else if (e.key === 'Enter') {
       e.preventDefault();
-      if (open && filtered[highlight]) commit(filtered[highlight].table.logicalName);
+      if (isOpen && filtered[highlight]) commit(filtered[highlight].table.logicalName);
     } else if (e.key === 'Escape') {
       e.preventDefault();
       setOpen(false);
       setQuery('');
       inputRef.current?.blur();
     } else if (e.key === 'Tab') {
-      // Tab commits the highlighted match if filtering, else just closes
-      if (open && query && filtered[highlight]) commit(filtered[highlight].table.logicalName);
+      // Tab commits the highlighted match if filtering, else just closes.
+      if (isOpen && query && filtered[highlight]) commit(filtered[highlight].table.logicalName);
       else setOpen(false);
     }
   };
@@ -114,40 +155,52 @@ export function TableComboBox({
     alignItems: 'center',
     gap: 6,
     width: '100%',
-    padding: '4px 8px',
-    border: `1px solid ${error ? T.error : (open ? T.accent : T.stroke1)}`,
+    height: 32,
+    padding: '0 8px',
+    border: `1px solid ${error || invalid ? T.error : T.stroke1}`,
     borderRadius: T.rS,
     background: T.surface1,
+    boxShadow: focused && !loading && !disabled ? `inset 0 -2px ${T.accent}` : 'none',
     fontFamily: T.font,
     fontSize: 13,
     boxSizing: 'border-box',
-    cursor: loading ? 'wait' : 'text',
-    transition: 'border-color 80ms',
+    cursor: loading ? 'wait' : disabled ? 'default' : 'text',
+    transition: 'box-shadow 80ms',
   };
+  const filterUnavailable = filterDisabled || disabled || loading || Boolean(error);
 
   return (
     <div ref={rootRef} style={{ position: 'relative', width: '100%' }}>
       <div
         style={fieldStyle}
         onClick={() => {
-          if (!loading) {
+          if (!loading && !disabled) {
             setOpen(true);
             inputRef.current?.focus();
           }
         }}
       >
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke={T.fg3} strokeWidth="1.5" strokeLinecap="round" aria-hidden="true">
+          <circle cx="6.75" cy="6.75" r="4.25" />
+          <path d="m10 10 3.25 3.25" />
+        </svg>
         <input
           ref={inputRef}
+          id={control.id}
+          aria-describedby={control['aria-describedby']}
           type="text"
-          value={open ? query : displayValue}
-          placeholder={value ? '' : (placeholder ?? 'Select a table…')}
+          value={isOpen ? query : displayValue}
+          placeholder={value ? '' : (placeholder ?? `Select a ${singular}…`)}
           onChange={e => { setOpen(true); setQuery(e.target.value); }}
-          onFocus={() => setOpen(true)}
+          onFocus={() => { setFocused(true); if (!disabled) setOpen(true); }}
+          onBlur={() => setFocused(false)}
           onKeyDown={handleKeyDown}
           aria-label={ariaLabel}
+          aria-invalid={Boolean(error || invalid || control['aria-invalid']) || undefined}
           aria-autocomplete="list"
-          aria-expanded={open}
-          aria-controls="tablecombo-listbox"
+          aria-expanded={isOpen}
+          aria-controls={listboxId}
+          aria-activedescendant={isOpen && filtered[highlight] ? `${id}-option-${highlight}` : undefined}
           role="combobox"
           style={{
             flex: 1,
@@ -160,25 +213,67 @@ export function TableComboBox({
             padding: 0,
             minWidth: 0,
           }}
-          disabled={loading}
+          disabled={loading || disabled}
         />
-        {value && !loading && (
+        {onCustomOnlyChange && (
+          <button
+            type="button"
+            aria-label="Show custom tables only"
+            aria-pressed={customOnly}
+            disabled={filterUnavailable}
+            onMouseDown={e => e.preventDefault()}
+            onClick={() => {
+              onCustomOnlyChange(!customOnly);
+              setOpen(true);
+              setHighlight(0);
+            }}
+            title={customOnly ? 'Show all tables' : 'Show custom tables only'}
+            style={{
+              width: 24,
+              height: 24,
+              flex: '0 0 24px',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: 0,
+              border: 'none',
+              borderRadius: T.rS,
+              background: customOnly ? T.accentBg : 'transparent',
+              color: customOnly ? T.accent : T.fg3,
+              cursor: filterUnavailable ? 'default' : 'pointer',
+            }}
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M2.5 3.25h11l-4.25 4.5v4l-2.5 1v-5z" />
+            </svg>
+          </button>
+        )}
+        {(Boolean(value) || (open && Boolean(query))) && !disabled && !loading && (
           <button
             type="button"
             aria-label="Clear selection"
-            onMouseDown={e => { e.preventDefault(); onChange(''); setQuery(''); inputRef.current?.focus(); }}
+            onMouseDown={e => e.preventDefault()}
+            onClick={() => {
+              onChange('');
+              setQuery('');
+              setOpen(true);
+              inputRef.current?.focus();
+            }}
             title="Clear"
             style={{
+              width: 24,
+              height: 24,
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: 0,
               border: 'none',
               background: 'transparent',
               color: T.fg3,
               cursor: 'pointer',
-              padding: 0,
-              display: 'inline-flex',
-              alignItems: 'center',
             }}
           >
-            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden="true">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden="true">
               <path d="M4 4l8 8M12 4l-8 8" />
             </svg>
           </button>
@@ -198,13 +293,18 @@ export function TableComboBox({
           <path d="M4 6l4 4 4-4" />
         </svg>
       </div>
-      {open && (
+      {isOpen && (
         <TableComboDropdown
+          id={listboxId}
+          optionIdPrefix={`${id}-option`}
           loading={loading}
           error={error}
           onRetry={onRetry}
           filtered={filtered}
+          matchCount={matches.length}
           query={query}
+          customOnly={customOnly}
+          noun={noun}
           highlight={highlight}
           value={value}
           onCommit={commit}

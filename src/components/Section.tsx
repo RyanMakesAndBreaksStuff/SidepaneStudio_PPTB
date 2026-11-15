@@ -1,25 +1,29 @@
 // src/components/Section.tsx
 import * as React from 'react';
-import { useState } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 import { theme } from '../theme/tokens';
 
 export interface SectionProps {
   title: string;
   icon?: string;
-  defaultOpen?: boolean;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  /** Reaches the header button, so a caller can scroll to it and focus it. */
+  headerRef?: React.Ref<HTMLButtonElement>;
   children: React.ReactNode;
 }
 
-export function Section({ title, icon, defaultOpen = false, children }: SectionProps): React.ReactElement {
+export function Section({ title, icon, open, onOpenChange, headerRef, children }: SectionProps): React.ReactElement {
   const { isDark } = useTheme();
   const T = theme(isDark);
-  const [open, setOpen] = useState(defaultOpen);
+  const toggle = () => onOpenChange(!open);
 
   return (
     <div style={{ borderBottom: `1px solid ${T.stroke1}` }}>
       <button
-        onClick={() => setOpen(o => !o)}
+        ref={headerRef}
+        type="button"
+        onClick={toggle}
         aria-expanded={open}
         style={{
           display: 'flex', alignItems: 'center', gap: 8,

@@ -1,239 +1,154 @@
-import { PaneDefinitionConfig } from '../types/PaneDefinitionConfig';
-import { normalizeGuid } from './odataGuards';
+import { PaneDefinitionConfig, COMMAND_TRIGGERS, MAX_CONFIG_WIDTH, MIN_CONFIG_WIDTH } from '../types/PaneDefinitionConfig';
+import { isValidLogicalName, normalizeGuid } from './odataGuards';
 import { parseFormData } from './formData';
-import { isConfigWidthValid } from './configGuards';
-import { MAX_CONFIG_WIDTH, MIN_CONFIG_WIDTH } from '../types/PaneDefinitionConfig';
+import { isConfigWidthValid, isJsIdentifier } from './configGuards';
+import { GENERATED_NAMES, normalizeImageSrc, resolveTriggerNames } from './CodeGenerationService';
+import { allowedSources, allowedTargets, isCreating, sendsRecord, TRIGGER_CAPABILITIES } from './triggerCapabilities';
 
-export interface ValidationError {
-  field: string;
-  message: string;
+export interface ValidationError { field: string; message: string; }
+export interface ValidationWarning { field: string; message: string; }
+export interface ValidationResult { errors: ValidationError[]; warnings: ValidationWarning[]; isValid: boolean; }
+
+/** Names the generated scripts declare or receive; the record variable may not shadow them. */
+export const RESERVED_VARIABLES: readonly string[] = [...GENERATED_NAMES];
+
+function pushJsonObjectError(errors: ValidationError[], data: string, message: string): void {
+  try { parseFormData(data); } catch { errors.push({ field: 'target.data', message }); }
 }
 
-export interface ValidationWarning {
-  field: string;
-  message: string;
+/** W20 — selections only exist in the org they were picked from; flag, never block, until the user confirms them here. */
+const ORG_MISMATCH_TAIL = 'was picked in a different environment. Confirm it exists here.';
+function pushOrgMismatchWarnings(warnings: ValidationWarning[], target: PaneDefinitionConfig['target']): void {
+  for (const [field, value, noun] of [
+    ['target.entityName', 'entityName' in target ? target.entityName : '', 'table'],
+    ['target.formId', target.pageType === 'entityrecord' ? target.formId : '', 'form'],
+    ['target.viewId', target.pageType === 'entitylist' ? target.viewId : '', 'view'],
+    ['target.pageId', target.pageType === 'generative' ? target.pageId : '', 'page'],
+  ] as const) {
+    if (value.trim()) warnings.push({ field, message: `This ${noun} ${ORG_MISMATCH_TAIL}` });
+  }
 }
 
-export interface ValidationResult {
-  errors: ValidationError[];
-  warnings: ValidationWarning[];
-  isValid: boolean;
+/**
+ * Every warning message per field, in validation order, for the Configure panel to show beside the field.
+ * The workbench banner already shows the org-mismatch messages, so they are left out rather than shown twice.
+ */
+export function warningsByField(warnings: readonly ValidationWarning[]): Record<string, string[]> {
+  const byField: Record<string, string[]> = {};
+  for (const { field, message } of warnings) {
+    if (message.endsWith(ORG_MISMATCH_TAIL)) continue;
+    byField[field] = [...(byField[field] ?? []), message];
+  }
+  return byField;
 }
 
-export function validate(config: PaneDefinitionConfig, accessibleTables?: Set<string>): ValidationResult {
+/** `orgMismatch` — the config was restored from another environment's save and the user has not confirmed it here. */
+export function validate(config: PaneDefinitionConfig, accessibleTables?: Set<string>, orgMismatch = false): ValidationResult {
   const errors: ValidationError[] = [];
   const warnings: ValidationWarning[] = [];
+  const { pane, target, trigger, host, context, behavior } = config;
+  const caps = TRIGGER_CAPABILITIES[trigger.kind];
+  const { source } = context;
+  const creating = isCreating(target);
+  const sendsRecordId = sendsRecord(config);
+  const hostTable = host.entityName.trim();
 
-  // Error: empty paneId
-  if (!config.pane.paneId?.trim()) {
-    errors.push({ field: 'pane.paneId', message: 'Pane ID is required.' });
+  // Pane
+  if (!pane.paneId?.trim()) errors.push({ field: 'pane.paneId', message: 'Pane ID is required.' });
+  if (!isConfigWidthValid(pane.width)) errors.push({ field: 'pane.width', message: `Pane width must be between ${MIN_CONFIG_WIDTH} and ${MAX_CONFIG_WIDTH} pixels.` });
+  if (!Number.isInteger(pane.badgeValue) || pane.badgeValue < 0) errors.push({ field: 'pane.badgeValue', message: 'Badge value must be a whole number, 0 or greater.' });
+  // W11 — the generators drop a path they cannot emit safely; say so instead of silently omitting the icon.
+  if (pane.imageSrc.trim() && !normalizeImageSrc(pane.imageSrc)) warnings.push({ field: 'pane.imageSrc', message: 'Not emitted: path must be relative to WebResources.' });
+
+  // The capability table is the owner; these only catch hand-edited configs.
+  if (!allowedTargets(trigger.kind).includes(target.pageType)) {
+    errors.push({ field: 'target.pageType', message: `${caps.label} cannot open this content type. Choose another.` });
+  }
+  if (!allowedSources(config).includes(source.kind)) {
+    errors.push({ field: 'context.source', message: 'This record choice is not available for the selected trigger and content. Choose another record.' });
   }
 
-  if (!isConfigWidthValid(config.pane.width)) {
-    errors.push({
-      field: 'pane.width',
-      message: `Pane width must be between ${MIN_CONFIG_WIDTH} and ${MAX_CONFIG_WIDTH} pixels.`,
-    });
+  // Host is required where a picker or lookup preamble needs it.
+  if (trigger.kind === 'FormOnChange') {
+    if (!isValidLogicalName(hostTable)) errors.push({ field: 'host.entityName', message: 'Select the table whose column change opens the pane.' });
+    if (!isValidLogicalName(host.attribute.trim())) errors.push({ field: 'host.attribute', message: 'Select the column to watch for changes.' });
   }
-
-  // Error: custom pageType with empty name
-  if (config.target.pageType === 'custom' && !config.target.name.trim()) {
-    errors.push({ field: 'target.name', message: 'Custom page name is required.' });
+  if (trigger.kind === 'LookupTagClick') {
+    if (!isValidLogicalName(hostTable)) errors.push({ field: 'host.entityName', message: 'Select the table whose lookup controls open the pane.' });
+    if (host.lookupControls.length === 0) errors.push({ field: 'host.lookupControls', message: 'Select at least one lookup control.' });
+    else if (!host.lookupControls.every(isValidLogicalName)) errors.push({ field: 'host.lookupControls', message: 'Lookup control names must be logical names.' });
   }
-
-  // Error: webresource pageType with empty name (WR-003)
-  if (config.target.pageType === 'webresource' && !config.target.name.trim()) {
-    errors.push({ field: 'target.name', message: 'Web resource name is required.' });
+  if (source.kind === 'lookup') {
+    if (!isValidLogicalName(hostTable)) errors.push({ field: 'host.entityName', message: 'Select the table that holds the lookup column.' });
+    if (!isValidLogicalName(source.attribute.trim())) errors.push({ field: 'context.source.attribute', message: 'Select the lookup column whose record opens in the pane.' });
   }
-
-  // Error: entityrecord/entitylist with empty entityName
-  if (
-    (config.target.pageType === 'entityrecord' || config.target.pageType === 'entitylist') &&
-    !config.target.entityName.trim()
-  ) {
-    errors.push({
-      field: 'target.entityName',
-      message: 'Table name is required.',
-    });
-  }
-
-  if (
-    (config.target.pageType === 'entityrecord' || config.target.pageType === 'entitylist') &&
-    !!config.target.entityName.trim() &&
-    accessibleTables &&
-    !accessibleTables.has(config.target.entityName.trim())
-  ) {
-    warnings.push({
-      field: 'target.entityName',
-      message: `Table "${config.target.entityName}" is no longer accessible in this app or for the current user.`,
-    });
-  }
-
-  // Warning: hideHeader + canClose — Microsoft publishes this combination (WR-009)
-  if (config.pane.hideHeader && config.pane.canClose) {
-    warnings.push({
-      field: 'pane.hideHeader',
-      message:
-        'Hiding the header also hides the close button, so users cannot dismiss the pane. The generated script emits canClose: false to match.',
-    });
-  }
-
-  // Warning: alwaysRender
-  if (config.pane.alwaysRender) {
-    warnings.push({
-      field: 'pane.alwaysRender',
-      message:
-        'alwaysRender keeps the pane loaded even when inactive. This has a memory cost.',
-    });
-  }
-
-  // Warning: FormOnLoad + isSelected: false
-  if (config.trigger.kind === 'FormOnLoad' && config.pane.isSelected === false) {
-    warnings.push({
-      field: 'pane.isSelected',
-      message:
-        'FormOnLoad with isSelected: false opens a background pane that may surprise users.',
-    });
-  }
-
-  // Error: dashboard with no dashboardId
-  if (config.target.pageType === 'dashboard' && !config.target.dashboardId.trim()) {
-    errors.push({ field: 'target.dashboardId', message: 'Dashboard is required.' });
-  }
-
-  // Warning: webresource pageType
-  if (config.target.pageType === 'webresource') {
-    warnings.push({
-      field: 'target.pageType',
-      message:
-        'Web resources inside side panes cannot access Xrm or parent.Xrm.',
-    });
-  }
-
-  // Warning: search pageType is not in the documented navigateTo pageInput list (WR-001)
-  if (config.target.pageType === 'search') {
-    warnings.push({
-      field: 'target.pageType',
-      message:
-        'Search is not a documented navigateTo pageType. Documented values are entitylist, entityrecord, dashboard, webresource, custom, and generative. Generated code may fail at runtime.',
-    });
-  }
-
-  // Warning: Static context mode
-  if (config.context.mode === 'Static') {
-    warnings.push({
-      field: 'context.mode',
-      message:
-        'Static record IDs are environment-specific. You must reconfigure this field after deploying to another environment.',
-    });
-  }
-
-  // Error: the selected context mode resolves to no record for this trigger (CR-001 / contract C1)
-  const GRID_TRIGGERS = ['MainGridButton', 'SubgridButton', 'MainGridOnSelect', 'SubgridOnSelect'];
-  if (config.context.mode === 'SelectedRow' && !GRID_TRIGGERS.includes(config.trigger.kind)) {
-    errors.push({
-      field: 'context.mode',
-      message:
-        'Selected row context is only available from a main grid or subgrid. Choose a different context mode or trigger.',
-    });
-  }
-  if (config.context.mode === 'CurrentRecord' && config.trigger.kind === 'ManualJS') {
-    errors.push({
-      field: 'context.mode',
-      message:
-        'Console / Manual scripts run outside a form or grid, so there is no current record. Use Static record ID or None.',
-    });
-  }
-
-  // Warning: SubgridButton + SelectedRow context (IN-001 — describe behavior, not a to-do)
-  if (config.trigger.kind === 'SubgridButton' && config.context.mode === 'SelectedRow') {
-    warnings.push({
-      field: 'context.mode',
-      message:
-        'The generated script uses the first selected row. It exits without opening a pane when no row is selected, and ignores rows beyond the first.',
-    });
-  }
-
-  // Warning: MainGridButton + entityrecord — no single record context available
-  if (
-    config.trigger.kind === 'MainGridButton' &&
-    config.target.pageType === 'entityrecord'
-  ) {
-    warnings.push({
-      field: 'target.pageType',
-      message:
-        'MainGridButton opens the first selected row. The generated script exits without opening a pane when no row is selected, and ignores rows beyond the first.',
-    });
-  }
-
-  if (config.target.pageType === 'entitylist') {
-    if (config.target.viewId.trim() && !normalizeGuid(config.target.viewId)) {
-      errors.push({ field: 'target.viewId', message: 'View ID must be a valid GUID.' });
+  if (source.kind === 'fixed') {
+    if (!normalizeGuid(source.id)) errors.push({ field: 'context.source.id', message: 'Enter the full GUID of the record to open.' });
+    if (target.pageType !== 'entityrecord' && !isValidLogicalName(source.entityName.trim())) {
+      errors.push({ field: 'context.source.entityName', message: "Select the record's table." });
     }
-    if (config.target.viewId.trim() && !['savedquery', 'userquery'].includes(config.target.viewType)) {
-      errors.push({ field: 'target.viewType', message: 'Select a view type when a view ID is set.' });
+    warnings.push({ field: 'context.source', message: 'A fixed record ID is environment-specific. Reconfigure it after deploying to another environment.' });
+  }
+  if (sendsRecordId) {
+    const name = context.variableName.trim();
+    if (!isJsIdentifier(name)) errors.push({ field: 'context.variableName', message: 'Variable name must be a valid JavaScript identifier.' });
+    else if (RESERVED_VARIABLES.includes(name)) errors.push({ field: 'context.variableName', message: `${name} is used by the generated script. Choose another name.` });
+  }
+
+  // Target
+  if ((target.pageType === 'custom' || target.pageType === 'webresource') && !target.name.trim()) {
+    errors.push({ field: 'target.name', message: target.pageType === 'custom' ? 'Custom page name is required.' : 'Web resource name is required.' });
+  }
+  if (target.pageType === 'dashboard' && !target.dashboardId.trim()) errors.push({ field: 'target.dashboardId', message: 'Dashboard is required.' });
+  if (target.pageType === 'entitylist') {
+    if (!target.entityName.trim()) errors.push({ field: 'target.entityName', message: 'Table name is required.' });
+    if (target.viewId.trim() && !normalizeGuid(target.viewId)) errors.push({ field: 'target.viewId', message: 'View ID must be a valid GUID.' });
+    if (target.viewId.trim() && !['savedquery', 'userquery'].includes(target.viewType)) errors.push({ field: 'target.viewType', message: 'Select a view type when a view ID is set.' });
+  }
+  if (target.pageType === 'entityrecord') {
+    // The other sources name the table at runtime; create mode and a fixed record need it here.
+    if ((creating || source.kind === 'fixed') && !target.entityName.trim()) errors.push({ field: 'target.entityName', message: 'Table name is required.' });
+    if (target.formId.trim() && !normalizeGuid(target.formId)) errors.push({ field: 'target.formId', message: 'Form ID must be a valid GUID.' });
+    pushJsonObjectError(errors, target.data, 'Form data must be a JSON object.');
+    if (creating && (source.kind === 'host' || source.kind === 'selectedRow')) {
+      warnings.push({ field: 'target.createNew', message: 'Pre-fill copies only the columns that a relationship mapping between the two tables defines.' });
     }
   }
-  if (config.target.pageType === 'entityrecord') {
-    if (config.target.formId.trim() && !normalizeGuid(config.target.formId)) {
-      errors.push({ field: 'target.formId', message: 'Form ID must be a valid GUID.' });
-    }
-    try {
-      parseFormData(config.target.data);
-    } catch {
-      errors.push({ field: 'target.data', message: 'Form data must be a JSON object.' });
+  if ((target.pageType === 'entityrecord' || target.pageType === 'entitylist') && target.entityName.trim() && accessibleTables && !accessibleTables.has(target.entityName.trim())) {
+    warnings.push({ field: 'target.entityName', message: `Table "${target.entityName.trim()}" is not in the current table list for this environment.` });
+  }
+  if (orgMismatch) pushOrgMismatchWarnings(warnings, target);
+  if (target.pageType === 'generative') {
+    if (!normalizeGuid(target.pageId)) errors.push({ field: 'target.pageId', message: 'Page ID must be the GUID of a generative page.' });
+    pushJsonObjectError(errors, target.data, 'Page data must be a JSON object.');
+    if (sendsRecordId || target.data.trim()) {
+      warnings.push({ field: 'target.pageType', message: 'recordId, entityName and data reach the page only if its prompt sets it up to accept input parameters.' });
     }
   }
 
-  // Error: entityrecord navigation that resolves its ID from configuration rather than
-  // from the trigger. Mirrors buildConfiguredRecordIdExpression in CodeGenerationService —
-  // without a normalizable GUID the generated script's only effect is to throw.
-  if (
-    config.target.pageType === 'entityrecord' &&
-    (config.context.mode === 'Static' || config.context.mode === 'None' || config.trigger.kind === 'ManualJS') &&
-    config.trigger.kind !== 'LookupTagClick'
-  ) {
-    const configuredId = config.context.staticRecordId;
-    if (!normalizeGuid(configuredId)) {
-      errors.push({
-        field: 'context.staticRecordId',
-        message: 'A valid record ID (GUID) is required — this trigger and context supply no record at runtime.',
-      });
-    }
+  // Advisory
+  if (pane.hideHeader && pane.canClose) warnings.push({ field: 'pane.hideHeader', message: 'Hiding the header also hides the close button, so users cannot dismiss the pane. The generated script emits canClose: false to match.' });
+  if (pane.alwaysRender) warnings.push({ field: 'pane.alwaysRender', message: 'alwaysRender keeps the pane loaded even when inactive. This has a memory cost.' });
+  if (trigger.kind === 'FormOnLoad' && pane.isSelected === false) warnings.push({ field: 'pane.isSelected', message: 'FormOnLoad with isSelected: false opens a background pane that may surprise users.' });
+  if (target.pageType === 'webresource') warnings.push({ field: 'target.pageType', message: 'Web resources inside side panes cannot access Xrm or parent.Xrm.' });
+  if (target.pageType === 'search') warnings.push({ field: 'target.pageType', message: 'Search is not a documented navigateTo pageType. Documented values are entitylist, entityrecord, dashboard, webresource, custom, and generative. Generated code may fail at runtime.' });
+  if (trigger.kind === 'GridButton' && source.kind === 'selectedRow') {
+    warnings.push({ field: 'context.source', message: 'The generated script uses the first selected row. It exits without opening a pane when no row is selected, and ignores rows beyond the first.' });
   }
-
-
-  if ((config.trigger.kind === 'FormOnChange' || config.trigger.kind === 'LookupTagClick') && !config.trigger.fieldName?.trim()) {
-    errors.push({
-      field: 'trigger.fieldName',
-      message: config.trigger.kind === 'LookupTagClick'
-        ? 'Lookup control name is required for LookupTagClick triggers.'
-        : 'Field name is required for FormOnChange triggers.',
-    });
+  if (behavior.toggleIfOpen) {
+    if (!COMMAND_TRIGGERS.includes(trigger.kind)) errors.push({ field: 'behavior.toggleIfOpen', message: 'Close if already open works only for command bar buttons. Any other trigger would close its own pane when it fires again.' });
+    else if (pane.hideHeader || !pane.canClose) warnings.push({ field: 'behavior.toggleIfOpen', message: 'This pane has no close button, so the command button is the only way to close it.' });
   }
-
-
+  // Trigger names — CR-001: the same resolver the generators use, so no script is emitted under a name the UI did not show.
+  const triggerNames = resolveTriggerNames(config);
+  if (!triggerNames.ok) errors.push(...triggerNames.errors);
   const specialCharPattern = /['"\\]/;
-  const stringFields: Array<{ value: string; field: string; label: string }> = [
-    { value: config.pane.paneId, field: 'pane.paneId', label: 'Pane ID' },
-    { value: config.pane.title, field: 'pane.title', label: 'Title' },
-    { value: config.trigger.namespace, field: 'trigger.namespace', label: 'Namespace' },
-    { value: config.trigger.functionName, field: 'trigger.functionName', label: 'Function name' },
-  ];
-  for (const sf of stringFields) {
-    if (sf.value && specialCharPattern.test(sf.value)) {
-      warnings.push({
-        field: sf.field,
-        message: `${sf.label} contains special characters. These are safely escaped in generated code, but may indicate a copy-paste issue.`,
-      });
-    }
+  for (const sf of [
+    { value: pane.paneId, field: 'pane.paneId', label: 'Pane ID' },
+    { value: pane.title, field: 'pane.title', label: 'Title' },
+  ]) {
+    if (sf.value && specialCharPattern.test(sf.value)) warnings.push({ field: sf.field, message: `${sf.label} contains special characters. These are safely escaped in generated code, but may indicate a copy-paste issue.` });
   }
 
-  // Policy: warn-without-blocking. Warnings are advisory; code generation and copy proceed regardless.
-  // Blocking errors (isValid: false) require user action before code is usable.
-  return {
-    errors,
-    warnings,
-    isValid: errors.length === 0,
-  };
+  return { errors, warnings, isValid: errors.length === 0 };
 }

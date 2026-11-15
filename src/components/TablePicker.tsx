@@ -1,24 +1,19 @@
 import * as React from 'react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 import { theme } from '../theme/tokens';
-import { MetadataService, TableInfo } from '../services/MetadataService';
-import { Select, SelectOption } from './Select';
 import { Callout } from './Callout';
-import { CustomTableFilterButton } from './CustomTableFilterButton';
-
-type LoadState =
-  | { status: 'loading' }
-  | { status: 'loaded'; tables: TableInfo[] }
-  | { status: 'error'; reason: string };
+import { RetryButton } from './RetryButton';
+import { useAccessibleTables, type AccessibleTablesService } from './useAccessibleTables';
+import { TableComboBox } from './TableComboBox';
 
 export interface TablePickerProps {
   value: string;
   onChange: (value: string) => void;
-  metadataService: Pick<MetadataService, 'listAccessibleTables' | 'invalidate'>;
+  metadataService: AccessibleTablesService;
   error?: boolean;
   disabled?: boolean;
-  onAccessibleTablesChange?: (tables: Set<string> | undefined) => void;
+  ariaLabel?: string;
   customOnlyState?: readonly [boolean, (enabled: boolean) => void];
 }
 
@@ -28,117 +23,59 @@ export function TablePicker({
   metadataService,
   error,
   disabled,
-  onAccessibleTablesChange,
+  ariaLabel = 'Table',
   customOnlyState,
 }: TablePickerProps): React.ReactElement {
   const { isDark } = useTheme();
   const T = theme(isDark);
-  const [loadState, setLoadState] = useState<LoadState>({ status: 'loading' });
-  const [reloadKey, setReloadKey] = useState(0);
+  const {
+    tables,
+    loading,
+    error: loadError,
+    retry,
+  } = useAccessibleTables(metadataService);
   const [localCustomOnly, setLocalCustomOnly] = useState(false);
   const customOnly = customOnlyState?.[0] ?? localCustomOnly;
   const setCustomOnly = customOnlyState?.[1] ?? setLocalCustomOnly;
+  const loaded = !loading && loadError === undefined;
   const toggleCustomOnly = () => {
     const next = !customOnly;
     setCustomOnly(next);
-    if (next && value && loadState.status === 'loaded' &&
-        !loadState.tables.some(table => table.logicalName === value && table.isCustomEntity === true)) {
+    if (next && value && loaded &&
+        !tables.some(table => table.logicalName === value && table.isCustomEntity === true)) {
       onChange('');
     }
   };
-
-  useEffect(() => {
-    let cancelled = false;
-    setLoadState({ status: 'loading' });
-    onAccessibleTablesChange?.(undefined);
-
-    metadataService.listAccessibleTables().then(result => {
-      if (cancelled) return;
-      if (result.status === 'ok') {
-        setLoadState({ status: 'loaded', tables: result.tables });
-        onAccessibleTablesChange?.(new Set(result.tables.map(table => table.logicalName)));
-      } else {
-        setLoadState({ status: 'error', reason: result.reason });
-        onAccessibleTablesChange?.(undefined);
-      }
-    }).catch(err => {
-      if (cancelled) return;
-      setLoadState({
-        status: 'error',
-        reason: err instanceof Error ? err.message : 'Unable to load table list.',
-      });
-      onAccessibleTablesChange?.(undefined);
-    });
-
-    return () => { cancelled = true; };
-  }, [metadataService, onAccessibleTablesChange, reloadKey]);
-
-  const retry = useCallback(() => {
-    metadataService.invalidate();
-    setReloadKey(key => key + 1);
-  }, [metadataService]);
-
-  const options = useMemo<SelectOption[]>(() => {
-    if (loadState.status === 'loading') return [{ value: value || '', label: 'Loading tables...' }];
-    if (loadState.status === 'error') return [{ value: value || '', label: 'Could not load table list' }];
-
-    const visibleTables = customOnly
-      ? loadState.tables.filter(table => table.isCustomEntity === true)
-      : loadState.tables;
-    const tableOptions = visibleTables.map(table => ({
-      value: table.logicalName,
-      label: `${table.displayName} (${table.logicalName})`,
-    }));
-    if (!customOnly && value && !loadState.tables.some(table => table.logicalName === value)) {
-      return [{ value, label: `${value} (no longer accessible)`, disabled: true }, ...tableOptions];
-    }
-    if (tableOptions.length === 0) {
-      return [{ value: '', label: customOnly ? 'No custom tables found' : 'No accessible tables found' }];
-    }
-    // Without an explicit placeholder, an unset value renders as whichever table is
-    // alphabetically first (often "account") — selecting that table then does nothing,
-    // since the <select> already displays it and fires no change event.
-    return !value || (customOnly && !visibleTables.some(table => table.logicalName === value))
-      ? [{ value: '', label: 'Select a table…' }, ...tableOptions]
-      : tableOptions;
-  }, [loadState, value, customOnly]);
+  const inaccessible = !loading && loadError === undefined && Boolean(value) &&
+    !tables.some(table => table.logicalName === value);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <CustomTableFilterButton
-        pressed={customOnly}
-        disabled={loadState.status !== 'loaded' || disabled}
-        onClick={toggleCustomOnly}
-      />
-      <Select
-        value={customOnly && !options.some(option => option.value === value) ? '' : value}
+      <TableComboBox
+        value={value}
         onChange={onChange}
-        options={options}
-        disabled={loadState.status !== 'loaded' || disabled}
-        error={error || loadState.status === 'error'}
+        items={tables}
+        loading={loading}
+        error={loadError}
+        invalid={error}
+        onRetry={retry}
+        ariaLabel={ariaLabel}
+        placeholder={loading ? 'Loading tables...' : 'Select a table…'}
+        customOnly={customOnly}
+        onCustomOnlyChange={toggleCustomOnly}
+        filterDisabled={!loaded || disabled}
+        disabled={!loaded || disabled}
       />
-      {loadState.status === 'error' && (
+      {inaccessible && (
+        <span role="status" aria-live="polite" style={{ color: T.accentAlt, fontFamily: T.font, fontSize: 11 }}>
+          Table "{value}" is not in the current table list for this environment.
+        </span>
+      )}
+      {loadError !== undefined && (
         <Callout type="err" icon="x">
           <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-            <span>Could not load table list. {loadState.reason}</span>
-            <button
-              type="button"
-              onClick={retry}
-              style={{
-                flexShrink: 0,
-                border: `1px solid ${T.error}`,
-                background: T.pageBg,
-                color: T.error,
-                borderRadius: T.rS,
-                fontFamily: T.font,
-                fontSize: 12,
-                fontWeight: 600,
-                padding: '2px 8px',
-                cursor: 'pointer',
-              }}
-            >
-              Retry
-            </button>
+            <span>Could not load table list. {loadError}</span>
+            <RetryButton onClick={retry} />
           </span>
         </Callout>
       )}

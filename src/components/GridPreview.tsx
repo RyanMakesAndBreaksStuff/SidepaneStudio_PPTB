@@ -3,94 +3,184 @@ import { useEffect, useRef, useState } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 import { theme } from '../theme/tokens';
 import { PaneDefinitionConfig } from '../types/PaneDefinitionConfig';
+import type { IXrmContext } from '../adapters/PptbContextAdapter';
 import { MetadataService } from '../services/MetadataService';
+import type { ViewInfo } from '../services/MetadataService';
 import { ValidationResult } from '../services/ValidationService';
 import { TablePicker } from './TablePicker';
 import { ViewPicker } from './ViewPicker';
+import { LookupPicker } from './LookupPicker';
+import { useLookupColumns } from './useLookupColumns';
 import { NativeMdaFrame } from './NativeMdaFrame';
 import { MockGrid } from './MockGrid';
 import type { GridColumn } from '../services/GridViewModel';
-import { resolveGridColumns } from '../services/GridViewModel';
-import { usePreviewSessionState } from '../contexts/PreviewSessionContext';
-
-export function capGridFetchXml(source: string, entityName: string): string {
-  const doc = new DOMParser().parseFromString(source, 'text/xml');
-  const fetch = doc.documentElement;
-  const entities = Array.from(fetch.children).filter(child => child.tagName === 'entity');
-  if (doc.doctype || doc.querySelector('parsererror') || fetch.tagName !== 'fetch' ||
-      entities.length !== 1 || entities[0].getAttribute('name') !== entityName) {
-    throw new Error('This view does not contain valid FetchXML for the preview entity.');
-  }
-  const existing = fetch.getAttribute('top');
-  if (existing !== null && (!/^\d+$/.test(existing) || Number(existing) < 1)) {
-    throw new Error('This view has an invalid FetchXML row limit.');
-  }
-  for (const attribute of ['page', 'count', 'paging-cookie', 'returntotalrecordcount']) fetch.removeAttribute(attribute);
-  fetch.setAttribute('top', String(Math.min(10, existing === null ? 10 : Number(existing))));
-  return new XMLSerializer().serializeToString(doc);
-}
+import { capGridFetchXml, getRelatedLookup, parseGridFetch, resolveGridColumns, resolveRelatedRecord } from '../services/GridViewModel';
+import { usePreviewPane, usePreviewSessionState } from '../contexts/PreviewSessionContext';
+import { applyLookup, changeHostTable } from '../services/relatedRecordConfig';
+import type { LookupAttributeInfo } from '../services/MetadataService';
+import { isValidLogicalName } from '../services/odataGuards';
+import { describeDataverseError } from '../services/dataverseErrorText';
+import { gridButtonReadsSelection } from '../services/CodeGenerationService';
 
 interface Props {
   config: PaneDefinitionConfig;
   validation: ValidationResult;
   metadataService: MetadataService;
-  entityName: string;
-  allowEntityChange: boolean;
-  onEntityNameChange: (name: string) => void;
+  xrm: Pick<IXrmContext, 'fetchXml'>;
+  onConfigChange?: (updater: (prev: PaneDefinitionConfig) => PaneDefinitionConfig) => void;
+  /** The config was restored from another environment and is not confirmed here; metadata must not rewrite it. */
+  orgMismatch?: boolean;
 }
 
 export function GridPreview(props: Props): React.ReactElement {
-  const { config, entityName, allowEntityChange, metadataService, onEntityNameChange } = props;
+  const { config, metadataService, onConfigChange } = props;
+  const entityName = config.host.entityName;
   const { isDark } = useTheme();
   const T = theme(isDark);
-  const configured = config.target.pageType === 'entitylist' && config.target.entityName.trim() === entityName ? config.target : undefined;
-  const selectionKey = JSON.stringify(['grid-view', entityName, configured?.viewId ?? '', configured?.viewType ?? '']);
-  const [selection, setSelection] = usePreviewSessionState<{ id: string; viewType: '' | 'savedquery' | 'userquery' }>(
-    selectionKey, { id: configured?.viewId ?? '', viewType: configured?.viewType ?? '' });
+  const relatedMode = config.context.source.kind === 'lookup';
+  const relatedLookup = getRelatedLookup(config);
+  type ViewSelection = { id: string; viewType: '' | 'savedquery' | 'userquery' };
+  const selection: ViewSelection = { id: config.host.viewId, viewType: config.host.viewType };
+  const [relatedGeneration, setRelatedGeneration] = usePreviewSessionState<number>('related-grid-generation', 0);
+  const [resolvedLookupIdentity, setResolvedLookupIdentity] = usePreviewSessionState<{
+    service: MetadataService;
+    identity: string;
+  } | null>('related-grid-lookup-identity', null);
+  const lookupColumns = useLookupColumns(metadataService, relatedMode ? entityName : '');
+  const lookupStatus = lookupColumns.statusFor(relatedLookup);
+  const [resolvedLookup, setResolvedLookup] = useState<{ entityName: string; lookup: LookupAttributeInfo } | null>(null);
+  const [viewStatus, setViewStatus] = useState<'idle' | 'loading' | 'error' | 'unavailable' | 'empty' | 'resolved'>('idle');
+  const [relatedContext, setRelatedContext] = usePreviewSessionState<{ key: string; generation: number }>(
+    'related-grid-context', { key: '', generation: 0 });
+  const dependencyKey = JSON.stringify([entityName, relatedLookup]);
+  const generationFloor = Math.max(relatedGeneration, relatedContext.generation);
+  const effectiveGeneration = relatedMode && relatedContext.key !== dependencyKey
+    ? generationFloor + 1 : relatedGeneration;
+  useEffect(() => {
+    if (!relatedMode || relatedContext.key === dependencyKey) return;
+    setRelatedContext({ key: dependencyKey, generation: effectiveGeneration });
+    setRelatedGeneration(effectiveGeneration);
+  }, [relatedMode, relatedContext.key, dependencyKey, effectiveGeneration,
+    setRelatedContext, setRelatedGeneration]);
   const customOnlyState = usePreviewSessionState<boolean>('grid-custom-tables-only', false);
+  const resetRelatedPreview = () => setRelatedGeneration(value => value + 1);
+  const changeSource = (source: string) => {
+    setResolvedLookup(null);
+    setResolvedLookupIdentity(null);
+    resetRelatedPreview();
+    onConfigChange?.(prev => changeHostTable(prev, source));
+  };
+  const changeLookup = (lookup: LookupAttributeInfo | undefined, userSelected = false) => {
+    if (!relatedMode) return;
+    setResolvedLookup(lookup ? { entityName, lookup } : null);
+    if (!lookup) return;
+    const targets = [...new Set((Array.isArray(lookup.Targets) ? lookup.Targets : [])
+      .filter((target): target is string => typeof target === 'string' && isValidLogicalName(target)))].sort();
+    const identity = JSON.stringify([entityName, lookup.LogicalName, targets]);
+    const identityChanged = resolvedLookupIdentity !== null &&
+      (resolvedLookupIdentity.service !== metadataService || resolvedLookupIdentity.identity !== identity);
+    setResolvedLookupIdentity({ service: metadataService, identity });
+    if (userSelected || identityChanged) resetRelatedPreview();
+    onConfigChange?.(prev => applyLookup(prev, entityName, lookup));
+  };
+  const clearLookup = () => {
+    if (!relatedMode) return;
+    setResolvedLookup(null);
+    setResolvedLookupIdentity(null);
+    resetRelatedPreview();
+    onConfigChange?.(prev => applyLookup(prev, entityName, null));
+  };
+  useEffect(() => {
+    if (!lookupColumns.loaded || props.orgMismatch) return;
+    changeLookup(lookupColumns.find(relatedLookup));
+  }, [lookupColumns.loaded, entityName, relatedLookup, props.orgMismatch]);
+  const changeView = (view: ViewSelection) => {
+    onConfigChange?.(prev => ({ ...prev, host: { ...prev.host, viewId: view.id, viewType: view.viewType } }));
+    if (relatedMode) resetRelatedPreview();
+  };
+  const toViewSelection = (view: ViewInfo | null): ViewSelection => ({
+    id: view?.id ?? '',
+    viewType: view?.viewType === 'savedquery' || view?.viewType === 'userquery' ? view.viewType : '',
+  });
   return <div style={{ flex: 1, overflow: 'auto', padding: 12, minWidth: 0, color: T.fg1, fontFamily: T.font }}>
-    {allowEntityChange ? (
-      <div role="group" aria-label="Preview entity"
-        style={{ color: T.fg2, fontFamily: T.font, fontSize: 12 }}>
-        <span>Preview entity</span>
-        <TablePicker value={entityName} metadataService={metadataService}
-          onChange={onEntityNameChange} customOnlyState={customOnlyState} />
-      </div>
-    ) : <p style={{ color: T.fg2, fontFamily: T.font, fontSize: 12 }}>Preview entity: {entityName}</p>}
-    <ViewPicker entityName={entityName} value={selection.id} viewType={selection.viewType}
-      metadataService={metadataService} onChange={view => setSelection({ id: view?.id ?? '', viewType: view?.viewType ?? '' })} />
-    <GridData key={JSON.stringify([entityName, selection.viewType, selection.id])} {...props} viewId={selection.id} viewType={selection.viewType} />
+    <div role="group" aria-label="Grid source"
+      style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10, marginBottom: 10, color: T.fg2, fontFamily: T.font, fontSize: 12 }}>
+      <div style={{ gridColumn: '1 / -1', fontWeight: 600 }}>Grid source — changes update configuration</div>
+      <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>Source table
+        <TablePicker ariaLabel="Source table" value={entityName} metadataService={metadataService}
+          onChange={changeSource} customOnlyState={customOnlyState} />
+      </label>
+      {relatedMode && <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>Lookup column
+        <LookupPicker columns={lookupColumns} entityName={entityName} value={relatedLookup}
+          onChange={(logicalName, lookup) => lookup ? changeLookup(lookup, true) : !logicalName && clearLookup()} />
+      </label>}
+      <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>View
+        <ViewPicker entityName={entityName} value={selection.id} viewType={selection.viewType}
+          metadataService={metadataService} onChange={view => changeView(toViewSelection(view))}
+          onStatusChange={status => setViewStatus(status)} />
+      </label>
+    </div>
+    <GridData key={JSON.stringify([entityName, selection.viewType, selection.id, relatedLookup, effectiveGeneration])} {...props}
+      entityName={entityName} viewId={selection.id} viewType={selection.viewType} relatedLookup={relatedLookup}
+      relatedTargets={resolvedLookup?.entityName === entityName && resolvedLookup.lookup.LogicalName === relatedLookup
+        ? resolvedLookup.lookup.Targets : undefined}
+      relatedGeneration={relatedMode ? effectiveGeneration : 0}
+      relatedReady={!relatedMode || (lookupStatus === 'resolved' && !!relatedLookup && viewStatus === 'resolved')} />
   </div>;
 }
 
 type State = { status: 'idle' | 'loading' } | { status: 'error'; reason: string } |
   { status: 'loaded'; rows: Record<string, unknown>[]; viewName: string; columns: GridColumn[] };
 
-function GridData({ config, validation, metadataService, entityName, viewId, viewType }: Props & {
-  viewId: string; viewType: '' | 'savedquery' | 'userquery';
+function GridData({ config, validation, metadataService, xrm, entityName, viewId, viewType, relatedLookup,
+  relatedTargets, relatedGeneration, relatedReady }: Props & {
+  entityName: string; viewId: string; viewType: '' | 'savedquery' | 'userquery'; relatedLookup: string;
+  relatedTargets?: string[] | null;
+  relatedGeneration: number; relatedReady: boolean;
 }): React.ReactElement {
   const { isDark } = useTheme();
   const T = theme(isDark);
-  const dataKey = JSON.stringify(['grid-data', entityName, viewType, viewId]);
-  const selectionKey = JSON.stringify(['grid-rows', entityName, viewType, viewId]);
+  const dataKey = JSON.stringify(['grid-data', entityName, viewType, viewId, relatedLookup, relatedGeneration]);
+  const selectionKey = JSON.stringify(['grid-rows', entityName, viewType, viewId, relatedLookup, relatedGeneration]);
   const [completed, setCompleted] = usePreviewSessionState<Extract<State, { status: 'loaded' }> | null>(dataKey, null);
   const [state, setState] = useState<State>(() => completed ?? { status: 'idle' });
   const [selectedRows, setSelectedRows] = usePreviewSessionState<number[]>(`${selectionKey}:checked`, []);
   const [activeRow, setActiveRow] = usePreviewSessionState<number | null>(`${selectionKey}:active`, null);
+  const [paneSession, openPane] = usePreviewPane('grid');
+  // RelatedRecord: the pane opens the row's lookup record and stays closed when the lookup is empty.
+  const resolveRow = (index: number) => relatedLookup !== '' && state.status === 'loaded'
+    ? resolveRelatedRecord(state.rows[index], relatedLookup, relatedTargets) : null;
+  /** Each command or row selection is one invocation of the generated script. */
+  const [rowlessOpen, setRowlessOpen] = usePreviewSessionState<boolean>(`${selectionKey}:rowless`, false);
+  const invoke = (index: number | null) => {
+    setRowlessOpen(false);
+    setActiveRow(index);
+    if (index !== null && (relatedLookup === '' || resolveRow(index)?.status === 'resolved')) {
+      openPane(config.pane.isSelected, config.behavior.reuseExistingPane);
+    }
+  };
+  // The generated grid-button script reads the selection only for row-based sources; other triggers always have a row.
+  const needsRow = config.trigger.kind !== 'GridButton' || gridButtonReadsSelection(config);
+  const runCommand = () => {
+    if (selectedRows.length > 0) { invoke(Math.min(...selectedRows)); return; }
+    if (!needsRow) { setActiveRow(null); setRowlessOpen(true); openPane(config.pane.isSelected, config.behavior.reuseExistingPane); }
+  };
   const onSelectionChange = (indices: number[]) => {
+    const ticked = indices.filter(index => !selectedRows.includes(index));
     setSelectedRows(indices);
-    const onSelect = config.trigger.kind === 'MainGridOnSelect' || config.trigger.kind === 'SubgridOnSelect';
-    setActiveRow(onSelect && indices.length === 1 ? indices[0] : null);
+    // OnRecordSelect fires for the row the user just ticked, whatever else is ticked.
+    invoke(config.trigger.kind === 'GridRowSelect' && ticked.length === 1 ? ticked[0] : null);
   };
   const request = useRef(0);
   useEffect(() => {
     return () => { request.current += 1; };
-  }, [metadataService]);
+  }, [metadataService, xrm]);
   const generate = async () => {
     const id = ++request.current;
     setCompleted(null);
     setSelectedRows([]);
     setActiveRow(null);
+    setRowlessOpen(false);
     setState({ status: 'loading' });
     try {
       const result = await metadataService.listViewsForEntity(entityName);
@@ -98,10 +188,11 @@ function GridData({ config, validation, metadataService, entityName, viewId, vie
       if (result.status === 'error') throw new Error(result.reason);
       const view = result.views.find(item => item.id === viewId && item.viewType === viewType);
       if (!view) throw new Error('Select an accessible view.');
-      const xml = capGridFetchXml(view.fetchXml, entityName);
-      const columns = await resolveGridColumns(view, entityName, metadataService);
+      const parsed = parseGridFetch(view.fetchXml, entityName);
+      const xml = capGridFetchXml(parsed, relatedLookup);
+      const columns = await resolveGridColumns(view, entityName, metadataService, parsed);
       if (id !== request.current) return;
-      const response = await window.dataverseAPI.fetchXmlQuery(xml);
+      const response = await xrm.fetchXml(xml);
       if (id !== request.current) return;
       if (!Array.isArray(response.value) || response.value.some(row => !row || typeof row !== 'object' || Array.isArray(row))) {
         throw new Error('The grid query returned an invalid response.');
@@ -113,14 +204,17 @@ function GridData({ config, validation, metadataService, entityName, viewId, vie
       setState(loaded);
     } catch (error) {
       if (id !== request.current) return;
-      setState({ status: 'error', reason: error instanceof Error ? error.message : 'Could not load grid rows.' });
+      setState({ status: 'error', reason: describeDataverseError(error, 'Could not load grid rows.') });
     }
   };
+  const relatedResolution = activeRow !== null ? resolveRow(activeRow) : null;
+  const related = relatedResolution?.status === 'resolved' ? relatedResolution.record : null;
+  const paneOpen = (rowlessOpen && !needsRow) || (activeRow !== null && (relatedLookup === '' || relatedResolution?.status === 'resolved'));
   return <>
     <p style={{ color: T.accent, fontFamily: T.font, fontSize: 12 }}>Reads up to 10 rows from the selected view. Preview only.</p>
     <button
       type="button"
-      disabled={!entityName || !viewId || !viewType || state.status === 'loading'}
+      disabled={!entityName || !viewId || !viewType || state.status === 'loading' || !relatedReady}
       onClick={() => void generate()}
       style={{
         border: `1px solid ${T.accent}`,
@@ -138,13 +232,19 @@ function GridData({ config, validation, metadataService, entityName, viewId, vie
     </button>
     {state.status === 'loading' && <p role="status" style={{ color: T.fg3, fontFamily: T.font, fontSize: 12 }}>Loading grid rows...</p>}
     {state.status === 'error' && <p role="alert" style={{ color: T.error, fontFamily: T.font, fontSize: 12 }}>{state.reason}</p>}
+    {relatedResolution?.status === 'empty' && activeRow !== null && <p role="status" style={{ color: T.fg3, fontFamily: T.font, fontSize: 12 }}>
+      No {relatedLookup} value on row {activeRow + 1}, so the pane does not open.
+    </p>}
+    {relatedResolution?.status === 'unresolved' && relatedResolution.reason === 'table-unknown' &&
+      <p role="status" style={{ color: T.fg3, fontFamily: T.font, fontSize: 12 }}>The related record's table could not be determined.</p>}
+    {relatedResolution?.status === 'unresolved' && relatedResolution.reason === 'table-not-allowed' &&
+      <p role="alert" style={{ color: T.error, fontFamily: T.font, fontSize: 12 }}>The lookup annotation identifies a table that is not an allowed destination table.</p>}
     {state.status === 'loaded' && <NativeMdaFrame
-      pane={{ ...config.pane, isSelected: activeRow !== null }}
-      hostTarget={{ pageType: 'entitylist', entityName, viewId, viewType }}
-      paneTarget={config.target} validation={validation} caption={`${entityName} · ${state.viewName} · live data, simulated command`}>
+      pane={{ ...config.pane, isSelected: paneOpen && paneSession.selected }} paneTarget={config.target} validation={validation}
+      variant={{ kind: 'grid', caption: `${entityName} · ${state.viewName} · live data, simulated command`, record: related }}>
       <MockGrid rows={state.rows} columns={state.columns} viewName={state.viewName}
         selectedRows={selectedRows} activeRow={activeRow} onSelectionChange={onSelectionChange}
-        onCommand={() => { if (selectedRows.length === 1) setActiveRow(selectedRows[0]); }}
+        commandEnabled={!needsRow || selectedRows.length > 0} onCommand={runCommand}
         onRefresh={() => void generate()} />
     </NativeMdaFrame>}
   </>;

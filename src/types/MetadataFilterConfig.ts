@@ -30,7 +30,7 @@ export const METADATA_FILTER_CONFIG_KEYS = [
 
 export type MetadataFilterConfigKey = typeof METADATA_FILTER_CONFIG_KEYS[number];
 
-export function normalizeMetadataFilterList(values: string[]): string[] {
+function normalizeMetadataFilterList(values: string[]): string[] {
   const seen = new Set<string>();
   const normalized: string[] = [];
   for (const value of values) {
@@ -51,7 +51,7 @@ export function normalizeMetadataFilterConfig(config: MetadataFilterConfig): Met
   };
 }
 
-export function resolveMetadataFilterList(value: unknown, fallback: string[]): string[] {
+function resolveMetadataFilterList(value: unknown, fallback: string[]): string[] {
   if (!Array.isArray(value)) return fallback;
   if (value.some(item => typeof item !== 'string' || item.trim().length === 0)) {
     return fallback;

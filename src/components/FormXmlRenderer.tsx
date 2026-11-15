@@ -1,6 +1,7 @@
 import * as React from 'react';
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { FormModel, FormSection, FormCell } from '../services/FormXmlService';
+import { TabStrip, tabPanelProps } from './TabStrip';
 
 import { FL } from './flTokens';
 function DisabledInput({ type }: { type: FormCell['fieldType'] }): React.ReactElement {
@@ -97,45 +98,42 @@ interface FormXmlRendererProps {
 
 export function FormXmlRenderer({ model }: FormXmlRendererProps): React.ReactElement {
   const [activeTab, setActiveTab] = useState(0);
+  const tabsId = useId();
 
   if (model.tabs.length === 0) {
     return (
-      <div style={{ padding: 24, color: FL.fgLabel, fontFamily: FL.font, fontSize: 13 }}>
+      <div style={{ padding: 24, color: FL.fgMuted, fontFamily: FL.font, fontSize: 13 }}>
         No tabs in form.
       </div>
     );
   }
 
-  const currentTab = model.tabs[activeTab] ?? model.tabs[0];
+  const activeIndex = model.tabs[activeTab] ? activeTab : 0;
+  const currentTab = model.tabs[activeIndex];
+  const hasTabStrip = model.tabs.length > 1;
 
   return (
     <div style={{ minHeight: '100%', display: 'flex', flexDirection: 'column', background: FL.pageBg, fontFamily: FL.font }}>
       {/* Tab strip */}
-      {model.tabs.length > 1 && <div style={{ display: 'flex', borderBottom: `1px solid ${FL.stroke}`, background: FL.surface, flexShrink: 0, marginBottom: 10, borderRadius: 8 }}>
-        {model.tabs.map((tab, i) => (
-          <button
-            key={tab.name}
-            onClick={() => setActiveTab(i)}
-            style={{
-              padding: '8px 16px',
-              border: 'none',
-              borderBottom: i === activeTab ? `2px solid ${FL.tabActiveBorder}` : '2px solid transparent',
-              background: 'transparent',
-              color: i === activeTab ? FL.tabActiveFg : FL.tabFg,
-              fontFamily: FL.font,
-              fontSize: 13,
-              fontWeight: i === activeTab ? 600 : 400,
-              cursor: 'pointer',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {tab.label || tab.name}
-          </button>
-        ))}
-      </div>}
+      {hasTabStrip && <TabStrip label="Form tabs" idPrefix={tabsId}
+        tabs={model.tabs.map((tab, i) => ({ id: String(i), label: tab.label || tab.name }))}
+        value={String(activeIndex)} onChange={id => setActiveTab(Number(id))}
+        style={{ display: 'flex', borderBottom: `1px solid ${FL.stroke}`, background: FL.surface, flexShrink: 0, marginBottom: 10, borderRadius: 8 }}
+        tabStyle={active => ({
+          padding: '8px 16px',
+          border: 'none',
+          borderBottom: active ? `2px solid ${FL.brand}` : '2px solid transparent',
+          background: 'transparent',
+          color: active ? FL.brand : FL.tabFg,
+          fontFamily: FL.font,
+          fontSize: 13,
+          fontWeight: active ? 600 : 400,
+          cursor: 'pointer',
+          whiteSpace: 'nowrap',
+        })} />}
 
       {/* Tab content */}
-      <div style={{ flex: 1, overflow: 'visible', background: FL.pageBg }}>
+      <div {...(hasTabStrip ? tabPanelProps(tabsId, String(activeIndex)) : {})} style={{ flex: 1, overflow: 'visible', background: FL.pageBg }}>
         {currentTab.sections.map(section => (
           <SectionView key={section.name} section={section} />
         ))}

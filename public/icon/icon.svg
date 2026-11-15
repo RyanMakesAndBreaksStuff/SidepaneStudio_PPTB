@@ -1,14 +1,16 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="Frame Shift nested">
-  <rect x="16" y="16" width="68" height="68" rx="16" fill="none" stroke="#1C1B18" stroke-width="3"/>
-  <g fill="none" stroke-linecap="round" stroke-linejoin="round" transform="translate(4,4)">
-    <rect x="30" y="28" width="40" height="48" rx="8" fill="none" stroke="#F2F0EA" stroke-width="3"/>
-    <path d="M42 34 V70" fill="none" stroke="#F2F0EA" stroke-width="5"/>
-    <path d="M42 36 H58 A9 9 0 0 1 58 54 H42" fill="none" stroke="#F2F0EA" stroke-width="4.5"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="Seal cut, letters centered">
+  <rect x="6" y="6" width="90" height="90" rx="22" fill="#1C1B18"/>
+  <!-- Rear disc -->
+  <circle cx="68" cy="56" r="22" fill="#2A2825" transform="translate(2,2)"/>
+  <circle cx="68" cy="56" r="22" fill="#2A2825" stroke="#F2F0EA" stroke-width="2.5"/>
+  <g fill="none" stroke="#F2F0EA" stroke-linecap="round" stroke-linejoin="round" transform="translate(5.5,0)">
+    <path d="M57 41 V71" stroke-width="4.5"/>
+    <path d="M57 43 H71 A8 8 0 0 1 71 59 H57" stroke-width="4"/>
   </g>
-  <g fill="none" stroke-linecap="round" stroke-linejoin="round" transform="translate(-5,-5)">
-    <rect x="30" y="28" width="40" height="48" rx="8" fill="none" stroke="#BADD52" stroke-width="3"/>
-    <g transform="translate(-2,-2)">
-      <path d="M62 36 H42 A9 9 0 0 0 42 52 H56 A9 9 0 0 1 56 70 H38" fill="none" stroke="#BADD52" stroke-width="5.5"/>
-    </g>
+  <!-- Front disc, clear of the rear so the ink tile is the void -->
+  <circle cx="34" cy="44" r="22" fill="#1A2208" transform="translate(2,2)"/>
+  <circle cx="34" cy="44" r="22" fill="#24290F" stroke="#BADD52" stroke-width="3"/>
+  <g fill="none" stroke="#BADD52" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M44 28 H28 A8 8 0 0 0 28 44 H40 A8 8 0 0 1 40 60 H24" stroke-width="5"/>
   </g>
 </svg>

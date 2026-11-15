@@ -6,11 +6,14 @@ lets makers configure a pane without hand-writing JavaScript, previews the
 result, and generates the code needed to open the pane from a form, grid,
 command bar button, field change, or manual script.
 
+![Side Pane Studio workbench — the Configure panel (left), the Mock preview of a 480 px "Related Records" pane (center), and the generated Basic Script output (right)](documentation/images/workbench-overview.png)
+
 ## What It Builds
 
 Side panes can target:
 
 - Custom pages
+- Generative pages built by the app agent in the app designer
 - Dataverse table records
 - Dataverse table lists
 - HTML or JavaScript web resources
@@ -22,32 +25,60 @@ The generated configuration includes pane presentation, target content,
 trigger wiring, context handling, and behavior options such as pane reuse,
 expansion, and closing other panes.
 
-Table-record targets support a form, tab, and JSON form data. Table-list
-targets support system and personal views. Metadata pickers include custom
-table quick filters, and record context can come from the current record,
-a selected row, a static record ID, or a clicked lookup tag.
+Table-record targets support a form, tab, and JSON form data, and can open a
+blank form in create mode, optionally pre-filled from the triggering record.
+Table-list targets support system and personal views. Generative-page targets
+take a page ID and optional JSON page data. Metadata pickers include custom
+table quick filters. Record sources are the form record, selected row, clicked
+tag, lookup record, specific record, or no record.
 
 ## Preview and Generate
 
 - **Mock** previews pane layout and presentation.
-- **Form** uses connected table metadata and form XML.
+- **Form** uses the configured trigger table and form with connected metadata.
 - **Grid** uses a selected Dataverse view, its column order and display labels,
   and up to 10 records. Checkbox selection and **Preview command** let you
   try the configured interaction. Grid state survives workbench navigation
-  within the current session.
+  within the current session; table and view changes update the configured host.
 - **Basic Script** generates self-contained JavaScript.
 - **Shared Library** generates a handler that calls `SidePaneHelper`. Download
   the runtime from the Output panel, publish it as
   `spstudio_/scripts/sidepane.runtime.js`, and load it before the handler.
 - **Command Steps** provides deployment and trigger-wiring instructions.
 
-Triggers include form load, form/grid/subgrid command buttons, grid/subgrid
-row selection, field change, lookup tag click, and console/manual execution.
+The generated **Basic Script** is self-contained JavaScript. The **Command
+Steps** tab lists the trigger-wiring checklist for your current trigger.
+
+![Basic Script output — the "What this script does" summary and the generated JavaScript](documentation/images/output-basic-script.png)
+
+![Command Steps output — the function name and the Command Designer wiring checklist](documentation/images/command-steps.png)
+
+The Configure panel reads the configuration as a sentence above **Trigger &
+source**, **Destination**, and **Pane & behaviour**. It offers seven triggers:
+Form on load, Form button, Field change, Lookup tag click, Grid button, Grid
+row select, and Console. Grid triggers have a Main grid / Subgrid choice.
+Content and record choices follow the selected trigger; Grid preview appears
+only for grid triggers.
 Validation blocks copying invalid configurations. Clipboard failures provide
 a manual-copy fallback.
 
 Previews do not open a live side pane inside PPTB. Publish and test the
 generated script in the target model-driven app before shipping it.
+
+## Not supported by design
+
+Side Pane Studio generates side-pane scripts only. It does not generate
+`Xrm.Navigation.navigateTo` dialog or inline navigation.
+
+- The `createPane` option `hidden`: a hidden pane has no tab, so users cannot
+  reach it.
+- Collapsing the side pane rail. Scripts only expand it when they open a pane.
+- The `entityrecord` page inputs `relationship`, `processId`,
+  `processInstanceId`, `selectedStageId`, `isCrossEntityNavigate`, and
+  `isOfflineSyncError`.
+- Clients without side panes. Side panes run in the web browser only and not
+  on-premises; there, generated scripts exit with a console warning, or an
+  alert for command bar buttons.
 
 ## Usage Guide
 
@@ -59,12 +90,12 @@ The [user instruction manual](documentation/user-manual.md) starts with an
 installed tool and covers configuration, deployment, and troubleshooting.
 For installation and source builds, see [How-To-Build.md](How-To-Build.md).
 
-See [Change-Log.md](Change-Log.md) for the `v1.1.1` change summary.
+See [Change-Log.md](Change-Log.md) for the `v1.4.0` change summary.
 
 ## Requirements
 
 - Node.js 20.19.0 or newer for local development, as declared in `package.json`
-- PPTB with host API 1.2.0 or newer and an active Dataverse connection
+- PPTB with host API 1.2.7 or newer and an active Dataverse connection
 - Access to a Dynamics 365 or Power Apps model-driven app environment
 
 ## Local Development
@@ -72,7 +103,7 @@ See [Change-Log.md](Change-Log.md) for the `v1.1.1` change summary.
 Install dependencies:
 
 ```powershell
-npm install
+npm ci
 ```
 
 Start the Vite dev server:
@@ -87,14 +118,10 @@ Build the package:
 npm run build
 ```
 
-The studio build is written to `dist/`. To build the separate shared runtime:
-
-```powershell
-npm run build:runtime
-```
-
-This writes `dist-runtime/sidepane.runtime.js` for deployment as the shared
-JavaScript web resource. Basic Script output does not need that runtime.
+The studio build is written to `dist/`. The shared runtime has no build step:
+`src/runtime/sidepane.runtime.js` is the web resource you deploy, byte for
+byte, and **Output → Shared Library → Download runtime** saves the same file.
+Basic Script output does not need that runtime.
 
 Run tests:
 
@@ -124,7 +151,7 @@ does not supply the PPTB and Dataverse APIs needed for connected features.
 - `src/components/` - Workbench panels, preview UI, config inputs, and output UI.
 - `src/services/` - Code generation, validation, metadata, and form XML helpers.
 - `src/contexts/` - Theme and preview session state.
-- `src/runtime/` - Shared `SidePaneHelper` runtime and its entry point.
+- `src/runtime/` - Shared `SidePaneHelper` runtime (`sidepane.runtime.js`, deployed as written) and its option types.
 - `src/__tests__/` - Automated regression tests.
 - `documentation/` - User-facing guides and supporting docs.
 
@@ -132,7 +159,8 @@ does not supply the PPTB and Dataverse APIs needed for connected features.
 
 Side Pane Studio saves the current configuration through PPTB settings when
 available, so the last pane setup can be restored the next time the tool opens.
-If restoration fails, **Retry restore** or **Continue with defaults** lets you
-recover before new settings overwrite the saved configuration. Connection
+If restoration fails, or the saved configuration cannot be read, **Retry restore**
+or **Continue with defaults** lets you recover before new settings overwrite the
+saved configuration. Connection
 changes clear environment-specific selections and invalidate metadata and
 preview state. The studio follows PPTB's light or dark theme.

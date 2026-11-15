@@ -1,5 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { open, __setXrm } from '../runtime/sidePaneHelper';
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
+import type { SidePaneHelperOptions } from '../runtime/sidePaneHelper';
+import runtimeSource from '../runtime/sidepane.runtime.js?raw';
+import { deferred } from './testHelpers';
 
 function fakeXrm() {
   const pane = { paneId: 'p', select: vi.fn(), close: vi.fn(), navigate: vi.fn().mockResolvedValue(undefined), badge: 0 };
@@ -12,9 +14,20 @@ function fakeXrm() {
   return { pane, xrm: { App: { sidePanes }, Navigation: { openErrorDialog: vi.fn() } } };
 }
 
+/** Calls the shipped bytes: Download runtime saves this same file. */
+function open(options: SidePaneHelperOptions): Promise<void> {
+  return (globalThis as unknown as { SidePaneHelper: { open: typeof open } }).SidePaneHelper.open(options);
+}
+
+beforeEach(() => { (0, eval)(runtimeSource); });
+afterEach(() => {
+  vi.unstubAllGlobals();
+  Reflect.deleteProperty(globalThis, 'SidePaneHelper');
+});
+
 describe('SidePaneHelper.open — createPane options (contract C4/C3)', () => {
   let f: ReturnType<typeof fakeXrm>;
-  beforeEach(() => { f = fakeXrm(); __setXrm(f.xrm as any); });
+  beforeEach(() => { f = fakeXrm(); vi.stubGlobal('Xrm', f.xrm); });
 
   it('forwards only documented paneOptions to createPane', async () => {
     await open({ paneId: 'p', title: 'T', width: 600, pageType: 'custom', name: 'sps_Page', badge: 3, closeOthers: true });
@@ -49,10 +62,18 @@ describe('SidePaneHelper.open — createPane options (contract C4/C3)', () => {
       .toBeLessThan(f.pane.select.mock.invocationCallOrder[0]);
   });
 
+  it('navigates a reused pane without selecting it when isSelected is false', async () => {
+    f.xrm.App.sidePanes.getPane.mockReturnValue(f.pane);
+    await open({ paneId: 'p', pageType: 'custom', name: 'sps_Page', isSelected: false });
+    expect(f.pane.navigate).toHaveBeenCalled();
+    expect(f.pane.select).not.toHaveBeenCalled();
+    expect(f.xrm.App.sidePanes.createPane).not.toHaveBeenCalled();
+  });
+
   it('shared helper closes other panes after reusing one', async () => {
     const events: string[] = [];
     const f = fakeXrm();
-    __setXrm(f.xrm as any);
+    vi.stubGlobal('Xrm', f.xrm);
     f.xrm.App.sidePanes.getPane.mockReturnValue(f.pane);
     f.pane.navigate.mockImplementation(async () => { events.push('navigate'); });
     f.pane.select.mockImplementation(() => { events.push('select'); });
@@ -74,7 +95,8 @@ describe('SidePaneHelper.open — createPane options (contract C4/C3)', () => {
     await open({ paneId: 'p', pageType: 'custom', name: 'sps_Page' });
     expect(f.xrm.App.sidePanes.state).toBe(1);
 
-    const g = fakeXrm(); __setXrm(g.xrm as any);
+    const g = fakeXrm();
+    vi.stubGlobal('Xrm', g.xrm);
     await open({ paneId: 'p', pageType: 'custom', name: 'sps_Page', expandOnOpen: false });
     expect(g.xrm.App.sidePanes.state).toBe(0);
   });
@@ -90,11 +112,73 @@ describe('SidePaneHelper.open — createPane options (contract C4/C3)', () => {
     expect(f.xrm.App.sidePanes.createPane).not.toHaveBeenCalled();
     expect(f.xrm.Navigation.openErrorDialog).toHaveBeenCalled();
   });
+  it('warns and opens nothing when side panes are unavailable', async () => {
+    vi.stubGlobal('Xrm', { Navigation: f.xrm.Navigation });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    await open({ paneId: 'p', pageType: 'custom', name: 'sps_Page' });
+    expect(warn).toHaveBeenCalledWith('SidePaneHelper.open: side panes are not available in this client.');
+    expect(f.xrm.Navigation.openErrorDialog).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+  it('closes the selected, expanded pane when toggleIfOpen is set', async () => {
+    const selected = { paneId: 'p', close: vi.fn() };
+    Object.assign(f.xrm.App.sidePanes, { state: 1, getSelectedPane: vi.fn().mockReturnValue(selected) });
+    await open({ paneId: 'p', pageType: 'custom', name: 'sps_Page', toggleIfOpen: true });
+    expect(selected.close).toHaveBeenCalled();
+    expect(f.pane.navigate).not.toHaveBeenCalled();
+  });
+});
+
+describe('SidePaneHelper.open — one open per pane at a time (L2)', () => {
+  let f: ReturnType<typeof fakeXrm>;
+  beforeEach(() => { f = fakeXrm(); vi.stubGlobal('Xrm', f.xrm); });
+  const page = (name: string): SidePaneHelperOptions => ({ paneId: 'p', pageType: 'custom', name });
+  const openedPages = () => f.pane.navigate.mock.calls.map(call => (call[0] as { name: string }).name);
+
+  it('opens only the newest call made while the pane is opening', async () => {
+    const first = deferred<void>();
+    f.pane.navigate.mockReturnValueOnce(first.promise);
+    const opened = open(page('A'));
+    open(page('B'));
+    open(page('C'));
+    first.resolve();
+    await opened;
+    expect(openedPages()).toEqual(['A', 'C']);
+  });
+
+  it('opens a repeated identical call once, so a double click opens one pane', async () => {
+    const first = deferred<void>();
+    f.pane.navigate.mockReturnValueOnce(first.promise);
+    const opened = open(page('A'));
+    open(page('A'));
+    first.resolve();
+    await opened;
+    expect(openedPages()).toEqual(['A']);
+  });
+
+  it('lets a call take over a lock held for two seconds; the old open then neither releases nor replays', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      const start = new Date('2026-11-10T12:00:00Z').getTime();
+      vi.setSystemTime(start);
+      const hung = deferred<void>();
+      f.pane.navigate.mockReturnValueOnce(hung.promise);
+      const opened = open(page('A'));
+      vi.setSystemTime(start + 1000);
+      open(page('B')); // A still holds the pane, so B waits as the newest call.
+      vi.setSystemTime(start + 2500);
+      await open(page('C')); // A's lock has expired, so C opens at once.
+      hung.resolve();
+      await opened;
+      expect(openedPages()).toEqual(['A', 'C']);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 describe('SidePaneHelper — global attachment', () => {
-  it('publishes SidePaneHelper.open on the window', async () => {
-    await import('../runtime/index');
+  it('publishes SidePaneHelper.open on the window', () => {
     expect(typeof (globalThis as any).SidePaneHelper?.open).toBe('function');
   });
 });

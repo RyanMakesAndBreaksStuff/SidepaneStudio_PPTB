@@ -1,27 +1,32 @@
 // src/components/OutputPanel.tsx
 import * as React from 'react';
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useId } from 'react';
+import { TabStrip, tabPanelProps } from './TabStrip';
 import { useTheme } from '../contexts/ThemeContext';
 import { theme } from '../theme/tokens';
 import { PaneDefinitionConfig } from '../types/PaneDefinitionConfig';
 import { ValidationResult } from '../services/ValidationService';
 import { generateBasicScript, generateLibraryScript } from '../services/CodeGenerationService';
+import { buildGenerativePagePrompt } from '../services/GenerativePagePromptService';
 import { IXrmContext } from '../adapters/PptbContextAdapter';
 import { CodeBlock } from './CodeBlock';
 import { SummaryCard } from './SummaryCard';
 import { Callout } from './Callout';
-import { CommandStepsTab, TRIGGER_SUMMARIES, DEPLOY_STEPS } from './CommandStepsTab';
-import { escapeHtml } from './previewHelpers';
+import { CommandStepsTab, deploySteps } from './CommandStepsTab';
+import { describeConfigText } from '../services/describeConfig';
+import { notify } from '../services/notify';
 import runtimeSource from '../runtime/sidepane.runtime.js?raw';
 
 export interface OutputPanelProps {
   config: PaneDefinitionConfig;
   xrm: IXrmContext;
   validation: ValidationResult;
+  /** W20 — the config was restored from another environment's save; copying waits until the user confirms it. */
+  copyBlocked?: boolean;
 }
 
 
-import { RUNTIME_WEB_RESOURCE_NAME } from '../constants';
+import { RUNTIME_FILE_NAME, RUNTIME_WEB_RESOURCE_NAME, RUNTIME_WEB_RESOURCE_SUFFIX } from '../constants';
 
 function generateRawConfig(config: PaneDefinitionConfig): string {
   return JSON.stringify(config, null, 2);
@@ -32,14 +37,18 @@ const TABS = [
   { id: 'library', label: 'Shared Library' },
   { id: 'command', label: 'Command Steps' },
 ];
+const PROMPT_TAB = { id: 'prompt', label: 'Page prompt' };
 
-export const OutputPanel = React.memo(function OutputPanel({ config, xrm, validation }: OutputPanelProps): React.ReactElement {
+export const OutputPanel = React.memo(function OutputPanel({ config, xrm, validation, copyBlocked = false }: OutputPanelProps): React.ReactElement {
   const { isDark } = useTheme();
   const T = theme(isDark);
 
   const [activeTab, setActiveTab] = useState('basic');
+  const tabsId = useId();
+  const rawId = useId();
   const [showRaw, setShowRaw] = useState(false);
   const [runtimeExists, setRuntimeExists] = useState<boolean | null>(null);
+  const [runtimeName, setRuntimeName] = useState<string | null>(null);
   const [runtimeCheckError, setRuntimeCheckError] = useState<string | null>(null);
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [savingRuntime, setSavingRuntime] = useState(false);
@@ -47,20 +56,25 @@ export const OutputPanel = React.memo(function OutputPanel({ config, xrm, valida
   const basicCode   = useMemo(() => generateBasicScript(config), [config]);
   const libCode     = useMemo(() => generateLibraryScript(config), [config]);
   const rawCode     = useMemo(() => generateRawConfig(config), [config]);
+  const pagePrompt  = useMemo(() => buildGenerativePagePrompt(config), [config]);
+  const tabs = config.target.pageType === 'generative' ? [...TABS, PROMPT_TAB] : TABS;
+  // Changing the target can remove the tab that was open.
+  const currentTab = tabs.some(tab => tab.id === activeTab) ? activeTab : 'basic';
 
   const downloadRuntime = async () => {
     setDownloadError(null);
     setSavingRuntime(true);
     try {
       if (window.toolboxAPI?.fileSystem?.saveFile) {
-        await window.toolboxAPI.fileSystem.saveFile('sidepane.runtime.js', runtimeSource);
+        const savedPath = await window.toolboxAPI.fileSystem.saveFile(RUNTIME_FILE_NAME, runtimeSource);
+        if (savedPath) notify('Runtime saved', `Saved ${RUNTIME_FILE_NAME} to ${savedPath}`, 'success');
         return;
       }
       const url = URL.createObjectURL(new Blob([runtimeSource], { type: 'text/javascript;charset=utf-8' }));
       const anchor = document.createElement('a');
       try {
         anchor.href = url;
-        anchor.download = 'sidepane.runtime.js';
+        anchor.download = RUNTIME_FILE_NAME;
         document.body.appendChild(anchor);
         anchor.click();
       } finally {
@@ -74,54 +88,56 @@ export const OutputPanel = React.memo(function OutputPanel({ config, xrm, valida
     }
   };
 
-  // Re-check runtime web resource every time the library tab is activated
+  // Re-check runtime web resource every time the library tab is activated; a superseded check is ignored
   useEffect(() => {
-    if (activeTab === 'library') {
-      setRuntimeExists(null);
-      setRuntimeCheckError(null);
-      xrm.checkWebResourceExists(RUNTIME_WEB_RESOURCE_NAME)
-        .then(exists => setRuntimeExists(exists))
-        .catch((err) => setRuntimeCheckError(err instanceof Error ? err.message : String(err)));
-    }
+    if (activeTab !== 'library') return;
+    let active = true;
+    setRuntimeExists(null);
+    setRuntimeName(null);
+    setRuntimeCheckError(null);
+    xrm.checkWebResourceExists(RUNTIME_WEB_RESOURCE_SUFFIX)
+      .then(name => {
+        if (!active) return;
+        setRuntimeExists(Boolean(name));
+        setRuntimeName(typeof name === 'string' ? name : null);
+      })
+      .catch((err) => {
+        if (!active) return;
+        setRuntimeCheckError(err instanceof Error ? err.message : String(err));
+      });
+    return () => { active = false; };
   }, [activeTab, xrm]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       {/* Tab strip */}
-      <div style={{ display: 'flex', borderBottom: `1px solid ${T.stroke1}`, padding: '0 6px', background: T.pageBg, flexShrink: 0 }}>
-        {TABS.map(tab => (
-          <button
-            key={tab.id}
-            role="tab"
-            aria-selected={activeTab === tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 5,
-              padding: '9px 12px 8px', border: 'none', background: 'transparent',
-              fontFamily: T.font, fontSize: 12, fontWeight: 500,
-              color: activeTab === tab.id ? T.accent : T.fg3,
-              borderBottom: `2px solid ${activeTab === tab.id ? T.accent : 'transparent'}`,
-              cursor: 'pointer', whiteSpace: 'nowrap',
-              transition: 'color 80ms, border-color 80ms',
-            }}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
+      <TabStrip label="Output" idPrefix={tabsId} tabs={tabs} value={currentTab} onChange={setActiveTab}
+        style={{ display: 'flex', borderBottom: `1px solid ${T.stroke1}`, padding: '0 6px', background: T.pageBg, flexShrink: 0 }}
+        tabStyle={active => ({
+          display: 'flex', alignItems: 'center', gap: 5,
+          padding: '9px 12px 8px', border: 'none', background: 'transparent',
+          fontFamily: T.font, fontSize: 12, fontWeight: 500,
+          color: active ? T.accent : T.fg3,
+          borderBottom: `2px solid ${active ? T.accent : 'transparent'}`,
+          cursor: 'pointer', whiteSpace: 'nowrap',
+          transition: 'color 80ms, border-color 80ms',
+        })} />
 
       {/* Tab content */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div {...tabPanelProps(tabsId, currentTab)} style={{ flex: 1, overflowY: 'auto', padding: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {copyBlocked && (
+          <Callout type="warn" icon="⚠">Copy is disabled until you confirm the environment warning with <strong>Use anyway</strong>.</Callout>
+        )}
 
         {/* Basic Script */}
-        {activeTab === 'basic' && (
+        {currentTab === 'basic' && (
           <>
             <SummaryCard
               title="📋 What this script does"
-              body={`Opens a side pane showing <strong>${escapeHtml(config.pane.title || 'Side Pane')}</strong>. ${TRIGGER_SUMMARIES[config.trigger.kind] || ''}`}
-              steps={DEPLOY_STEPS[config.trigger.kind] || []}
+              body={describeConfigText(config)}
+              steps={deploySteps(config, 'basic')}
             />
-            {validation.errors.length > 0 && (
+            {!validation.isValid && (
               <Callout type="err" icon="✕">
                 Fix {validation.errors.length} validation error{validation.errors.length > 1 ? 's' : ''} before using this code: {validation.errors[0].message}
               </Callout>
@@ -131,12 +147,12 @@ export const OutputPanel = React.memo(function OutputPanel({ config, xrm, valida
                 <strong>closeOthers is active:</strong> The generated script closes all other side panes after opening this one.
               </Callout>
             )}
-            {validation.errors.length === 0 && <CodeBlock code={basicCode} lang="js" />}
+            {validation.isValid && <CodeBlock code={basicCode} lang="js" copyDisabled={copyBlocked} />}
           </>
         )}
 
         {/* Shared Library */}
-        {activeTab === 'library' && (
+        {currentTab === 'library' && (
           <>
             <button type="button" onClick={downloadRuntime} disabled={savingRuntime}
               style={{ padding: '8px 12px', alignSelf: 'flex-start', fontFamily: T.font,
@@ -151,37 +167,54 @@ export const OutputPanel = React.memo(function OutputPanel({ config, xrm, valida
               </Callout>
             )}
             {runtimeExists === false && !runtimeCheckError && (
-              <Callout type="warn" icon="⚠">
-                <strong>Prerequisite not detected:</strong> The shared runtime library (<code>{RUNTIME_WEB_RESOURCE_NAME}</code>) is not deployed in this environment. Deploy it before using this output.
+              <Callout type="warn" icon="⚠" live>
+                <strong>Prerequisite not detected:</strong> No web resource ending in <code>{RUNTIME_WEB_RESOURCE_SUFFIX}</code> was found in this environment. Deploy the shared runtime (recommended name: <code>{RUNTIME_WEB_RESOURCE_NAME}</code>) before using this output.
               </Callout>
             )}
-            {runtimeExists === true && (
-              <Callout type="ok" icon="✓">Shared runtime library detected in this environment.</Callout>
+            {runtimeExists === true && !runtimeCheckError && (
+              <Callout type="ok" icon="✓" live>Shared runtime library detected in this environment{runtimeName && <> (<code>{runtimeName}</code>)</>}.</Callout>
             )}
             <SummaryCard
               title="📚 Shared library version"
-              body={`Shorter snippet that calls the pre-deployed <strong>SidePaneHelper</strong> runtime. Your organization must deploy the shared library web resource first.`}
+              body={<>Shorter snippet that calls the pre-deployed <strong>SidePaneHelper</strong> runtime.</>}
+              steps={deploySteps(config, 'library')}
             />
-            {validation.errors.length > 0 && (
+            {!validation.isValid && (
               <Callout type="err" icon="✕">
                 Fix {validation.errors.length} validation error{validation.errors.length > 1 ? 's' : ''} before using this code: {validation.errors[0].message}
               </Callout>
             )}
-            {validation.errors.length === 0 && <CodeBlock code={libCode} lang="js" />}
+            {validation.isValid && <CodeBlock code={libCode} lang="js" copyDisabled={copyBlocked} />}
           </>
         )}
 
         {/* Command Steps */}
-        {activeTab === 'command' && (
+        {currentTab === 'command' && (
           <CommandStepsTab config={config} />
         )}
 
+        {/* Page prompt — generative targets only */}
+        {currentTab === 'prompt' && (
+          <>
+            <SummaryCard
+              title="✨ Generative page prompt"
+              body="Add this to the page's prompt in the app agent so the page accepts what this script sends. The agent is not deterministic: test the page after it regenerates."
+            />
+            {pagePrompt
+              ? <CodeBlock code={pagePrompt} lang="text" copyDisabled={copyBlocked} />
+              : <Callout type="info" icon="ℹ">This script sends no input parameters, so the page needs no prompt changes for them.</Callout>}
+          </>
+        )}
+
         {/* Advanced expander — Raw Config.
-            Gated on validation.errors.length === 0, same as the basic/library tabs, for
+            Gated on validation.isValid, same as the basic/library tabs, for
             consistency: the Copy/CodeBlock affordance is withheld whenever there are
             blocking validation errors, regardless of warnings. */}
         <div>
           <button
+            type="button"
+            aria-expanded={showRaw}
+            aria-controls={rawId}
             onClick={() => setShowRaw(r => !r)}
             style={{
               display: 'flex', alignItems: 'center', gap: 6,
@@ -198,11 +231,11 @@ export const OutputPanel = React.memo(function OutputPanel({ config, xrm, valida
             Advanced — Raw Config
           </button>
           {showRaw && (
-            <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div id={rawId} style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
               <Callout type="info" icon="ℹ">
                 Resolved <code>PaneDefinitionConfig</code> — for debugging and diagnostics only.
               </Callout>
-              {validation.errors.length === 0 && <CodeBlock code={rawCode} lang="json" />}
+              {validation.isValid && <CodeBlock code={rawCode} lang="json" copyDisabled={copyBlocked} />}
             </div>
           )}
         </div>

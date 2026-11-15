@@ -15,84 +15,139 @@ If the tool reports that `toolboxAPI` is unavailable, reopen it from inside
 PPTB. If it reports no active Dataverse connection, reconnect the environment
 in PPTB and retry.
 
-## 2. Choose Pane Content
+If you saved the configuration while another environment was active, a warning
+bar above the panels reads "This configuration was saved for a different
+environment; table, form, view and page selections are unverified." Until you
+select **Use anyway**, the table, form, view or page you picked there is
+flagged ("This table was picked in a different environment. Confirm it exists
+here.") and **Copy** is disabled on every code block. Picking the table, form,
+view or page again also confirms it, as does **Reset**.
 
-In the Configure panel, choose what the side pane should open:
+## 2. Choose the trigger and its table
+
+Open **Trigger & source** in the Configure panel. Choose **Trigger type** first;
+every other choice on the panel is limited to what that trigger can do.
+
+![The Configure panel's Trigger & source section — trigger type, trigger table, form, function name, and namespace](images/configure-trigger-source.png)
+
+- **Form on load** - opens the pane when a record form loads.
+- **Form button** - wires the pane to a form command bar button.
+- **Field change** - registers a column change handler.
+- **Lookup tag click** - cancels the lookup's default navigation and opens the
+  pane for the clicked lookup tag.
+- **Grid button** - wires the pane to a command bar button on a main grid or
+  subgrid.
+- **Grid row select** - opens the pane when one row is selected (needs the Power
+  Apps grid control).
+- **Console** - creates code you can paste into the browser console.
+
+Then fill in the fields the trigger shows:
+
+- **Grid surface** (grid triggers) - **Main grid** or **Subgrid**.
+- **Trigger table** - the table of the form, or of the grid the command or row
+  event belongs to. Leave it empty on a form trigger to read the table at
+  runtime.
+- **Form** (Form on load, Form button) or **View** (grid triggers) - the form or
+  view used by the previews.
+- **Column** (Field change) - the column to watch, picked from metadata.
+- **Lookup controls** (Lookup tag click) - add one or more lookup controls from
+  metadata; remove one with the button beside its name.
+- **Function name** and **Namespace** - match your solution naming conventions.
+
+For Lookup tag click, add the generated `register…` function to form OnLoad with
+**Pass execution context as first parameter** on; it registers the handler on
+each listed control and is safe to run more than once. The generated handler
+calls `preventDefault()` synchronously and reads the clicked tag with
+`getTagValue()`.
+
+## 3. Choose what opens and which record
+
+Open **Destination**. Choose the **Content type**:
+
+![The Configure panel's Destination section — content type, custom page name, record source, and variable name](images/configure-destination.png)
 
 - **Custom page** - opens a custom page from the current solution.
+- **Generative page** - opens a page built by the app agent, by page ID.
 - **Table record** - opens a Dataverse record.
 - **Table list** - opens a Dataverse table list.
 - **Web resource** - opens an HTML or JavaScript web resource.
 - **Dashboard** - opens a system or personal dashboard.
 - **Search** - opens global search results, optionally with pre-filled text.
 
-Fill in the required fields for the selected target. For table-based targets,
-select or enter the table name before generating code.
+Only the content types the trigger can use are offered. Fill in the required
+fields for the selected content type. Table lists can include a configured
+`viewId` and `viewType` (`savedquery` or `userquery`). Generative pages take a
+page ID and optional JSON page data; they receive record context and data only
+if the page's prompt accepts them (see **Output → Page prompt**).
 
-Table lists can include a configured `viewId` and `viewType` (`savedquery` or
-`userquery`). Table records can include a `formId`, `tabName`, and JSON-object
-`data` value. Custom-page `entityName` and `recordId` values come from Record
-context at runtime rather than from the custom-page target itself.
+For Table record, **Record** is **Open existing record** or **Create new
+record**. Create opens a blank form that **Form data** pre-fills, together with
+**Form** and **Tab name** for the destination. A form record or selected row as
+the source also pre-fills the new record.
 
-## 3. Configure Pane Settings
+For the content types that take a record, **Record source** says where the
+record ID comes from. Only the sources the trigger allows are listed:
 
-Set the pane details that control how the side pane appears:
+- **The record on this form** - the record on the triggering form.
+- **The selected row** - the first selected grid or subgrid row.
+- **The clicked tag record** - the record the clicked lookup tag points to.
+- **A record in a lookup** - the record a lookup on the trigger table points to;
+  pick the **Lookup column**.
+- **A specific record** - a fixed record; enter its **Record ID** (GUID), plus
+  **Record table** for content types other than Table record.
+- **No record** - opens the pane independently.
 
-- Pane ID
-- Title
-- Icon image source
-- Width
-- Badge value
-- Header visibility
-- Close behavior
-- Resize behavior
-- Initial selection state
+**Variable name** (default `recordId`) names the variable that holds the record
+ID in the generated script. **Destination table** is picked when you create a
+record or use a specific record, and otherwise shown as
+`Destination table: <name>`, read from the form record, row, or lookup.
+
+Changing the trigger snaps the source and content to values that are legal for
+it. The console starts on **No record** wherever a record is optional. A Table
+record opened from the console can only use **A specific record**, so **Record
+ID** is reported as missing until you enter one.
+
+## 4. Set the pane and its behaviour
+
+Open **Pane & behaviour**:
+
+![The Configure panel's Pane & behaviour section — pane ID, title, icon, width, header options, and the Advanced behaviour controls](images/configure-pane-behaviour.png)
+
+- **Unique pane ID**, **Pane title**, **Tab icon**, and **Width**
+- **Show close button** and **Hide header bar**
+- **Advanced**: **Open in foreground (isSelected)**, **Keep loaded when
+  inactive**, **Keep badge on select**, and **Initial badge value**
+- **Expand pane on open**, **Close other side panes**, **Close if already open**,
+  and **Reuse open pane**
 
 Use a stable Pane ID if you want generated code to reuse or update the same
 pane across multiple opens.
 
-## 4. Select a Trigger
-
-Choose how the generated code will be called:
-
-- **Form on load** - opens the pane when a record form loads.
-- **Command bar button (form)** - wires the pane to a form command.
-- **Command bar button (grid)** - wires the pane to a main grid command.
-- **Command bar button (subgrid)** - wires the pane to a subgrid command.
-- **Console / Manual** - creates code you can paste into the browser console.
-- **Field on change** - registers a field change handler.
-- **Lookup tag click** - cancels the lookup's default navigation and opens the
-  pane for the clicked lookup tag.
-
-For command and event triggers, set the generated function namespace and
-function name to match your solution naming conventions.
-
-For Lookup tag click, set the lookup control's logical name. Register the
-generated handler from form OnLoad with
-`formContext.getControl('lookuplogicalname').addOnLookupTagClick(...)`.
-The control event automatically passes execution context. The generated
-handler calls `preventDefault()` synchronously and reads the clicked tag with
-`getTagValue()`.
-
-## 5. Set Context Behavior
-
-Choose how the target receives record context:
-
-- **Current record** - uses the record from the form trigger.
-- **Selected row** - uses the selected grid or subgrid row.
-- **Static** - uses a fixed record ID.
-- **None** - opens the pane independently.
-
 Enable **Reuse open pane** when the same pane should stay loaded instead of
 being recreated. Reuse will navigate the existing pane to the new page, then
-select it. For a Lookup tag click targeting a custom page or table record,
-the clicked tag supplies `tag.entityType` and `tag.id`, overriding Current
-record, Static, or None context at runtime. Use **Expand on open** when the
-pane should become visible immediately after the trigger runs.
+select it. For a command bar button, **Close if already open** closes the
+pane instead of opening it again when the pane is already open. Use **Expand
+pane on open** when the pane should become visible immediately after the
+trigger runs.
+
+## 5. Read the summary
+
+The sentence in the summary strip above the three panels reads back what the
+generated script does, for example "When a user clicks a form command button on
+the account form, open the account record from the form record in a 480px pane
+titled “Related Records”." Each highlighted phrase is a button that opens the
+section holding that choice. To the right of the sentence the strip counts
+errors and warnings, for example "2 errors · 0 warnings", and holds the
+**Reset** button. Check that the sentence says what you intend before you copy
+code.
 
 ## 6. Preview the Pane
 
 Use the preview area before copying code:
+
+![Mock preview — the pane title, header, and width against a fixed Account sample](images/preview-mock.png)
+
+![Form preview — a form layout driven by the configured trigger table](images/preview-form.png)
 
 1. Open the mock preview to check pane layout, title, width, and behavior.
 2. Use the form preview when connected metadata and form XML are available.
@@ -108,6 +163,8 @@ code in the target model-driven app before shipping.
 
 ## 7. Generate and Deploy Code
 
+![Basic Script output — the generated JavaScript in the Output panel](images/output-basic-script.png)
+
 1. Open the Output panel.
 2. Review validation messages and fix required fields.
 3. Copy the generated JavaScript.
@@ -115,9 +172,13 @@ code in the target model-driven app before shipping.
 5. Publish the solution customizations.
 6. Test the trigger in the model-driven app.
 
-For quick experiments, use the **Console / Manual** trigger and paste the
+![Command Steps output — the function name and the Command Designer wiring checklist](images/command-steps.png)
+
+For quick experiments, use the **Console** trigger and paste the
 generated code into the browser developer console while the model-driven app is
-open.
+open. Console output needs a **Function name** and a **Namespace** like every
+other trigger: it defines `Namespace.functionName` and calls it, so pasting it
+opens the pane.
 
 ## Troubleshooting
 
@@ -125,10 +186,11 @@ open.
 - **Missing metadata** - confirm the table exists and the current user can read it.
 - **Pane does not open** - check the trigger function name, namespace, and command
   wiring.
-- **Wrong record opens** - review the selected context mode and the trigger source.
+- **Wrong record opens** - review the **Record source** and the trigger.
 - **Code validation fails** - complete all required fields shown in the Configure
   panel before copying output.
-- **Lookup tag does not register** - use `getControl`, not `getAttribute`,
-  and register `addOnLookupTagClick` from form OnLoad with execution context.
+- **Lookup tag does not register** - add the generated `register…` function
+  to form OnLoad with execution context, and check the browser console for a
+  missing-control warning.
 - **Preview differs from the app** - local tests and preview do not replace a
   target model-driven-app test in a connected Dataverse environment.

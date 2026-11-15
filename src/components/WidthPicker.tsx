@@ -2,7 +2,8 @@
 import * as React from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 import { theme } from '../theme/tokens';
-import { MIN_CONFIG_WIDTH, MAX_CONFIG_WIDTH } from './previewHelpers';
+import { MIN_CONFIG_WIDTH, MAX_CONFIG_WIDTH } from '../types/PaneDefinitionConfig';
+import { useFieldControl } from './Field';
 
 export interface WidthPickerProps {
   value: number;
@@ -24,16 +25,31 @@ export function WidthPicker({
   const { isDark } = useTheme();
   const T = theme(isDark);
 
+  const control = useFieldControl();
+  const [draft, setDraft] = React.useState(String(value));
+  React.useEffect(() => setDraft(String(value)), [value]);
+
+  const clamp = (n: number) => Math.max(min, Math.min(max, Math.round(n)));
+
   const handleNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const raw = +e.target.value;
-    if (Number.isNaN(raw)) return;
-    onChange(Math.max(min, Math.min(max, Math.round(raw))));
+    const text = e.target.value;
+    setDraft(text);
+    const n = Number(text);
+    if (text.trim() !== '' && Number.isInteger(n) && n >= min && n <= max) onChange(n);
+  };
+
+  const commitDraft = () => {
+    const n = Number(draft);
+    const next = draft.trim() === '' || Number.isNaN(n) ? value : clamp(n);
+    setDraft(String(next));
+    if (next !== value) onChange(next);
   };
 
   return (
     <>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <input
+          {...control}
           type="range"
           min={min}
           max={max}
@@ -47,8 +63,10 @@ export function WidthPicker({
           min={min}
           max={max}
           step={step}
-          value={value}
+          value={draft}
           onChange={handleNumberChange}
+          onBlur={commitDraft}
+          onKeyDown={e => { if (e.key === 'Enter') commitDraft(); }}
           aria-label="Pane width in pixels"
           style={{
             width: 64,
@@ -74,6 +92,7 @@ export function WidthPicker({
             <button
               key={preset}
               type="button"
+              aria-pressed={active}
               onClick={() => onChange(preset)}
               style={{
                 padding: '3px 10px',

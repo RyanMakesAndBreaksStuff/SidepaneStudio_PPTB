@@ -6,7 +6,7 @@ This guide covers local development and the installation guidance moved out of t
 
 - Install Git so you can clone the repository.
 - Install Node.js and npm from [Node.js downloads](https://nodejs.org/). The project declares Node.js `>=20.19.0`; use Node.js 22.13 or newer in the 22.x line, or Node.js 24.x, to satisfy the checked-in toolchain's Vite and ESLint requirements as well.
-- Use Power Platform ToolBox with host API 1.2.0 or newer and a Dataverse connection for connected testing. See [ToolBox setup](#toolbox-setup) below if needed.
+- Use Power Platform ToolBox with host API 1.2.7 or newer and a Dataverse connection for connected testing. See [ToolBox setup](#toolbox-setup) below if needed.
 
 On Windows or macOS, use the Node.js installer for your operating system. On Linux, follow the installation instructions linked from the Node.js download page. Open a new terminal after installation and verify the tools:
 
@@ -25,10 +25,10 @@ Clone the repository and enter its root folder:
 ```shell
 git clone https://github.com/RyanMakesAndBreaksStuff/SidepaneStudio_PPTB.git
 cd SidepaneStudio_PPTB
-npm install
+npm ci
 ```
 
-If you already have a checkout, run `npm install` from that checkout instead. All commands below run from the folder containing `package.json`.
+If you already have a checkout, run `npm ci` from that checkout instead. `npm ci` installs exactly the versions recorded in `package-lock.json`. All commands below run from the folder containing `package.json`.
 
 **Verify:** dependency installation completes successfully and `npm run` lists the development, build, and verification scripts.
 
@@ -72,17 +72,13 @@ npm run preview
 
 Open the URL printed by Vite. The same host-API limitation applies to this standalone preview.
 
-## 5. Build the optional shared runtime
+## 5. Get the optional shared runtime
 
-Build the reusable helper separately:
+The shared runtime has no build step. `src/runtime/sidepane.runtime.js` is the file you deploy, byte for byte; its option types are in `src/runtime/sidePaneHelper.d.ts`. Makers get the same file from **Output → Shared Library → Download runtime**.
 
-```shell
-npm run build:runtime
-```
+**Verify:** `npx vitest run --dir src sidePaneHelper` passes. Those tests evaluate the file itself.
 
-**Verify:** `dist-runtime/sidepane.runtime.js` exists. This is the shared JavaScript helper, not the studio application. Its build configuration is `vite.runtime.config.ts`.
-
-For **Shared Library** output, upload the runtime as a JavaScript web resource named `spstudio_/scripts/sidepane.runtime.js`, publish it, and load it before the generated handler. Makers can also download the bundled runtime from **Output → Shared Library → Download runtime**. **Basic Script** output is self-contained and does not require the shared runtime.
+For **Shared Library** output, upload the runtime as a JavaScript web resource named `spstudio_/scripts/sidepane.runtime.js`, publish it, and load it before the generated handler. **Basic Script** output is self-contained and does not require the shared runtime.
 
 ## 6. Test inside ToolBox
 
@@ -109,23 +105,21 @@ Reload the tool in ToolBox after a rebuild as needed. Passing local checks and s
 | Problem | Action | Verify |
 | --- | --- | --- |
 | `node` or `npm` is unavailable | Install Node.js, check PATH, and reopen the terminal. | Both version commands print a version. |
-| Dependency installation reports an unsupported engine | Use a Node version compatible with the project, Vite, and ESLint requirements above, then rerun `npm install`. | Installation succeeds without an engine mismatch. |
+| Dependency installation reports an unsupported engine | Use a Node version compatible with the project, Vite, and ESLint requirements above, then rerun `npm ci`. | Installation succeeds without an engine mismatch. |
 | The browser reports missing ToolBox or Dataverse APIs | Load the built tool inside ToolBox and select a connection. | The workbench and connected metadata load. |
 | Type checking, lint, or tests fail | Read the named file and diagnostic, fix the issue, and rerun that command before building. | The failed check exits successfully. |
-| The shared-runtime output is missing | Run `npm run build:runtime`; the studio build is separate. | `dist-runtime/sidepane.runtime.js` exists. |
 
 ## Command reference
 
 | Task | Command | Result |
 | --- | --- | --- |
-| Install dependencies | `npm install` | Local dependencies |
+| Install dependencies | `npm ci` | Local dependencies, exactly as locked |
 | Development server | `npm run dev` | Vite development URL |
 | Type checking | `npm run typecheck` | TypeScript diagnostics |
 | Lint | `npm run lint` | ESLint diagnostics |
 | Tests | `npm test` | Vitest results |
 | Coverage | `npm run coverage` | Test coverage report |
 | Studio build | `npm run build` | `dist/` |
-| Shared runtime | `npm run build:runtime` | `dist-runtime/sidepane.runtime.js` |
 | Preview build | `npm run preview` | Vite preview URL |
 | Watch builds | `npm run watch` | Rebuilt studio output |
 | Debug builds | `npm run debug` | Watch builds with sourcemaps |
@@ -181,12 +175,12 @@ Use an environment where you can read the tables your pane will show, and where 
 
 1. In ToolBox, click **Tools Marketplace**.
 2. Search for `Side Pane Studio`.
-3. Open the tool whose package is `@ryanmakes/side-pane-studio`, author Ryan Rettinger, version **1.1.1**.
+3. Open the tool whose package is `@ryanmakes/side-pane-studio`, author Ryan Rettinger, version **1.4.0**.
 4. Click **Install**.
 5. If ToolBox asks for permission consent, read the request and accept it only if it matches a side-pane builder that reads Dataverse metadata. Declining consent prevents the tool from loading.
 6. Open **Installed Tools** and click **Side Pane Studio**.
 
-**Verification**: the studio header reads **Side Pane Studio**. You do not see **Dataverse API + Toolbox API unavailable** or **Connection unavailable**. The preview shows a mock Account form and a pane titled **Related Records**.
+**Verification**: the workbench shows **Configure**, **Preview**, and **Output**. You do not see **Dataverse API + Toolbox API unavailable** or **Connection unavailable**. The preview shows a mock Account form and a pane titled **Related Records**.
 
 Developer-only alternatives, after you enable **Show Debug Setting** in the ToolBox settings menu:
 

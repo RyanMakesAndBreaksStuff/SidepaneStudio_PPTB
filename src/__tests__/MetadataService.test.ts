@@ -59,7 +59,16 @@ const ENTITY_CUSTOM = {
 
 const ENTITY_INTERSECT = { ...ENTITY_ACCOUNT, LogicalName: 'accountleads', IsIntersect: true };
 const ENTITY_PRIVATE = { ...ENTITY_ACCOUNT, LogicalName: 'something', IsPrivate: true };
-const ENTITY_ACTIVITY = { ...ENTITY_ACCOUNT, LogicalName: 'task', IsActivity: true };
+const ENTITY_ACTIVITY = { ...ENTITY_ACCOUNT, LogicalName: 'letter', SchemaName: 'Letter', EntitySetName: 'letters', IsActivity: true };
+const ENTITY_CUSTOM_ACTIVITY = { ...ENTITY_CUSTOM, LogicalName: 'new_visit', SchemaName: 'new_Visit', EntitySetName: 'new_visits', IsActivity: true };
+const activity = (logicalName: string) => ({
+  ...ENTITY_ACCOUNT,
+  LogicalName: logicalName,
+  SchemaName: logicalName,
+  EntitySetName: `${logicalName}s`,
+  IsActivity: true,
+  IsCustomizable: { Value: false },
+});
 const ENTITY_NO_ENTITY_SET = { ...ENTITY_ACCOUNT, EntitySetName: null };
 const ENTITY_DENY_PREFIX = { ...ENTITY_CUSTOM, LogicalName: 'msdyn_something' };
 const ENTITY_DENY_EXACT = { ...ENTITY_ACCOUNT, LogicalName: 'webresource' };
@@ -96,6 +105,22 @@ describe('MetadataService', () => {
       expect(result.tables.map(t => t.logicalName)).toContain('new_widget');
     });
 
+    it('remembers the language of the user-localized labels (revie2 WR-007)', async () => {
+      const xrm = makeXrm([{ ...ENTITY_ACCOUNT, DisplayName: { UserLocalizedLabel: { Label: 'Compte', LanguageCode: 1036 } } }]);
+      const service = new MetadataService(xrm);
+      expect(service.userLanguageCode).toBeNull();
+      await service.listAccessibleTables();
+      expect(service.userLanguageCode).toBe(1036);
+    });
+
+    it('forgets the language when the connection changes (pp-review3 WR-001)', async () => {
+      const xrm = makeXrm([{ ...ENTITY_ACCOUNT, DisplayName: { UserLocalizedLabel: { Label: 'Compte', LanguageCode: 1036 } } }]);
+      const service = new MetadataService(xrm);
+      await service.listAccessibleTables();
+      service.invalidate();
+      expect(service.userLanguageCode).toBeNull();
+    });
+
     it('accepts unwrapped collection arrays from webApiGet', async () => {
       const xrm: MetaXrm = {
         webApiGet: vi.fn().mockResolvedValue([ENTITY_ACCOUNT]),
@@ -125,10 +150,44 @@ describe('MetadataService', () => {
       expect(result.tables).toHaveLength(0);
     });
 
-    it('excludes activity entities', async () => {
-      const xrm = makeXrm([ENTITY_ACTIVITY]);
+    it('excludes activity entities that are not on the allowlist', async () => {
+      const xrm = makeXrm([ENTITY_ACTIVITY, ENTITY_CUSTOM_ACTIVITY]);
       const svc = new MetadataService(xrm);
       const result = await svc.listAccessibleTables();
+      expect(result.status).toBe('ok');
+      if (result.status !== 'ok') return;
+      expect(result.tables).toHaveLength(0);
+    });
+
+    it('keeps activity tables on the default allowlist', async () => {
+      const xrm = makeXrm(['task', 'phonecall', 'appointment', 'email'].map(activity));
+      const svc = new MetadataService(xrm);
+      const result = await svc.listAccessibleTables();
+      expect(result.status).toBe('ok');
+      if (result.status !== 'ok') return;
+      expect(result.tables.map(t => t.logicalName).sort()).toEqual(['appointment', 'email', 'phonecall', 'task']);
+    });
+
+    it('keeps an activity table the user adds to the allowlist', async () => {
+      const xrm = makeXrm([ENTITY_ACTIVITY]);
+      const svc = new MetadataService(xrm, {
+        ...DEFAULT_METADATA_FILTER_CONFIG,
+        allowedStandardTables: [...DEFAULT_METADATA_FILTER_CONFIG.allowedStandardTables, 'letter'],
+      });
+      const result = await svc.listAccessibleTables();
+      expect(result.status).toBe('ok');
+      if (result.status !== 'ok') return;
+      expect(result.tables.map(t => t.logicalName)).toEqual(['letter']);
+    });
+
+    it('still excludes an allowlisted activity table that is exact-denied', async () => {
+      const xrm = makeXrm([activity('task')]);
+      const svc = new MetadataService(xrm, {
+        ...DEFAULT_METADATA_FILTER_CONFIG,
+        denyExact: [...DEFAULT_METADATA_FILTER_CONFIG.denyExact, 'task'],
+      });
+      const result = await svc.listAccessibleTables();
+      expect(result.status).toBe('ok');
       if (result.status !== 'ok') return;
       expect(result.tables).toHaveLength(0);
     });
@@ -198,6 +257,27 @@ describe('MetadataService', () => {
       expect(xrm.webApiGet).toHaveBeenCalledTimes(1);
     });
 
+    it('shares one EntityDefinitions request between concurrent callers', async () => {
+      const xrm = makeXrm([ENTITY_ACCOUNT]);
+      const svc = new MetadataService(xrm);
+      const [first, second] = await Promise.all([svc.listAccessibleTables(), svc.listAccessibleTables()]);
+      expect(xrm.webApiGet).toHaveBeenCalledTimes(1);
+      expect(second).toEqual(first);
+    });
+
+    it('drops a failed table request so the next call fetches again', async () => {
+      const webApiGet = vi.fn()
+        .mockRejectedValueOnce(new Error('Network error'))
+        .mockResolvedValueOnce([ENTITY_ACCOUNT]);
+      const svc = new MetadataService({ webApiGet });
+      const [first, second] = await Promise.all([svc.listAccessibleTables(), svc.listAccessibleTables()]);
+      expect(first).toEqual({ status: 'error', reason: 'Network error' });
+      expect(second).toEqual({ status: 'error', reason: 'Network error' });
+      const retried = await svc.listAccessibleTables();
+      expect(retried.status).toBe('ok');
+      expect(webApiGet).toHaveBeenCalledTimes(2);
+    });
+
     it('invalidate clears cache — next call re-fetches', async () => {
       const xrm = makeXrm([ENTITY_ACCOUNT]);
       const svc = new MetadataService(xrm);
@@ -250,21 +330,6 @@ describe('MetadataService', () => {
       await svc.listAccessibleTables();
       expect(logSpy).not.toHaveBeenCalled();
       logSpy.mockRestore();
-    });
-
-    it('forwards connectionTarget to webApiGet', async () => {
-      const xrm = makeXrm([]);
-      const svc = new MetadataService(xrm);
-      await svc.listAccessibleTables('secondary');
-      expect(xrm.webApiGet).toHaveBeenCalledWith(expect.any(String), 'secondary');
-    });
-
-    it('cache key includes connectionTarget — primary and secondary are independent', async () => {
-      const xrm = makeXrm([]);
-      const svc = new MetadataService(xrm);
-      await svc.listAccessibleTables('primary');
-      await svc.listAccessibleTables('secondary');
-      expect(xrm.webApiGet).toHaveBeenCalledTimes(2);
     });
 
     it('uses custom filter config for exact denies and allowed standard tables', async () => {
@@ -437,6 +502,154 @@ describe('MetadataService', () => {
       expect(result.reason).toBe('Dashboard fetch failed');
     });
   });
+
+  describe('cache lifetime', () => {
+    const SYS_DASH = { name: 'Sales Dashboard', formid: 'sys-1' };
+    const FIVE_MINUTES_MS = 5 * 60 * 1000;
+    const start = 1700000000000;
+
+    it('reuses the same table array until five minutes and refetches when expiry is equal', async () => {
+      const now = vi.spyOn(Date, 'now');
+      try {
+        now.mockReturnValue(start);
+        const xrm = makeXrm([ENTITY_ACCOUNT, ENTITY_CUSTOM]);
+        const svc = new MetadataService(xrm);
+
+        const first = await svc.listAccessibleTables();
+        expect(first.status).toBe('ok');
+        if (first.status !== 'ok') return;
+
+        now.mockReturnValue(start + FIVE_MINUTES_MS - 1);
+        const cached = await svc.listAccessibleTables();
+        expect(cached.status).toBe('ok');
+        if (cached.status !== 'ok') return;
+        expect(cached.tables).toBe(first.tables);
+        expect(xrm.webApiGet).toHaveBeenCalledTimes(1);
+
+        now.mockReturnValue(start + FIVE_MINUTES_MS);
+        const expired = await svc.listAccessibleTables();
+        expect(expired.status).toBe('ok');
+        if (expired.status !== 'ok') return;
+        expect(expired.tables).not.toBe(first.tables);
+        expect(expired.tables.map(table => table.logicalName)).toEqual(
+          first.tables.map(table => table.logicalName)
+        );
+        expect(xrm.webApiGet).toHaveBeenCalledTimes(2);
+      } finally {
+        now.mockRestore();
+      }
+    });
+
+    it('reuses the same dashboard array until five minutes and refetches when expiry is equal', async () => {
+      const now = vi.spyOn(Date, 'now');
+      try {
+        now.mockReturnValue(start);
+        const webApiGet = vi.fn()
+          .mockResolvedValueOnce([SYS_DASH])
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([SYS_DASH])
+          .mockResolvedValueOnce([]);
+        const svc = new MetadataService({ webApiGet });
+
+        const first = await svc.listAccessibleDashboards();
+        expect(first.status).toBe('ok');
+        if (first.status !== 'ok') return;
+
+        now.mockReturnValue(start + FIVE_MINUTES_MS - 1);
+        const cached = await svc.listAccessibleDashboards();
+        expect(cached.status).toBe('ok');
+        if (cached.status !== 'ok') return;
+        expect(cached.dashboards).toBe(first.dashboards);
+        expect(webApiGet).toHaveBeenCalledTimes(2);
+
+        now.mockReturnValue(start + FIVE_MINUTES_MS);
+        const expired = await svc.listAccessibleDashboards();
+        expect(expired.status).toBe('ok');
+        if (expired.status !== 'ok') return;
+        expect(expired.dashboards).not.toBe(first.dashboards);
+        expect(webApiGet).toHaveBeenCalledTimes(4);
+      } finally {
+        now.mockRestore();
+      }
+    });
+
+    it('setFilterConfig clears only the table cache and notifies table listeners', async () => {
+      const webApiGet = vi.fn()
+        .mockResolvedValueOnce([ENTITY_ACCOUNT])
+        .mockResolvedValueOnce([SYS_DASH])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([]);
+      const svc = new MetadataService({ webApiGet });
+      const tables = await svc.listAccessibleTables();
+      const dashboards = await svc.listAccessibleDashboards();
+      expect(tables.status).toBe('ok');
+      expect(dashboards.status).toBe('ok');
+      if (tables.status !== 'ok' || dashboards.status !== 'ok') return;
+
+      let notifiedReload: ReturnType<MetadataService['listAccessibleTables']> | undefined;
+      svc.subscribeTables(() => {
+        notifiedReload = svc.listAccessibleTables();
+      });
+      svc.setFilterConfig({
+        ...DEFAULT_METADATA_FILTER_CONFIG,
+        denyExact: [...DEFAULT_METADATA_FILTER_CONFIG.denyExact, 'account'],
+      });
+
+      expect(notifiedReload).toBeDefined();
+      if (!notifiedReload) return;
+      const reloaded = await notifiedReload;
+      const dashboardsAgain = await svc.listAccessibleDashboards();
+      expect(reloaded.status).toBe('ok');
+      expect(dashboardsAgain.status).toBe('ok');
+      if (reloaded.status !== 'ok' || dashboardsAgain.status !== 'ok') return;
+      expect(reloaded.tables).toHaveLength(0);
+      expect(reloaded.tables).not.toBe(tables.tables);
+      expect(dashboardsAgain.dashboards).toBe(dashboards.dashboards);
+      expect(webApiGet).toHaveBeenCalledTimes(4);
+    });
+
+    it('invalidate clears both caches and advances the generation', async () => {
+      let resolveOldTables!: (value: typeof ENTITY_ACCOUNT[]) => void;
+      const oldTables = new Promise<typeof ENTITY_ACCOUNT[]>(resolve => { resolveOldTables = resolve; });
+      const webApiGet = vi.fn()
+        .mockResolvedValueOnce([ENTITY_ACCOUNT])
+        .mockResolvedValueOnce([SYS_DASH])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([ENTITY_ACCOUNT])
+        .mockResolvedValueOnce([SYS_DASH])
+        .mockResolvedValueOnce([])
+        .mockReturnValueOnce(oldTables)
+        .mockResolvedValueOnce([ENTITY_CUSTOM]);
+      const svc = new MetadataService({ webApiGet });
+
+      const primedTables = await svc.listAccessibleTables();
+      const primedDashboards = await svc.listAccessibleDashboards();
+      expect(primedTables.status).toBe('ok');
+      expect(primedDashboards.status).toBe('ok');
+      if (primedTables.status !== 'ok' || primedDashboards.status !== 'ok') return;
+
+      svc.invalidate();
+      const tablesAfter = await svc.listAccessibleTables();
+      const dashboardsAfter = await svc.listAccessibleDashboards();
+      expect(tablesAfter.status).toBe('ok');
+      expect(dashboardsAfter.status).toBe('ok');
+      if (tablesAfter.status !== 'ok' || dashboardsAfter.status !== 'ok') return;
+      expect(tablesAfter.tables).not.toBe(primedTables.tables);
+      expect(dashboardsAfter.dashboards).not.toBe(primedDashboards.dashboards);
+      expect(webApiGet).toHaveBeenCalledTimes(6);
+
+      svc.invalidate();
+      const pending = svc.listAccessibleTables();
+      svc.invalidate();
+      resolveOldTables([ENTITY_ACCOUNT]);
+      const retried = await pending;
+      expect(retried.status).toBe('ok');
+      if (retried.status !== 'ok') return;
+      expect(retried.tables.map(table => table.logicalName)).toEqual(['new_widget']);
+      await svc.listAccessibleTables();
+      expect(webApiGet).toHaveBeenCalledTimes(8);
+    });
+  });
 });
 
 describe('view metadata', () => {
@@ -450,10 +663,10 @@ describe('view metadata', () => {
         userqueryid: 'bbbbbbbb-0000-0000-0000-000000000002',
         name: 'My accounts', fetchxml: '<fetch top="3"><entity name="account"/></fetch>',
       }]);
-    const result = await new MetadataService({ webApiGet }).listViewsForEntity('account', 'secondary');
+    const result = await new MetadataService({ webApiGet }).listViewsForEntity('account');
     expect(webApiGet.mock.calls).toEqual([
-      ["savedqueries?$select=name,savedqueryid,fetchxml,layoutxml&$filter=returnedtypecode eq 'account' and querytype eq 0&$orderby=name asc", 'secondary'],
-      ["userqueries?$select=name,userqueryid,fetchxml,layoutxml&$filter=returnedtypecode eq 'account' and querytype eq 0&$orderby=name asc", 'secondary'],
+      ["savedqueries?$select=name,savedqueryid,fetchxml,layoutxml&$filter=returnedtypecode eq 'account' and querytype eq 0 and statecode eq 0&$orderby=name asc"],
+      ["userqueries?$select=name,userqueryid,fetchxml,layoutxml&$filter=returnedtypecode eq 'account' and querytype eq 0 and statecode eq 0&$orderby=name asc"],
     ]);
     expect(result).toEqual({ status: 'ok', views: [
       { id: 'bbbbbbbb-0000-0000-0000-000000000002', name: 'My accounts', viewType: 'userquery', fetchXml: '<fetch top="3"><entity name="account"/></fetch>', layoutXml: '' },
@@ -465,10 +678,25 @@ describe('view metadata', () => {
     const labels = [{ LogicalName: 'name', DisplayName: { UserLocalizedLabel: { Label: 'Account Name' } } }];
     const webApiGet = vi.fn().mockResolvedValue(labels);
     const service = new MetadataService({ webApiGet });
-    expect(await service.listAttributeLabels('account', 'secondary')).toEqual(labels);
+    expect(await service.listAttributeLabels('account')).toEqual(labels);
     expect(webApiGet).toHaveBeenCalledWith(
-      "EntityDefinitions(LogicalName='account')/Attributes?$select=LogicalName,DisplayName", 'secondary');
+      "EntityDefinitions(LogicalName='account')/Attributes?$select=LogicalName,DisplayName");
     await expect(service.listAttributeLabels("account'bad")).rejects.toThrow('Invalid table logical name.');
+    expect(webApiGet).toHaveBeenCalledTimes(1);
+  });
+
+  it('retrieves lookup columns through the guarded metadata cast endpoint', async () => {
+    const lookups = [
+      { LogicalName: 'primarycontactid', DisplayName: { UserLocalizedLabel: { Label: 'Primary Contact' } }, Targets: ['contact'] },
+      { LogicalName: 'customerid', DisplayName: { UserLocalizedLabel: { Label: 'Customer' } }, Targets: ['account', 'contact'] },
+    ];
+    const webApiGet = vi.fn().mockResolvedValue(lookups);
+    const service = new MetadataService({ webApiGet });
+    const result = await service.listLookupAttributes('account');
+    expect(webApiGet).toHaveBeenCalledWith(
+      "EntityDefinitions(LogicalName='account')/Attributes/Microsoft.Dynamics.CRM.LookupAttributeMetadata?$select=LogicalName,DisplayName,Targets");
+    expect(result).toEqual(lookups);
+    await expect(service.listLookupAttributes("account'bad")).rejects.toThrow('Invalid table logical name.');
     expect(webApiGet).toHaveBeenCalledTimes(1);
   });
 
@@ -482,10 +710,74 @@ describe('view metadata', () => {
     expect(webApiGet).not.toHaveBeenCalled();
   });
 
+  it('caches views, attribute labels and lookup columns per table until invalidate', async () => {
+    const webApiGet = vi.fn().mockResolvedValue([]);
+    const service = new MetadataService({ webApiGet });
+    await Promise.all([service.listViewsForEntity('account'), service.listViewsForEntity('account')]);
+    await service.listViewsForEntity('account');
+    await Promise.all([service.listAttributeLabels('account'), service.listAttributeLabels('account')]);
+    await Promise.all([service.listLookupAttributes('account'), service.listLookupAttributes('account')]);
+    // savedqueries + userqueries, Attributes, LookupAttributeMetadata: one request each for 'account'.
+    expect(webApiGet).toHaveBeenCalledTimes(4);
+    await service.listViewsForEntity('contact');
+    expect(webApiGet).toHaveBeenCalledTimes(6);
+    service.invalidate();
+    await service.listViewsForEntity('account');
+    await service.listAttributeLabels('account');
+    await service.listLookupAttributes('account');
+    expect(webApiGet).toHaveBeenCalledTimes(10);
+  });
+
+  it('does not cache a failed view request', async () => {
+    const webApiGet = vi.fn().mockRejectedValueOnce(new Error('Access denied')).mockResolvedValue([]);
+    const service = new MetadataService({ webApiGet });
+    expect(await service.listViewsForEntity('account')).toEqual({ status: 'error', reason: 'Access denied' });
+    expect(await service.listViewsForEntity('account')).toEqual({ status: 'ok', views: [] });
+  });
+
   it('distinguishes an empty result from a failed query', async () => {
     const empty = new MetadataService({ webApiGet: vi.fn().mockResolvedValue([]) });
     expect(await empty.listViewsForEntity('account')).toEqual({ status: 'ok', views: [] });
     const failed = new MetadataService({ webApiGet: vi.fn().mockRejectedValue(new Error('Access denied')) });
     expect(await failed.listViewsForEntity('account')).toEqual({ status: 'error', reason: 'Access denied' });
+  });
+});
+
+describe('untrusted host rows (r2 WR-014)', () => {
+  it('drops table rows without a logical name and says how many', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      const webApiGet = vi.fn().mockResolvedValue([ENTITY_ACCOUNT, { ...ENTITY_CUSTOM, LogicalName: undefined }, null]);
+      const result = await new MetadataService({ webApiGet }).listAccessibleTables();
+      expect(result).toMatchObject({ status: 'ok', tables: [{ logicalName: 'account' }] });
+      expect(warn).toHaveBeenCalledWith('MetadataService: ignored 2 table row(s) without LogicalName.');
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('drops a view row without a name instead of failing the list', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      const webApiGet = vi.fn()
+        .mockResolvedValueOnce([{ savedqueryid: 'v1', name: 'Active accounts', fetchxml: null, layoutxml: null }, { savedqueryid: 'v2' }])
+        .mockResolvedValueOnce([]);
+      const result = await new MetadataService({ webApiGet }).listViewsForEntity('account');
+      expect(result).toMatchObject({ status: 'ok', views: [{ id: 'v1', name: 'Active accounts' }] });
+    } finally {
+      warn.mockRestore();
+    }
+  });
+});
+
+describe('dashboard requests (r2 PR-005)', () => {
+  it('shares one request pair between concurrent callers', async () => {
+    const webApiGet = vi.fn()
+      .mockResolvedValueOnce([{ name: 'Sales Dashboard', formid: 'sys-1' }])
+      .mockResolvedValueOnce([]);
+    const svc = new MetadataService({ webApiGet });
+    const [first, second] = await Promise.all([svc.listAccessibleDashboards(), svc.listAccessibleDashboards()]);
+    expect(webApiGet).toHaveBeenCalledTimes(2);
+    expect(second).toEqual(first);
   });
 });

@@ -18,16 +18,20 @@ vi.mock('../components/ConfigurePanel', async () => {
     ConfigurePanel: ({ metadataService, config }: {
       metadataService: React.ComponentProps<typeof TablePicker>['metadataService'];
       config: PaneDefinitionConfig;
-    }) => <TablePicker
-      metadataService={metadataService}
-      value={config.target.pageType === 'entityrecord' ? config.target.entityName : ''}
-      onChange={() => {}}
-    />,
+    }) => <>
+      <TablePicker
+        metadataService={metadataService}
+        value={config.host.entityName}
+        onChange={() => {}}
+      />
+      <output data-testid="lookup">{config.context.source.kind === 'lookup' ? config.context.source.attribute : ''}</output>
+      <output data-testid="host">{config.host.entityName}</output>
+      <output data-testid="target">{JSON.stringify(config.target)}</output>
+    </>,
   };
 });
 vi.mock('../components/PreviewPanel', () => ({ PreviewPanel: () => null }));
 vi.mock('../components/OutputPanel', () => ({ OutputPanel: () => null }));
-vi.mock('../components/CommandBar', () => ({ CommandBar: () => null }));
 
 type Handler = (event: unknown, payload: ToolBoxAPI.ToolBoxEventPayload) => void;
 let handler: Handler;
@@ -82,31 +86,56 @@ async function mount() {
   await act(async () => { root.render(<SidePaneBuilderWorkbench />); });
 }
 
-async function emit(event: ToolBoxAPI.ToolBoxEventPayload['event']) {
+async function emit(event: ToolBoxAPI.ToolBoxEventPayload['event'], data: unknown = null) {
   await act(async () => {
-    handler({ senderId: 'transport' }, { event, data: null, timestamp: '2026-09-23' });
+    handler({ senderId: 'transport' }, { event, data, timestamp: '2026-09-23' });
   });
 }
 
+const tableRequests = () => vi.mocked(window.dataverseAPI.queryData).mock.calls.length;
+
 function options() {
-  return Array.from(host.querySelectorAll('option')).map(option => option.value);
+  return Array.from(host.querySelectorAll<HTMLElement>('[role="option"]'))
+    .map(option => option.querySelectorAll('span')[1]?.textContent ?? '').filter(Boolean);
+}
+
+async function openTablePicker() {
+  const input = host.querySelector<HTMLInputElement>('[role="combobox"]');
+  if (input && !input.disabled) await act(async () => { input.focus(); input.click(); });
 }
 
 it('replaces org A table choices after a connection update', async () => {
   await mount();
+  await openTablePicker();
   expect(options()).toContain('new_a');
   org = 'b';
   getActiveConnection.mockResolvedValue({ id: 'b' });
   await emit('connection:updated');
+  await openTablePicker();
   expect(options()).toContain('new_b');
   expect(options()).not.toContain('new_a');
   expect(on).toHaveBeenCalledTimes(1);
+});
+
+it('reloads metadata and keeps selections for another connection to the same environment (pp-review3 WR-005)', async () => {
+  const url = 'https://contoso.crm.dynamics.com';
+  getActiveConnection.mockResolvedValue({ id: 'a', url });
+  storeTargetTable('new_a');
+  await mount();
+  await openTablePicker();
+  const before = tableRequests();
+  getActiveConnection.mockResolvedValue({ id: 'a2', url });
+  await emit('connection:updated');
+  await openTablePicker();
+  expect(tableRequests()).toBeGreaterThan(before);
+  expect(host.querySelector('[data-testid="host"]')?.textContent).toBe('new_a');
 });
 
 function storeTargetTable(entityName: string) {
   const settings = (window.toolboxAPI as unknown as { settings: { get: ReturnType<typeof vi.fn> } }).settings;
   settings.get.mockImplementation(async (key: string) => key === 'lastConfig' ? JSON.stringify({
     ...DEFAULT_CONFIG,
+    host: { ...DEFAULT_CONFIG.host, entityName },
     target: { pageType: 'entityrecord', entityName, formId: 'form-a', tabName: 'tab-a', data: '' },
   }) : null);
 }
@@ -114,20 +143,95 @@ function storeTargetTable(entityName: string) {
 it('clears the old org table selection when the connection switches orgs', async () => {
   storeTargetTable('new_a');
   await mount();
-  expect(host.querySelector('select')?.value).toBe('new_a');
+  expect(host.querySelector<HTMLInputElement>('[role="combobox"]')?.value).toBe('Org a (new_a)');
   org = 'b';
   getActiveConnection.mockResolvedValue({ id: 'b' });
   await emit('connection:updated');
+  await openTablePicker();
   expect(options()).toContain('new_b');
   expect(options()).not.toContain('new_a');
-  expect(host.textContent).not.toContain('no longer accessible');
+  expect(host.textContent).not.toContain('is not in the current table list');
+});
+
+it('ignores a token refresh: no recheck, no remount, no table refetch', async () => {
+  await mount();
+  const picker = host.querySelector('[role="combobox"]');
+  const requests = tableRequests();
+  await emit('connection:updated', { id: 'a', tokenRefreshed: true });
+  expect(getActiveConnection).toHaveBeenCalledTimes(1);
+  expect(host.querySelector('[role="combobox"]')).toBe(picker);
+  expect(tableRequests()).toBe(requests);
+});
+
+it('rechecks a same-connection update in place, without the Connecting screen or a table refetch', async () => {
+  await mount();
+  const picker = host.querySelector('[role="combobox"]');
+  const requests = tableRequests();
+  const check = deferred<{ id: string } | null>();
+  getActiveConnection.mockReturnValueOnce(check.promise);
+  await emit('connection:updated', { id: 'a', isActive: true });
+  expect(host.textContent).not.toContain('Connecting to Dataverse');
+  await act(async () => { check.resolve({ id: 'a' }); });
+  expect(getActiveConnection).toHaveBeenCalledTimes(2);
+  expect(host.querySelector('[role="combobox"]')).toBe(picker);
+  expect(tableRequests()).toBe(requests);
 });
 
 it('keeps the table selection when the same connection is updated', async () => {
   storeTargetTable('new_a');
   await mount();
+  expect(host.querySelector<HTMLInputElement>('[role="combobox"]')?.value).toBe('Org a (new_a)');
   await emit('connection:updated');
-  expect(host.querySelector('select')?.value).toBe('new_a');
+  expect(host.querySelector<HTMLInputElement>('[role="combobox"]')?.value).toBe('Org a (new_a)');
+});
+
+it('clears the related-record lookup column when the connection switches orgs', async () => {
+  const settings = (window.toolboxAPI as unknown as { settings: { get: ReturnType<typeof vi.fn> } }).settings;
+  settings.get.mockImplementation(async (key: string) => key === 'lastConfig' ? JSON.stringify({
+    ...DEFAULT_CONFIG,
+    host: { ...DEFAULT_CONFIG.host, entityName: 'new_a' },
+    context: { ...DEFAULT_CONFIG.context, source: { kind: 'lookup', attribute: 'new_contactid' } },
+  }) : null);
+  await mount();
+  const lookup = () => host.querySelector('[data-testid="lookup"]')?.textContent;
+  expect(lookup()).toBe('new_contactid');
+  org = 'b';
+  getActiveConnection.mockResolvedValue({ id: 'b' });
+  await emit('connection:updated');
+  expect(lookup()).toBe('');
+  expect(host.querySelector('[data-testid="host"]')?.textContent).toBe('');
+});
+
+function storeTarget(target: PaneDefinitionConfig['target']) {
+  const settings = (window.toolboxAPI as unknown as { settings: { get: ReturnType<typeof vi.fn> } }).settings;
+  settings.get.mockImplementation(async (key: string) => key === 'lastConfig' ? JSON.stringify({
+    ...DEFAULT_CONFIG,
+    target,
+  }) : null);
+}
+
+async function switchOrg() {
+  org = 'b';
+  getActiveConnection.mockResolvedValue({ id: 'b' });
+  await emit('connection:updated');
+}
+
+function currentTarget() {
+  return JSON.parse(host.querySelector('[data-testid="target"]')?.textContent ?? 'null');
+}
+
+it('clears the generative page id and data when the connection switches orgs', async () => {
+  storeTarget({ pageType: 'generative', pageId: 'page-a', data: 'row-a' });
+  await mount();
+  await switchOrg();
+  expect(currentTarget()).toEqual({ pageType: 'generative', pageId: '', data: '' });
+});
+
+it('keeps a custom page name when the connection switches orgs', async () => {
+  storeTarget({ pageType: 'custom', name: 'new_page' });
+  await mount();
+  await switchOrg();
+  expect(currentTarget()).toEqual({ pageType: 'custom', name: 'new_page' });
 });
 
 it.each(['connection:created', 'connection:updated'] as const)(
@@ -145,6 +249,7 @@ it('reloads the remaining active org after a connection is deleted', async () =>
   org = 'b';
   getActiveConnection.mockResolvedValue({ id: 'b' });
   await emit('connection:deleted');
+  await openTablePicker();
   expect(options()).toContain('new_b');
   expect(options()).not.toContain('new_a');
 });
@@ -170,6 +275,7 @@ it('ignores an older failed event check after a newer successful check', async (
   await emit('connection:updated');
   await act(async () => { older.reject(new Error('old check failed')); });
   expect(getActiveConnection).toHaveBeenCalledTimes(3);
+  await openTablePicker();
   expect(options()).toContain('new_b');
   expect(host.textContent).not.toContain('old check failed');
 });

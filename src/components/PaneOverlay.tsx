@@ -1,23 +1,16 @@
 import * as React from 'react';
-import { PaneConfig, TargetConfig } from '../types/PaneDefinitionConfig';
+import { PageType, PaneConfig, TargetConfig } from '../types/PaneDefinitionConfig';
 import { ValidationResult } from '../services/ValidationService';
-import { getPreviewPaneWidth, getSafePreviewImageSrc } from './previewHelpers';
-
-// Fluent Light tokens — hardcoded, isolated from app theme (same invariant as MockMDAShell)
-const FL = {
-  headerBg: '#0078D4',
-  headerFg: '#FFFFFF',
-  paneBg: '#FFFFFF',
-  fg: '#323130',
-  strokeStrong: '#D2D0CE',
-  fgMuted: '#605E5C',
-  stroke: '#EDEBE9',
-  font: "'Segoe UI', system-ui, sans-serif",
-};
+import type { PreviewRecord } from '../services/GridViewModel';
+import { getPreviewPaneWidth } from './previewHelpers';
+import { getSafePreviewImageSrc } from '../services/imagePath';
+import { FL } from './flTokens';
 
 interface PaneOverlayProps {
   pane: PaneConfig;
   target: TargetConfig;
+  /** RelatedRecord preview: the record the pane opens. */
+  record?: PreviewRecord;
   validation: ValidationResult;
   /**
    * inline = sit to the right of the form, fixed/clamped width.
@@ -27,13 +20,14 @@ interface PaneOverlayProps {
   layout?: 'inline' | 'stacked';
 }
 
-const PAGE_TYPE_LABELS: Record<string, string> = {
+const PAGE_TYPE_LABELS: Record<PageType, string> = {
   entityrecord: 'Entity Record',
   entitylist: 'Entity List',
   webresource: 'Web Resource',
   custom: 'Custom Page',
   dashboard: 'Dashboard',
   search: 'Search',
+  generative: 'Generative Page',
 };
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -183,6 +177,27 @@ function SearchSkeleton(): React.ReactElement {
   );
 }
 
+function GenerativePageSkeleton(): React.ReactElement {
+  // Agent-built page: KPI cards over a bar chart.
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
+        {[0, 1, 2].map(i => (
+          <div key={i} style={{ padding: 6, background: '#FFFFFF', border: `1px solid ${FL.stroke}`, borderRadius: 4, display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <Bar w={60} h={5} />
+            <Bar w={40} h={10} />
+          </div>
+        ))}
+      </div>
+      <div style={{ height: 48, display: 'flex', alignItems: 'flex-end', gap: 4, padding: 6, border: `1px solid ${FL.stroke}`, borderRadius: 4 }}>
+        {[20, 35, 28, 42, 30, 38].map((h, i) => (
+          <div key={i} style={{ flex: 1, height: h, background: FL.stroke, borderRadius: 1 }} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function PaneContentSkeleton({ target }: { target: TargetConfig }): React.ReactElement {
   switch (target.pageType) {
     case 'entityrecord': return <EntityRecordSkeleton />;
@@ -191,47 +206,50 @@ function PaneContentSkeleton({ target }: { target: TargetConfig }): React.ReactE
     case 'webresource':  return <WebResourceSkeleton name={target.name} />;
     case 'dashboard':    return <DashboardSkeleton />;
     case 'search':       return <SearchSkeleton />;
-    default:             return <EntityRecordSkeleton />;
+    case 'generative':   return <GenerativePageSkeleton />;
   }
 }
 
 export const PaneOverlay = React.memo(function PaneOverlay({
   pane,
   target,
+  record,
   validation,
   layout = 'inline',
 }: PaneOverlayProps): React.ReactElement | null {
+  // The tool is served from its own origin, so a web-resource path normally fails to load here.
+  const [failedImageSrc, setFailedImageSrc] = React.useState<string | null>(null);
   if (pane.isSelected === false) return null;
 
   const requestedWidth = getPreviewPaneWidth(pane.width);
   const imageSrc = getSafePreviewImageSrc(pane.imageSrc);
   const stacked = layout === 'stacked';
 
-  // Inline: keep the requested width but cap so it can't crowd out the form
-  //   when the simulated MDA window is narrow.
+  // Inline: the scaled width (never below 160) capped so it can't crowd out
+  //   the form when the simulated MDA window is narrow.
   // Stacked: full-width, fixed height — sits under the form on compact views.
   const wrapperStyle: React.CSSProperties = stacked
     ? {
         width: '100%',
+        marginTop: 10,
         maxHeight: 220,
         display: 'flex',
         flexDirection: 'column',
         border: `1px solid ${FL.stroke}`,
         borderRadius: 6,
-        background: FL.paneBg,
-        fontFamily: FL.font,
+        background: FL.surface,
+        fontFamily: FL.paneFont,
         overflow: 'hidden',
       }
     : {
         flex: `0 1 ${requestedWidth}px`,
         width: requestedWidth,
-        minWidth: 160,
         maxWidth: '50%',
         display: 'flex',
         flexDirection: 'column',
         borderLeft: `1px solid ${FL.stroke}`,
-        background: FL.paneBg,
-        fontFamily: FL.font,
+        background: FL.surface,
+        fontFamily: FL.paneFont,
         overflow: 'hidden',
       };
 
@@ -242,8 +260,8 @@ export const PaneOverlay = React.memo(function PaneOverlay({
         <div
           style={{
             height: 32,
-            background: FL.headerBg,
-            color: FL.headerFg,
+            background: FL.brand,
+            color: FL.surface,
             display: 'flex',
             alignItems: 'center',
             padding: '0 8px',
@@ -251,8 +269,8 @@ export const PaneOverlay = React.memo(function PaneOverlay({
             flexShrink: 0,
           }}
         >
-          {imageSrc ? (
-            <img src={imageSrc} alt="" style={{ width: 16, height: 16 }} />
+          {imageSrc && imageSrc !== failedImageSrc ? (
+            <img src={imageSrc} alt="" onError={() => setFailedImageSrc(imageSrc)} style={{ width: 16, height: 16 }} />
           ) : (
             <span style={{ fontSize: 14 }}>🔲</span>
           )}
@@ -268,21 +286,34 @@ export const PaneOverlay = React.memo(function PaneOverlay({
       {/* Content */}
       <div style={{ flex: 1, padding: '12px 10px', display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0, overflow: 'hidden' }}>
         <div style={{ fontSize: 10, color: FL.fgMuted, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-          {PAGE_TYPE_LABELS[target.pageType] ?? target.pageType}
+          {PAGE_TYPE_LABELS[target.pageType]}
         </div>
-        {(target.pageType === 'entityrecord' || target.pageType === 'entitylist') && target.entityName && (
-          <div style={{ fontSize: 12, color: FL.fg, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {target.entityName}
+        {(target.pageType === 'entityrecord' || target.pageType === 'entitylist') &&
+          (target.entityName || (target.pageType === 'entityrecord' && record?.entityName)) && (
+          <div style={{ fontSize: 12, color: FL.fg2, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {target.pageType === 'entityrecord' && target.createNew
+              ? `New ${target.entityName}`
+              : target.pageType === 'entityrecord' && record?.entityName ? record.entityName : target.entityName}
           </div>
         )}
         {target.pageType === 'dashboard' && target.dashboardName && (
-          <div style={{ fontSize: 12, color: FL.fg, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <div style={{ fontSize: 12, color: FL.fg2, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {target.dashboardName}
           </div>
         )}
         {target.pageType === 'search' && target.searchText && (
-          <div style={{ fontSize: 12, color: FL.fg, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <div style={{ fontSize: 12, color: FL.fg2, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             Search: {target.searchText}
+          </div>
+        )}
+        {target.pageType === 'generative' && target.pageId.trim() && (
+          <div title={target.pageId} style={{ fontSize: 12, color: FL.fg2, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            …{target.pageId.trim().slice(-8)}
+          </div>
+        )}
+        {record && (
+          <div title={record.id} style={{ fontSize: 11, color: FL.fgMuted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {record.name ? `${record.name} · ${record.id}` : record.id}
           </div>
         )}
         {/* Type-aware skeleton — hints at what the live pane will actually render */}

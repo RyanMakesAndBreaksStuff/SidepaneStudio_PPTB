@@ -3,6 +3,7 @@ import { act } from 'react';
 import { createRoot, Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CodeBlock } from '../components/CodeBlock';
+import { theme } from '../theme/tokens';
 
 let root: Root | undefined;
 let host: HTMLDivElement | undefined;
@@ -53,5 +54,78 @@ describe('CodeBlock', () => {
     });
 
     expect(writeText).toHaveBeenCalledWith(code);
+  });
+
+  // Regression pin for ffaacfa -> 5f95b64: tokenizing escaped text split `&#39;` and leaked it as visible text.
+  const spanStyle = (text: string) =>
+    Array.from(host?.querySelectorAll('pre span') ?? []).find(s => s.textContent === text)?.getAttribute('style');
+
+  it('renders quotes, angle brackets, ampersands and entity-like text in JS strings and comments verbatim', async () => {
+    const str = '"it\'s <b> & &#60; done"';
+    const line = "// it's <i> & &#60; note";
+    const block = "/* 'x' <y> & &#60; */";
+    const code = `const msg = ${str}; ${line}\n${block}\nvar n = 39;`;
+
+    await render(<CodeBlock code={code} lang="js" />);
+
+    const pre = host?.querySelector('pre');
+    expect(pre?.textContent).toBe(code);
+    expect(pre?.querySelector('b, i, y')).toBeNull();
+    expect(spanStyle(str)).toContain('#CE9178');
+    expect(spanStyle(line)).toContain('#6A9955');
+    expect(spanStyle(block)).toContain('#6A9955');
+    expect(spanStyle('const')).toContain('#569CD6');
+    expect(spanStyle('39')).toContain('#B5CEA8');
+  });
+
+  it('renders quotes, angle brackets, ampersands and entity-like text in JSON verbatim', async () => {
+    const code = '{\n  "o\'key": "O\'Brien <x> & &#60;",\n  "count": 39,\n  "ok": true\n}';
+
+    await render(<CodeBlock code={code} lang="json" />);
+
+    const pre = host?.querySelector('pre');
+    expect(pre?.textContent).toBe(code);
+    expect(pre?.querySelector('x')).toBeNull();
+    expect(spanStyle('"o\'key"')).toContain('#9CDCFE');
+    expect(spanStyle('"O\'Brien <x> & &#60;"')).toContain('#CE9178');
+    expect(spanStyle('39')).toContain('#B5CEA8');
+    expect(spanStyle('true')).toContain('#569CD6');
+  });
+
+  it('renders plain text verbatim', async () => {
+    const code = "it's <b> & &#60; done";
+
+    await render(<CodeBlock code={code} lang="text" />);
+
+    const pre = host?.querySelector('pre');
+    expect(pre?.textContent).toBe(code);
+    expect(pre?.querySelector('b')).toBeNull();
+  });
+  it('draws its chrome from the code-well tokens, not hard-coded greys', async () => {
+    const T = theme(true);
+    await render(<CodeBlock code="var n = 1;" lang="js" />);
+    const well = host!.querySelector('pre')!.parentElement!.parentElement as HTMLElement;
+    const header = well.firstElementChild as HTMLElement;
+    const pre = host!.querySelector('pre') as HTMLElement;
+    const rgb = (hex: string) => `rgb(${[1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16)).join(', ')})`;
+    expect(well.style.background).toBe(rgb(T.codeBg));
+    expect(well.style.borderColor).toBe(rgb(T.codeStroke));
+    expect(header.style.background).toBe(rgb(T.codeBg2));
+    expect(pre.style.color).toBe(rgb(T.codeFg));
+    expect((header.querySelector('span') as HTMLElement).style.color).toBe(rgb(T.codeAccent));
+    expect(host!.innerHTML).not.toMatch(/#1E1E1E|#252526|#D4D4D4|#4EC9B0/i);
+  });
+
+  it('announces a successful copy through a status region (r2 WR-012)', async () => {
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: vi.fn().mockResolvedValue(undefined) } });
+    await render(<CodeBlock code="var a = 1;" lang="js" />);
+    const status = () => host?.querySelector('[role="status"]');
+    expect(status()?.textContent).toBe('');
+    const copyButton = Array.from(host?.querySelectorAll('button') ?? []).find(b => b.textContent?.includes('Copy'));
+    await act(async () => {
+      copyButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await new Promise(resolve => setTimeout(resolve, 0));
+    });
+    expect(status()?.textContent).toBe('Copied to clipboard');
   });
 });

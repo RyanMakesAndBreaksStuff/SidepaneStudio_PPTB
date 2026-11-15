@@ -9,8 +9,11 @@ import typescriptEslint from "typescript-eslint";
 export default [
   {
     ignores: [
-      "**/generated", "**/dist/**", "**/dist-runtime/**", "tasks/**",
-      "eslint.config.mjs", "vite.config.ts", "vite.runtime.config.ts",
+      "**/dist/**", "tasks/**",
+      "coverage/**", "docs/**",
+      ".claude/**", ".worktrees/**", ".superpowers/**",
+      ".agents/**", "full-review/**", "probes/**",
+      "eslint.config.mjs", "vite.config.ts",
       "vitest.config.ts", "src/runtime/sidePaneHelper.d.ts",
     ],
   },
@@ -28,7 +31,6 @@ export default [
     languageOptions: {
       globals: {
         ...globals.browser,
-        ComponentFramework: true,
       },
       parserOptions: {
         ecmaVersion: 2020,
